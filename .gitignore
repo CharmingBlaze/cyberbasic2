@@ -1,0 +1,40 @@
+# Binaries and backups
+cyberbasic
+cyberbasic.exe
+cb.exe
+*.exe
+*~
+*.dll
+*.so
+*.dylib
+
+# Go build
+/bin/
+*.test
+*.out
+go.work
+
+# IDE and OS
+.idea/
+.vscode/
+*.swp
+*.swo
+.DS_Store
+Thumbs.db
+
+# Cursor
+.cursor/
+
+# Local / env
+.env
+.env.local
+*.local
+
+# Generated
+*_gen.go
+generated/
+
+# Optional C engine build artifacts
+engine/*.o
+engine/*.a
+engine/test_engine

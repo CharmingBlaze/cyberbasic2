@@ -1,0 +1,39 @@
+CREATEPHYSICSWORLD3D "world", 0, -9.8, 0
+CREATEPHYSICSBODY3D "world", "ground", 0, 10, 1, 10, 0
+SETPHYSICSPOSITION3D "ground", 0, -5, 0
+CREATEPHYSICSBODY3D "world", "box", 1, 2, 2, 2, 1.0
+SETPHYSICSPOSITION3D "box", 0, 5, 0
+STEPPHYSICS3D "world", 1.0/60.0
+GETPHYSICSPOSITION3D "box"
+DIM boxZ AS FLOAT
+DIM boxY AS FLOAT
+DIM boxX AS FLOAT
+boxZ = POP()
+boxY = POP()
+boxX = POP()
+PRINT boxX
+PRINT boxY
+PRINT boxZ
+APPLYPHYSICSFORCE3D "box", 10, 0, 0, 0, 0, 0
+STEPPHYSICS3D "world", 1.0/60.0
+GETPHYSICSPOSITION3D "box"
+boxZ = POP()
+boxY = POP()
+boxX = POP()
+PRINT boxX
+PRINT boxY
+PRINT boxZ
+RAYCAST3D "world", -5, 0, 0, 5, 0, 0
+DIM hit AS BOOLEAN
+DIM hitZ AS FLOAT
+DIM hitY AS FLOAT
+DIM hitX AS FLOAT
+hitZ = POP()
+hitY = POP()
+hitX = POP()
+hit = POP()
+PRINT hit
+DESTROYPHYSICSBODY3D "world", "ground"
+DESTROYPHYSICSBODY3D "world", "box"
+DESTROYPHYSICSWORLD3D "world"
+PRINT "Basic Bullet demo completed!"

@@ -1,0 +1,70 @@
+# CyberBasic Documentation Index
+
+Complete guide to all CyberBasic documentation.
+
+## Getting Started
+
+- **[Getting Started Guide](GETTING_STARTED.md)** – Installation, building, running your first program
+- **[Quick Reference](QUICK_REFERENCE.md)** – One-page syntax reference for daily use
+
+## Language Reference
+
+- **[Language Spec (LANGUAGE_SPEC.md)](../LANGUAGE_SPEC.md)** – Full language reference
+  - Variables, constants, types (DIM, VAR, LET, TYPE...END TYPE, ENUM)
+  - Null literal (Nil/Null), IsNull(value)
+  - Control flow (IF/THEN, FOR/NEXT, WHILE/WEND, REPEAT/UNTIL, SELECT CASE)
+  - Functions, subs, modules, dot notation
+  - Includes (#include "file.bas"), events, coroutines, compound assignment
+
+## Game Development
+
+- **[Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)** – Making games with CyberBasic
+  - Game loop, input handling
+  - GAME.* helpers (camera, movement, collision)
+  - 2D/3D physics (Box2D, Bullet)
+  - ECS (entity-component system)
+  - Best practices
+
+- **[2D Graphics Guide](2D_GRAPHICS_GUIDE.md)** – 2D rendering reference
+  - Window and frame (InitWindow, ClearBackground; BeginDrawing/EndDrawing only when not using Main() or auto-wrapped WHILE)
+  - Primitives, textures, text, colors
+  - 2D camera (SetCamera2D, BeginMode2D, EndMode2D)
+  - 2D game checklist
+
+- **[3D Graphics Guide](3D_GRAPHICS_GUIDE.md)** – 3D rendering reference
+  - 3D camera (SetCamera3D, GAME.CameraOrbit)
+  - Primitives, models, meshes
+  - BeginMode3D/EndMode3D
+  - 3D game checklist
+
+- **[ECS Guide](ECS_GUIDE.md)** – Entity-Component System (via library)
+  - Create world, entities, components
+  - Queries and iteration
+  - Example (ecs_demo.bas)
+
+## API and Reference
+
+- **[API Reference (API_REFERENCE.md)](../API_REFERENCE.md)** – All bindings (raylib, Box2D, Bullet, GAME, ECS, std)
+- **[Cheatsheet (CHEATSHEET.md)](../CHEATSHEET.md)** – First 10 lines for 2D and 3D games
+- **[Modules (MODULES.md)](../MODULES.md)** – Codebase layout and adding bindings
+
+## Examples
+
+- **[Examples README](../examples/README.md)** – Index of example programs
+- **Templates:** [2D game](../templates/2d_game.bas), [3D game](../templates/3d_game.bas)
+
+---
+
+## Quick Navigation
+
+| I want to… | Start here |
+|------------|------------|
+| **Learn the language** | [Getting Started](GETTING_STARTED.md) → [Quick Reference](QUICK_REFERENCE.md) → [Language Spec](../LANGUAGE_SPEC.md) |
+| **Make a 2D game** | [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) → [2D Graphics Guide](2D_GRAPHICS_GUIDE.md) → [Cheatsheet](../CHEATSHEET.md) |
+| **Make a 3D game** | [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) → [3D Graphics Guide](3D_GRAPHICS_GUIDE.md) → [Cheatsheet](../CHEATSHEET.md) |
+| **Use ECS** | [ECS Guide](ECS_GUIDE.md) → [API Reference](../API_REFERENCE.md) |
+| **Look up a function** | [API Reference](../API_REFERENCE.md) |
+
+**Full feature set:** CyberBasic supports **full 2D** and **full 3D** graphics, **full 2D physics** (Box2D), **full 3D physics** (Bullet), **full ECS** (entity-component system), and **minimal GUI** (BeginUI, Label, Button, EndUI). See the guides above for each area.
+
+All documentation lives in the `docs/` directory and the project root. Start with [Getting Started](GETTING_STARTED.md).

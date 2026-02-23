@@ -1,0 +1,6 @@
+REM Working test
+DIM x AS INTEGER
+x = 42
+PRINT x
+PRINT "Hello"
+PRINT 123

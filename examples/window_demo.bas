@@ -1,0 +1,8 @@
+INITGRAPHICS3D(800, 450, "CyberBasic Window")
+CREATESPRITE("box", "none", 350, 200)
+SETSPRITEPOSITION("box", 350, 200)
+
+WHILE NOT ShouldClose()
+    DRAWSPRITE("box")
+    SYNC
+WEND

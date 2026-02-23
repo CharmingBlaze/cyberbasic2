@@ -1,0 +1,425 @@
+package main
+
+import (
+	"bufio"
+	"fmt"
+	"os"
+	"path/filepath"
+	"regexp"
+	"strings"
+
+	"cyberbasic/compiler"
+	"cyberbasic/compiler/bindings/box2d"
+	"cyberbasic/compiler/bindings/bullet"
+	"cyberbasic/compiler/bindings/ecs"
+	"cyberbasic/compiler/bindings/raylib"
+	"cyberbasic/compiler/bindings/std"
+	"cyberbasic/compiler/gogen"
+	"cyberbasic/compiler/lexer"
+	"cyberbasic/compiler/parser"
+	"cyberbasic/compiler/runtime"
+	"cyberbasic/compiler/vm"
+)
+
+func main() {
+	fmt.Println("CyberBasic starting...")
+
+	// Check for --help first
+	for _, arg := range os.Args {
+		if arg == "--help" {
+			fmt.Println("CyberBasic - A BASIC-like language with Raylib + Bullet physics")
+			fmt.Println("Usage: cyberbasic <filename.bas> [options]")
+			fmt.Println("Options:")
+			fmt.Println("  --compile-only    Compile but don't run")
+			fmt.Println("  --gen-go [file]   Generate Go source that calls raylib directly (default: <basename>_gen.go)")
+			fmt.Println("  --debug           Enable debug output")
+			fmt.Println("  --help            Show this help")
+			return
+		}
+	}
+
+	var filename string
+	if len(os.Args) < 2 {
+		// No args: default to 3D physics demo so double-clicking the exe runs something
+		exeDir := filepath.Dir(os.Args[0])
+		defaultBas := filepath.Join(exeDir, "examples", "run_3d_physics_demo.bas")
+		if _, err := os.Stat(defaultBas); err == nil {
+			filename = defaultBas
+			fmt.Println("No file specified, running default: examples/run_3d_physics_demo.bas")
+		} else {
+			// exe might be in project root
+			defaultBas = filepath.Join("examples", "run_3d_physics_demo.bas")
+			if _, err := os.Stat(defaultBas); err == nil {
+				filename = defaultBas
+				fmt.Println("No file specified, running default: examples/run_3d_physics_demo.bas")
+			} else {
+				fmt.Println("CyberBasic - A BASIC-like language with Raylib + Bullet physics")
+				fmt.Println("Usage: cyberbasic <filename.bas> [options]")
+				fmt.Println("Options:")
+				fmt.Println("  --compile-only    Compile but don't run")
+				fmt.Println("  --gen-go [file]   Generate Go source that calls raylib directly")
+				fmt.Println("  --debug           Enable debug output")
+				return
+			}
+		}
+	} else {
+		filename = os.Args[1]
+	}
+	compileOnly := false
+	debug := false
+	genGo := false
+	genGoOut := ""
+
+	// Parse command line arguments
+	for i := 2; i < len(os.Args); i++ {
+		switch os.Args[i] {
+		case "--compile-only":
+			compileOnly = true
+		case "--debug":
+			debug = true
+		case "--gen-go":
+			genGo = true
+			if i+1 < len(os.Args) && len(os.Args[i+1]) > 0 && os.Args[i+1][0] != '-' {
+				i++
+				genGoOut = os.Args[i]
+			}
+		}
+	}
+	if genGo && genGoOut == "" {
+		base := strings.TrimSuffix(filepath.Base(filename), filepath.Ext(filename))
+		genGoOut = filepath.Join("generated", base+"_gen.go")
+	}
+
+	// Check if file exists
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		fmt.Printf("Error: File '%s' not found\n", filename)
+		return
+	}
+
+	// Read source file
+	source, err := os.ReadFile(filename)
+	if err != nil {
+		fmt.Printf("Error reading file: %v\n", err)
+		return
+	}
+
+	// Preprocess: expand #include "file.bas"
+	baseDir := filepath.Dir(filename)
+	source = preprocessIncludes(source, baseDir, nil)
+
+	// --gen-go: parse and generate Go source (no bytecode)
+	if genGo {
+		l := lexer.New(string(source))
+		tokens, err := l.Tokenize()
+		if err != nil {
+			fmt.Printf("Lex error: %v\n", err)
+			return
+		}
+		p := parser.New(tokens)
+		program, err := p.Parse()
+		if err != nil {
+			fmt.Printf("Parse error: %v\n", err)
+			return
+		}
+		goCode, err := gogen.Generate(program)
+		if err != nil {
+			fmt.Printf("Go gen error: %v\n", err)
+			return
+		}
+		if dir := filepath.Dir(genGoOut); dir != "." {
+			_ = os.MkdirAll(dir, 0755)
+		}
+		if err := os.WriteFile(genGoOut, []byte(goCode), 0644); err != nil {
+			fmt.Printf("Write error: %v\n", err)
+			return
+		}
+		fmt.Printf("Generated %s\n", genGoOut)
+		return
+	}
+
+	fmt.Printf("Compiling %s...\n", filename)
+
+	// Create compiler
+	comp := compiler.New()
+
+	// Compile source code
+	chunk, err := comp.Compile(string(source))
+	if err != nil {
+		fmt.Printf("Compilation error: %v\n", err)
+		return
+	}
+
+	if debug {
+		fmt.Printf("Compiled %d bytes of bytecode with %d constants\n", len(chunk.Code), len(chunk.Constants))
+	}
+
+	if compileOnly {
+		fmt.Println("Compilation successful!")
+		return
+	}
+
+	// Create runtime
+	rt := runtime.NewRuntime()
+
+	// Load bytecode into VM and wire runtime so game opcodes call into it
+	rt.GetVM().LoadChunk(chunk)
+	rt.GetVM().SetRuntime(rt)
+	// Expose raylib and Bullet as foreign API: RL.*, BULLET.*
+	raylib.RegisterRaylib(rt.GetVM())
+	bullet.RegisterBullet(rt.GetVM())
+	box2d.RegisterBox2D(rt.GetVM())
+	ecs.RegisterECS(rt.GetVM())
+	std.RegisterStd(rt.GetVM())
+
+	fmt.Println("Running program...")
+
+	// Run the program
+	err = rt.GetVM().Run()
+	if err != nil {
+		fmt.Printf("Runtime error: %v\n", err)
+		rt.CloseWindow()
+		return
+	}
+
+	rt.CloseWindow()
+	fmt.Println("Program completed successfully!")
+}
+
+// Additional utility functions for debugging and development
+func printTokens(tokens []lexer.Token) {
+	fmt.Println("Tokens:")
+	for _, token := range tokens {
+		fmt.Printf("  %s: %s (line %d, col %d)\n", token.Type, token.Value, token.Line, token.Col)
+	}
+}
+
+func printAST(program *parser.Program) {
+	fmt.Println("Abstract Syntax Tree:")
+	fmt.Println(program.String())
+}
+
+func printBytecode(chunk *vm.Chunk) {
+	fmt.Println("Bytecode:")
+	for i, instruction := range chunk.Code {
+		fmt.Printf("  %04d: %d", i, instruction)
+		if i < len(chunk.Code)-1 {
+			fmt.Printf(" %d", chunk.Code[i+1])
+			i++
+		}
+		fmt.Println()
+	}
+
+	fmt.Println("\nConstants:")
+	for i, constant := range chunk.Constants {
+		fmt.Printf("  %d: %v\n", i, constant)
+	}
+}
+
+func runTests() {
+	fmt.Println("Running CyberBasic tests...")
+
+	// Test basic arithmetic
+	testArithmetic()
+
+	// Test control flow
+	testControlFlow()
+
+	// Test functions
+	testFunctions()
+
+	fmt.Println("All tests completed!")
+}
+
+func testArithmetic() {
+	fmt.Println("Testing arithmetic...")
+
+	source := `
+DIM a AS INTEGER
+DIM b AS INTEGER
+a = 10
+b = 20
+DIM result AS INTEGER
+result = a + b
+`
+
+	comp := compiler.New()
+	chunk, err := comp.Compile(source)
+	if err != nil {
+		fmt.Printf("Arithmetic test failed: %v\n", err)
+		return
+	}
+
+	v := vm.NewVM()
+	v.LoadChunk(chunk)
+	err = v.Run()
+	if err != nil {
+		fmt.Printf("Arithmetic test runtime error: %v\n", err)
+		return
+	}
+
+	fmt.Println("Arithmetic test passed!")
+}
+
+func testControlFlow() {
+	fmt.Println("Testing control flow...")
+
+	source := `
+DIM i AS INTEGER
+DIM sum AS INTEGER
+sum = 0
+FOR i = 1 TO 10
+    sum = sum + i
+NEXT
+`
+
+	comp := compiler.New()
+	chunk, err := comp.Compile(source)
+	if err != nil {
+		fmt.Printf("Control flow test failed: %v\n", err)
+		return
+	}
+
+	v := vm.NewVM()
+	v.LoadChunk(chunk)
+	err = v.Run()
+	if err != nil {
+		fmt.Printf("Control flow test runtime error: %v\n", err)
+		return
+	}
+
+	fmt.Println("Control flow test passed!")
+}
+
+func testFunctions() {
+	fmt.Println("Testing functions...")
+
+	source := `
+FUNCTION AddNumbers(a AS INTEGER, b AS INTEGER) AS INTEGER
+    RETURN a + b
+END FUNCTION
+
+DIM result AS INTEGER
+result = AddNumbers(5, 7)
+`
+
+	comp := compiler.New()
+	chunk, err := comp.Compile(source)
+	if err != nil {
+		fmt.Printf("Function test failed: %v\n", err)
+		return
+	}
+
+	v := vm.NewVM()
+	v.LoadChunk(chunk)
+	err = v.Run()
+	if err != nil {
+		fmt.Printf("Function test runtime error: %v\n", err)
+		return
+	}
+
+	fmt.Println("Function test passed!")
+}
+
+// Helper function to get examples directory
+func getExamplesDir() string {
+	dir, err := os.Getwd()
+	if err != nil {
+		return "examples"
+	}
+	return filepath.Join(dir, "examples")
+}
+
+// Function to list available examples
+func listExamples() {
+	examplesDir := getExamplesDir()
+
+	fmt.Println("Available examples:")
+
+	files, err := os.ReadDir(examplesDir)
+	if err != nil {
+		fmt.Printf("Error reading examples directory: %v\n", err)
+		return
+	}
+
+	for _, file := range files {
+		if !file.IsDir() && filepath.Ext(file.Name()) == ".bas" {
+			fmt.Printf("  %s\n", file.Name())
+		}
+	}
+}
+
+// Function to run an example
+func runExample(name string) {
+	examplesDir := getExamplesDir()
+	filename := filepath.Join(examplesDir, name)
+
+	if _, err := os.Stat(filename); os.IsNotExist(err) {
+		fmt.Printf("Example '%s' not found\n", name)
+		listExamples()
+		return
+	}
+
+	// Read and run the example
+	source, err := os.ReadFile(filename)
+	if err != nil {
+		fmt.Printf("Error reading example: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Running example: %s\n", name)
+
+	comp := compiler.New()
+	chunk, err := comp.Compile(string(source))
+	if err != nil {
+		fmt.Printf("Example compilation error: %v\n", err)
+		return
+	}
+
+	rt := runtime.NewRuntime()
+	rt.GetVM().LoadChunk(chunk)
+
+	err = rt.GetVM().Run()
+	if err != nil {
+		fmt.Printf("Example runtime error: %v\n", err)
+		return
+	}
+
+	fmt.Printf("Example '%s' completed successfully!\n", name)
+}
+
+// preprocessIncludes expands #include "file.bas" with file contents (relative to baseDir). seen prevents cycles.
+func preprocessIncludes(source []byte, baseDir string, seen map[string]bool) []byte {
+	if seen == nil {
+		seen = make(map[string]bool)
+	}
+	includeRe := regexp.MustCompile(`^\s*#include\s*"([^"]+)"\s*$`)
+	var out strings.Builder
+	sc := bufio.NewScanner(strings.NewReader(string(source)))
+	for sc.Scan() {
+		line := sc.Text()
+		if m := includeRe.FindStringSubmatch(line); m != nil {
+			path := filepath.Join(baseDir, m[1])
+			abs, _ := filepath.Abs(path)
+			if seen[abs] {
+				continue
+			}
+			seen[abs] = true
+			inc, err := os.ReadFile(path)
+			if err != nil {
+				out.WriteString(line)
+				out.WriteByte('\n')
+				continue
+			}
+			incDir := filepath.Dir(path)
+			inc = preprocessIncludes(inc, incDir, seen)
+			out.Write(inc)
+			if len(inc) > 0 && inc[len(inc)-1] != '\n' {
+				out.WriteByte('\n')
+			}
+			continue
+		}
+		out.WriteString(line)
+		out.WriteByte('\n')
+	}
+	return []byte(out.String())
+}
