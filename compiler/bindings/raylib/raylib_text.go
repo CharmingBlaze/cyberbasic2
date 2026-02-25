@@ -25,6 +25,16 @@ func registerText(v *vm.VM) {
 		rl.DrawText(text, x, y, fontSize, c)
 		return nil, nil
 	})
+	// DrawTextSimple(text, x, y): draw text at (x,y), font size 20, white (use this for on-screen text; PRINT prints to console)
+	v.RegisterForeign("DrawTextSimple", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("DrawTextSimple requires (text, x, y)")
+		}
+		text := toString(args[0])
+		x, y := toInt32(args[1]), toInt32(args[2])
+		rl.DrawText(text, x, y, 20, rl.White)
+		return nil, nil
+	})
 	v.RegisterForeign("MeasureText", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
 			return nil, fmt.Errorf("MeasureText requires (text, fontSize)")

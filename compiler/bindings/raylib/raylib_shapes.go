@@ -238,6 +238,14 @@ func registerShapes(v *vm.VM) {
 		rl.DrawFPS(x, y)
 		return nil, nil
 	})
+	v.RegisterForeign("ShowFPS", func(args []interface{}) (interface{}, error) {
+		x, y := int32(10), int32(10)
+		if len(args) >= 2 {
+			x, y = toInt32(args[0]), toInt32(args[1])
+		}
+		rl.DrawFPS(x, y)
+		return nil, nil
+	})
 	v.RegisterForeign("DrawLineEx", func(args []interface{}) (interface{}, error) {
 		if len(args) < 6 {
 			return nil, fmt.Errorf("DrawLineEx requires (startX, startY, endX, endY, thick, color)")

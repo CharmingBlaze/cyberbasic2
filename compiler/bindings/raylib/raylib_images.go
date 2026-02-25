@@ -190,6 +190,18 @@ func registerImages(v *vm.VM) {
 		}
 		return rl.ExportImage(*img, toString(args[1])), nil
 	})
+	v.RegisterForeign("SaveImage", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SaveImage requires (imageId, path)")
+		}
+		imageMu.Lock()
+		img, ok := images[toString(args[0])]
+		imageMu.Unlock()
+		if !ok || img == nil {
+			return false, nil
+		}
+		return rl.ExportImage(*img, toString(args[1])), nil
+	})
 	v.RegisterForeign("ExportImageToMemory", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
 			return nil, fmt.Errorf("ExportImageToMemory requires (imageId, fileType)")

@@ -28,6 +28,8 @@ const (
 	OpMul
 	OpDiv
 	OpMod
+	OpPower  // ^ exponentiation
+	OpIntDiv // \ integer division
 	OpNeg
 
 	// Comparison operations
@@ -41,6 +43,7 @@ const (
 	// Logical operations
 	OpAnd
 	OpOr
+	OpXor
 	OpNot
 
 	// Control flow
@@ -200,6 +203,9 @@ const (
 // Value represents a value in the VM
 type Value interface{}
 
+// EnumMembers maps enum value name (lowercase) to integer value.
+type EnumMembers map[string]int64
+
 // Chunk represents a compiled bytecode chunk
 type Chunk struct {
 	Code      []byte
@@ -207,6 +213,8 @@ type Chunk struct {
 	Variables map[string]int
 	VarDims   map[string][]int // array dimensions per variable (nil = scalar)
 	Functions map[string]int   // user Sub/Function name (lowercase) -> code offset
+	// Enums: enum name (lowercase) -> member name (lowercase) -> value; used by Enum.getValue/getName/hasValue at runtime
+	Enums map[string]EnumMembers
 }
 
 // NewChunk creates a new bytecode chunk
@@ -217,6 +225,7 @@ func NewChunk() *Chunk {
 		Variables: make(map[string]int),
 		VarDims:   make(map[string][]int),
 		Functions: make(map[string]int),
+		Enums:     make(map[string]EnumMembers),
 	}
 }
 

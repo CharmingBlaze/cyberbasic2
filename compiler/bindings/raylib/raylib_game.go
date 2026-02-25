@@ -60,6 +60,309 @@ func registerGame(v *vm.VM) {
 		camera3D.Up = rl.Vector3{X: 0, Y: 1, Z: 0}
 		camera3D.Fovy = 60.0
 		camera3D.Projection = rl.CameraPerspective
+		orbitStateMu.Lock()
+		orbitTargetX, orbitTargetY, orbitTargetZ = tx, ty, tz
+		orbitAngle, orbitPitch, orbitDistance = angle, pitch, dist
+		orbitStateMu.Unlock()
+		return nil, nil
+	})
+	// CameraOrbit (unprefixed alias); also updates orbit state for CameraZoom/CameraRotate/UpdateCamera
+	v.RegisterForeign("CameraOrbit", func(args []interface{}) (interface{}, error) {
+		if len(args) < 6 {
+			return nil, fmt.Errorf("CameraOrbit requires (targetX, targetY, targetZ, angleRad, pitchRad, distance)")
+		}
+		tx := toFloat32(args[0])
+		ty := toFloat32(args[1])
+		tz := toFloat32(args[2])
+		angle := toFloat32(args[3])
+		pitch := toFloat32(args[4])
+		dist := toFloat32(args[5])
+		cp := float32(math.Cos(float64(pitch)))
+		sp := float32(math.Sin(float64(pitch)))
+		ca := float32(math.Cos(float64(angle)))
+		sa := float32(math.Sin(float64(angle)))
+		ex := tx + dist*cp*sa
+		ey := ty + dist*sp
+		ez := tz + dist*cp*ca
+		camera3D.Position = rl.Vector3{X: ex, Y: ey, Z: ez}
+		camera3D.Target = rl.Vector3{X: tx, Y: ty, Z: tz}
+		camera3D.Up = rl.Vector3{X: 0, Y: 1, Z: 0}
+		camera3D.Fovy = 60.0
+		camera3D.Projection = rl.CameraPerspective
+		orbitStateMu.Lock()
+		orbitTargetX, orbitTargetY, orbitTargetZ = tx, ty, tz
+		orbitAngle, orbitPitch, orbitDistance = angle, pitch, dist
+		orbitStateMu.Unlock()
+		return nil, nil
+	})
+	// CameraZoom(amount): adjust orbit distance with clamping (e.g. amount = GetMouseWheelMove(); default min 3, max 25)
+	v.RegisterForeign("CameraZoom", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		amount := toFloat32(args[0])
+		orbitStateMu.Lock()
+		orbitDistance -= amount * 1.5
+		if orbitDistance < 3 {
+			orbitDistance = 3
+		}
+		if orbitDistance > 25 {
+			orbitDistance = 25
+		}
+		orbitStateMu.Unlock()
+		return nil, nil
+	})
+	// CameraRotate(deltaX, deltaY): mouse-delta rotation; or CameraRotateDelta(deltaX, deltaY) alias
+	v.RegisterForeign("CameraRotateDelta", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("CameraRotateDelta requires (deltaX, deltaY)")
+		}
+		dx := toFloat32(args[0])
+		dy := toFloat32(args[1])
+		const sens = float32(0.002)
+		orbitStateMu.Lock()
+		orbitAngle -= dx * sens
+		orbitPitch += dy * sens
+		if orbitPitch > 1.4 {
+			orbitPitch = 1.4
+		}
+		if orbitPitch < -1.4 {
+			orbitPitch = -1.4
+		}
+		orbitStateMu.Unlock()
+		return nil, nil
+	})
+	// UpdateCamera(): apply orbit state to camera (position from target + angle/pitch/distance)
+	v.RegisterForeign("UpdateCamera", func(args []interface{}) (interface{}, error) {
+		orbitStateMu.Lock()
+		tx, ty, tz := orbitTargetX, orbitTargetY, orbitTargetZ
+		angle, pitch, dist := orbitAngle, orbitPitch, orbitDistance
+		if dist == 0 {
+			dist = 8
+			orbitDistance = 8
+		}
+		orbitStateMu.Unlock()
+		cp := float32(math.Cos(float64(pitch)))
+		sp := float32(math.Sin(float64(pitch)))
+		ca := float32(math.Cos(float64(angle)))
+		sa := float32(math.Sin(float64(angle)))
+		ex := tx + dist*cp*sa
+		ey := ty + dist*sp
+		ez := tz + dist*cp*ca
+		camera3D.Position = rl.Vector3{X: ex, Y: ey, Z: ez}
+		camera3D.Target = rl.Vector3{X: tx, Y: ty, Z: tz}
+		camera3D.Up = rl.Vector3{X: 0, Y: 1, Z: 0}
+		return nil, nil
+	})
+	// MouseOrbitCamera(): single call that does CameraRotateDelta(GetMouseDeltaX(), GetMouseDeltaY()), CameraZoom(GetMouseWheelMove()), UpdateCamera()
+	v.RegisterForeign("MouseOrbitCamera", func(args []interface{}) (interface{}, error) {
+		dx := float32(rl.GetMouseDelta().X)
+		dy := float32(rl.GetMouseDelta().Y)
+		wheel := float32(rl.GetMouseWheelMove())
+		const sens = float32(0.002)
+		orbitStateMu.Lock()
+		if orbitDistance == 0 {
+			orbitDistance = 8
+		}
+		orbitAngle -= dx * sens
+		orbitPitch += dy * sens
+		if orbitPitch > 1.4 {
+			orbitPitch = 1.4
+		}
+		if orbitPitch < -1.4 {
+			orbitPitch = -1.4
+		}
+		orbitDistance -= wheel * 1.5
+		if orbitDistance < 3 {
+			orbitDistance = 3
+		}
+		if orbitDistance > 25 {
+			orbitDistance = 25
+		}
+		tx, ty, tz := orbitTargetX, orbitTargetY, orbitTargetZ
+		angle, pitch, dist := orbitAngle, orbitPitch, orbitDistance
+		orbitStateMu.Unlock()
+		cp := float32(math.Cos(float64(pitch)))
+		sp := float32(math.Sin(float64(pitch)))
+		ca := float32(math.Cos(float64(angle)))
+		sa := float32(math.Sin(float64(angle)))
+		ex := tx + dist*cp*sa
+		ey := ty + dist*sp
+		ez := tz + dist*cp*ca
+		camera3D.Position = rl.Vector3{X: ex, Y: ey, Z: ez}
+		camera3D.Target = rl.Vector3{X: tx, Y: ty, Z: tz}
+		camera3D.Up = rl.Vector3{X: 0, Y: 1, Z: 0}
+		return nil, nil
+	})
+	// MouseLook(): FPS-style camera; rotate view from mouse delta (uses camera position as eye, updates target)
+	v.RegisterForeign("MouseLook", func(args []interface{}) (interface{}, error) {
+		dx := float32(rl.GetMouseDelta().X)
+		dy := float32(rl.GetMouseDelta().Y)
+		const sens = float32(0.002)
+		mouseLookMu.Lock()
+		mouseLookYaw -= dx * sens
+		mouseLookPitch += dy * sens
+		if mouseLookPitch > 1.4 {
+			mouseLookPitch = 1.4
+		}
+		if mouseLookPitch < -1.4 {
+			mouseLookPitch = -1.4
+		}
+		yaw, pitch := mouseLookYaw, mouseLookPitch
+		mouseLookMu.Unlock()
+		px, py, pz := camera3D.Position.X, camera3D.Position.Y, camera3D.Position.Z
+		cp := float32(math.Cos(float64(pitch)))
+		sp := float32(math.Sin(float64(pitch)))
+		ca := float32(math.Cos(float64(yaw)))
+		sa := float32(math.Sin(float64(yaw)))
+		const fwdDist float32 = 10
+		tx := px + fwdDist*cp*sa
+		ty := py + fwdDist*sp
+		tz := pz + fwdDist*cp*ca
+		camera3D.Target = rl.Vector3{X: tx, Y: ty, Z: tz}
+		return nil, nil
+	})
+	// CameraLookAt(x, y, z): set camera target so camera looks at point
+	v.RegisterForeign("CameraLookAt", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("CameraLookAt requires (x, y, z)")
+		}
+		camera3D.Target = rl.Vector3{X: toFloat32(args[0]), Y: toFloat32(args[1]), Z: toFloat32(args[2])}
+		return nil, nil
+	})
+	// CameraMove(dx, dy, dz): move camera position and target by delta
+	v.RegisterForeign("CameraMove", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("CameraMove requires (dx, dy, dz)")
+		}
+		dx, dy, dz := toFloat32(args[0]), toFloat32(args[1]), toFloat32(args[2])
+		camera3D.Position.X += dx
+		camera3D.Position.Y += dy
+		camera3D.Position.Z += dz
+		camera3D.Target.X += dx
+		camera3D.Target.Y += dy
+		camera3D.Target.Z += dz
+		return nil, nil
+	})
+	// CameraRotate(deltaX, deltaY): mouse-delta rotation; or CameraRotate(pitchRad, yawRad, rollRad): absolute rotation
+	v.RegisterForeign("CameraRotate", func(args []interface{}) (interface{}, error) {
+		if len(args) == 2 {
+			dx := toFloat32(args[0])
+			dy := toFloat32(args[1])
+			const sens = float32(0.002)
+			orbitStateMu.Lock()
+			orbitAngle -= dx * sens
+			orbitPitch += dy * sens
+			if orbitPitch > 1.4 {
+				orbitPitch = 1.4
+			}
+			if orbitPitch < -1.4 {
+				orbitPitch = -1.4
+			}
+			orbitStateMu.Unlock()
+			return nil, nil
+		}
+		if len(args) < 3 {
+			return nil, fmt.Errorf("CameraRotate requires (deltaX, deltaY) or (pitchRad, yawRad, rollRad)")
+		}
+		pitch := toFloat32(args[0])
+		yaw := toFloat32(args[1])
+		roll := toFloat32(args[2])
+		tx, ty, tz := camera3D.Target.X, camera3D.Target.Y, camera3D.Target.Z
+		px, py, pz := camera3D.Position.X, camera3D.Position.Y, camera3D.Position.Z
+		dx, dy, dz := px-tx, py-ty, pz-tz
+		dist := float32(math.Sqrt(float64(dx*dx + dy*dy + dz*dz)))
+		if dist < 1e-6 {
+			return nil, nil
+		}
+		// Current spherical angles (yaw around Y, pitch from horizontal)
+		currYaw := float32(math.Atan2(float64(dx), float64(dz)))
+		currPitch := float32(math.Asin(float64(dy / dist)))
+		currYaw += yaw
+		currPitch += pitch
+		cp := float32(math.Cos(float64(currPitch)))
+		sp := float32(math.Sin(float64(currPitch)))
+		ca := float32(math.Cos(float64(currYaw)))
+		sa := float32(math.Sin(float64(currYaw)))
+		camera3D.Position.X = tx + dist*cp*sa
+		camera3D.Position.Y = ty + dist*sp
+		camera3D.Position.Z = tz + dist*cp*ca
+		if math.Abs(float64(roll)) > 1e-6 {
+			// Rotate Up vector in view plane (simplified: rotate around forward)
+			fwd := rl.Vector3{X: -dx / dist, Y: -dy / dist, Z: -dz / dist}
+			up := camera3D.Up
+			cr := float32(math.Cos(float64(roll)))
+			sr := float32(math.Sin(float64(roll)))
+			right := rl.Vector3{
+				X: up.Y*fwd.Z - up.Z*fwd.Y,
+				Y: up.Z*fwd.X - up.X*fwd.Z,
+				Z: up.X*fwd.Y - up.Y*fwd.X,
+			}
+			camera3D.Up = rl.Vector3{
+				X: up.X*cr + right.X*sr,
+				Y: up.Y*cr + right.Y*sr,
+				Z: up.Z*cr + right.Z*sr,
+			}
+		}
+		return nil, nil
+	})
+	// SetCameraFOV(fov): set global camera field of view (degrees)
+	v.RegisterForeign("SetCameraFOV", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SetCameraFOV requires (fov)")
+		}
+		camera3D.Fovy = toFloat32(args[0])
+		return nil, nil
+	})
+	v.RegisterForeign("CameraSetFOV", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("CameraSetFOV requires (fov)")
+		}
+		camera3D.Fovy = toFloat32(args[0])
+		return nil, nil
+	})
+	v.RegisterForeign("CameraSetClipping", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("CameraSetClipping requires (near, far)")
+		}
+		cameraNearZ = toFloat32(args[0])
+		cameraFarZ = toFloat32(args[1])
+		return nil, nil
+	})
+	v.RegisterForeign("CameraShake", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("CameraShake requires (amount, duration)")
+		}
+		cameraShakeMu.Lock()
+		cameraShakeAmount = toFloat32(args[0])
+		cameraShakeDuration = toFloat32(args[1])
+		cameraShakeMu.Unlock()
+		return nil, nil
+	})
+	// CameraFPS(): first-person preset; set position and target. Call MouseLook() each frame for mouse, use WASD to move.
+	v.RegisterForeign("CameraFPS", func(args []interface{}) (interface{}, error) {
+		camera3D.Position = rl.Vector3{X: 0, Y: 2, Z: 10}
+		camera3D.Target = rl.Vector3{X: 0, Y: 0, Z: 0}
+		camera3D.Up = rl.Vector3{X: 0, Y: 1, Z: 0}
+		camera3D.Fovy = 60
+		camera3D.Projection = rl.CameraPerspective
+		mouseLookMu.Lock()
+		mouseLookYaw = 0
+		mouseLookPitch = 0
+		mouseLookMu.Unlock()
+		return nil, nil
+	})
+	// CameraFree(): free-fly noclip preset; same as CameraFPS for now.
+	v.RegisterForeign("CameraFree", func(args []interface{}) (interface{}, error) {
+		camera3D.Position = rl.Vector3{X: 0, Y: 2, Z: 10}
+		camera3D.Target = rl.Vector3{X: 0, Y: 0, Z: 0}
+		camera3D.Up = rl.Vector3{X: 0, Y: 1, Z: 0}
+		camera3D.Fovy = 60
+		camera3D.Projection = rl.CameraPerspective
+		mouseLookMu.Lock()
+		mouseLookYaw = 0
+		mouseLookPitch = 0
+		mouseLookMu.Unlock()
 		return nil, nil
 	})
 
@@ -616,6 +919,79 @@ func registerGame(v *vm.VM) {
 		return nil, nil
 	})
 
+	// CollisionBox(x, y, z, w, h, d): create AABB with center (x,y,z) and size (w,h,d). Returns box id for CheckCollision/RayCast.
+	v.RegisterForeign("CollisionBox", func(args []interface{}) (interface{}, error) {
+		if len(args) < 6 {
+			return nil, fmt.Errorf("CollisionBox requires (x, y, z, w, h, d)")
+		}
+		cx := toFloat64(args[0])
+		cy := toFloat64(args[1])
+		cz := toFloat64(args[2])
+		w := toFloat64(args[3])
+		h := toFloat64(args[4])
+		d := toFloat64(args[5])
+		hw, hh, hd := w/2, h/2, d/2
+		collisionBoxMu.Lock()
+		collisionBoxSeq++
+		id := fmt.Sprintf("box_%d", collisionBoxSeq)
+		collisionBoxes[id] = struct{ Cx, Cy, Cz, Hw, Hh, Hd float64 }{cx, cy, cz, hw, hh, hd}
+		collisionBoxMu.Unlock()
+		return id, nil
+	})
+	v.RegisterForeign("CheckCollision", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("CheckCollision requires (boxIdA, boxIdB)")
+		}
+		aId := toString(args[0])
+		bId := toString(args[1])
+		collisionBoxMu.Lock()
+		a, okA := collisionBoxes[aId]
+		b, okB := collisionBoxes[bId]
+		collisionBoxMu.Unlock()
+		if !okA || !okB {
+			return false, nil
+		}
+		axMin, axMax := a.Cx-a.Hw, a.Cx+a.Hw
+		ayMin, ayMax := a.Cy-a.Hh, a.Cy+a.Hh
+		azMin, azMax := a.Cz-a.Hd, a.Cz+a.Hd
+		bxMin, bxMax := b.Cx-b.Hw, b.Cx+b.Hw
+		byMin, byMax := b.Cy-b.Hh, b.Cy+b.Hh
+		bzMin, bzMax := b.Cz-b.Hd, b.Cz+b.Hd
+		overlap := axMin <= bxMax && axMax >= bxMin && ayMin <= byMax && ayMax >= byMin && azMin <= bzMax && azMax >= bzMin
+		return overlap, nil
+	})
+	// RayCast(originX, originY, originZ, dirX, dirY, dirZ [, boxId]): if boxId given, test vs that box and return hit distance (or -1). Without boxId, stores ray for GetRayCollision*.
+	v.RegisterForeign("RayCast", func(args []interface{}) (interface{}, error) {
+		if len(args) < 6 {
+			return nil, fmt.Errorf("RayCast requires (originX,Y,Z, dirX,dirY,dirZ)")
+		}
+		ray := rl.Ray{
+			Position:  rl.Vector3{X: toFloat32(args[0]), Y: toFloat32(args[1]), Z: toFloat32(args[2])},
+			Direction: rl.Vector3{X: toFloat32(args[3]), Y: toFloat32(args[4]), Z: toFloat32(args[5])},
+		}
+		if len(args) >= 7 {
+			boxId := toString(args[6])
+			collisionBoxMu.Lock()
+			b, ok := collisionBoxes[boxId]
+			collisionBoxMu.Unlock()
+			if !ok {
+				return float64(-1), nil
+			}
+			box := rl.BoundingBox{
+				Min: rl.Vector3{X: float32(b.Cx - b.Hw), Y: float32(b.Cy - b.Hh), Z: float32(b.Cz - b.Hd)},
+				Max: rl.Vector3{X: float32(b.Cx + b.Hw), Y: float32(b.Cy + b.Hh), Z: float32(b.Cz + b.Hd)},
+			}
+			coll := rl.GetRayCollisionBox(ray, box)
+			if !coll.Hit {
+				return float64(-1), nil
+			}
+			return float64(coll.Distance), nil
+		}
+		// No boxId: could store ray for later GetRayCollision*; for now return 0
+		_ = ray
+		return float64(0), nil
+	})
+
 	// Asset path: return "assets/" + filename for LoadTexture(AssetPath("hero.png")) convention
 	v.RegisterForeign("GAME.AssetPath", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
@@ -706,6 +1082,42 @@ func registerGame(v *vm.VM) {
 			n--
 		}
 		return n, nil
+	})
+
+	// 2D/3D convenience helpers (no namespace; for full 2D/3D games)
+	v.RegisterForeign("GetScreenCenterX", func(args []interface{}) (interface{}, error) {
+		return int32(rl.GetScreenWidth() / 2), nil
+	})
+	v.RegisterForeign("GetScreenCenterY", func(args []interface{}) (interface{}, error) {
+		return int32(rl.GetScreenHeight() / 2), nil
+	})
+	v.RegisterForeign("Distance2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("Distance2D requires (x1, y1, x2, y2)")
+		}
+		v1 := rl.Vector2{X: toFloat32(args[0]), Y: toFloat32(args[1])}
+		v2 := rl.Vector2{X: toFloat32(args[2]), Y: toFloat32(args[3])}
+		return float64(rl.Vector2Distance(v1, v2)), nil
+	})
+	v.RegisterForeign("Distance3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 6 {
+			return nil, fmt.Errorf("Distance3D requires (x1, y1, z1, x2, y2, z2)")
+		}
+		v1 := rl.Vector3{X: toFloat32(args[0]), Y: toFloat32(args[1]), Z: toFloat32(args[2])}
+		v2 := rl.Vector3{X: toFloat32(args[3]), Y: toFloat32(args[4]), Z: toFloat32(args[5])}
+		return float64(rl.Vector3Distance(v1, v2)), nil
+	})
+	v.RegisterForeign("SetCamera2DCenter", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetCamera2DCenter requires (worldX, worldY)")
+		}
+		w := rl.GetScreenWidth()
+		h := rl.GetScreenHeight()
+		camera2D.Offset = rl.Vector2{X: float32(w) / 2, Y: float32(h) / 2}
+		camera2D.Target = rl.Vector2{X: toFloat32(args[0]), Y: toFloat32(args[1])}
+		camera2D.Rotation = 0
+		camera2D.Zoom = 1
+		return nil, nil
 	})
 
 	// Key constants (0-arg, return key code for use with RL.IsKeyDown)

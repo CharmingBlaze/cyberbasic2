@@ -5,14 +5,14 @@ Complete guide to 2D graphics in CyberBasic using the raylib API.
 ## Table of Contents
 
 1. [Getting started](#getting-started)
-2. [Drawing frame](#drawing-frame)
-3. [Drawing primitives](#drawing-primitives)
-4. [Textures and images](#textures-and-images)
-5. [Text rendering](#text-rendering)
-6. [Colors](#colors)
-7. [2D camera](#2d-camera)
-8. [2D game checklist](#2d-game-checklist)
-9. [Complete 2D game example](#complete-2d-game-example)
+2. [Drawing primitives](#drawing-primitives)
+3. [Textures and images](#textures-and-images)
+4. [Text rendering](#text-rendering)
+5. [Colors](#colors)
+6. [2D camera](#2d-camera)
+7. [2D game checklist](#2d-game-checklist)
+8. [Complete 2D game example](#complete-2d-game-example)
+9. [Full 2D command reference](#full-2d-command-reference)
 
 ---
 
@@ -22,34 +22,22 @@ Complete guide to 2D graphics in CyberBasic using the raylib API.
 
 Every 2D graphics program needs a window and a game loop:
 
-Preferred style with **Main() ... EndMain** and **DeltaTime()**:
+Use **WHILE NOT WindowShouldClose() ... WEND** (or **REPEAT ... UNTIL WindowShouldClose()**) and **DeltaTime()**:
 
 ```basic
 InitWindow(800, 600, "My 2D Game")
 SetTargetFPS(60)
 
-Main()
+WHILE NOT WindowShouldClose()
     VAR dt = DeltaTime()
     ClearBackground(20, 20, 30, 255)
     // Your drawing code here; use dt for frame-based movement
-EndMain
+WEND
 
 CloseWindow()
 ```
 
-You can also use `WHILE NOT WindowShouldClose() ... WEND` (BeginDrawing/EndDrawing are automatic in both cases).
-
----
-
-## Drawing frame
-
-All drawing must happen between `BeginDrawing()` and `EndDrawing()`:
-
-```basic
-BeginDrawing()
-    // All drawing commands go here
-EndDrawing()
-```
+The compiler does not inject any frame or mode calls; your loop compiles exactly as written (DBPro-style).
 
 ---
 
@@ -120,6 +108,40 @@ DrawTextureRec(tex, 0, 0, 32, 32, 100, 100, 255, 255, 255, 255)
 UnloadTexture(tex)
 ```
 
+### 2D sprite (texture) animation
+
+Use **sprite-sheet** (texture frame) animation with time-based playback. One texture holds a grid of frames; an animation state advances by FPS and draws the current frame.
+
+```basic
+// Load texture and create animation: (textureId, frameWidth, frameHeight, framesPerRow [, totalFrames])
+VAR tex = LoadTexture("hero_sheet.png")
+VAR anim = CreateSpriteAnimation(tex, 32, 32, 4)
+// Optional: SetSpriteAnimationFPS(anim, 8), SetSpriteAnimationLoop(anim, TRUE)
+
+WHILE NOT WindowShouldClose()
+    // Advance animation by delta time
+    UpdateSpriteAnimation(anim, GetFrameTime())
+    ClearBackground(20, 20, 30, 255)
+    // Draw current frame at (x, y); optional scaleX, scaleY, rotation, tint
+    DrawSpriteAnimation(anim, 100, 100)
+    DrawSpriteAnimation(anim, 200, 200, 2.0, 2.0, 0, 255, 255, 255, 255)
+WEND
+
+DestroySpriteAnimation(anim)
+UnloadTexture(tex)
+```
+
+**Commands:**
+
+- **CreateSpriteAnimation**(textureId, frameWidth, frameHeight, framesPerRow [, totalFrames]) → animId. If totalFrames is omitted, it is derived from texture size.
+- **SetSpriteAnimationFPS**(animId, fps) — playback speed (frames per second).
+- **SetSpriteAnimationLoop**(animId, loop) — TRUE = loop, FALSE = one-shot.
+- **SetSpriteAnimationFrame**(animId, frameIndex) — set current frame by index (0-based).
+- **UpdateSpriteAnimation**(animId, deltaTime) — advance time; call each frame with GetFrameTime().
+- **GetSpriteAnimationFrame**(animId) → current frame index (int).
+- **DrawSpriteAnimation**(animId, posX, posY [, scaleX, scaleY, rotation, r, g, b, a]) — draw current frame. Position is top-left; rotation is around center of the frame.
+- **DestroySpriteAnimation**(animId) — remove state (texture is not unloaded).
+
 ---
 
 ## Text rendering
@@ -177,19 +199,11 @@ Use a 2D camera for scrolling or zoomed worlds:
 // SetCamera2D(offsetX, offsetY, targetX, targetY, rotation, zoom)
 SetCamera2D(400, 300, 400, 300, 0, 1.0)
 
-BeginDrawing()
 ClearBackground(20, 20, 30, 255)
-
-// All drawing between BeginMode2D and EndMode2D uses camera (world coordinates)
-BeginMode2D()
-    // Draw world content here
-    DrawRectangle(0, 0, 100, 100, 255, 100, 100, 255)
-EndMode2D()
-
-// UI in screen space (outside Mode2D)
+// Draw world content (world coordinates)
+DrawRectangle(0, 0, 100, 100, 255, 100, 100, 255)
+// UI in screen space
 DrawText("HUD", 10, 10, 20, 255, 255, 255, 255)
-
-EndDrawing()
 ```
 
 **GetWorldToScreen2D(worldX, worldY)** and **GetScreenToWorld2D(screenX, screenY)** convert between world and screen coordinates when using the 2D camera.
@@ -201,7 +215,7 @@ EndDrawing()
 Use this checklist to confirm your program is a valid 2D game:
 
 - [ ] **Window:** `InitWindow(width, height, title)` and `SetTargetFPS(60)` (or desired FPS)
-- [ ] **Loop:** `Main() ... EndMain` or `WHILE NOT WindowShouldClose() ... WEND` (both auto-wrap with BeginDrawing/EndDrawing; you do not call them yourself)
+- [ ] **Loop:** `WHILE NOT WindowShouldClose() ... WEND` (or `REPEAT ... UNTIL WindowShouldClose()`). No auto-wrap; your code compiles as written.
 - [ ] **Clear:** `ClearBackground(r, g, b, a)` at the start of each frame
 - [ ] **Input:** e.g. `IsKeyDown(KEY_W)`, `GetAxisX()`, `GetAxisY()`, `GetMouseX()`, `GetMouseY()`
 - [ ] **Draw:** Primitives (`DrawRectangle`, `DrawCircle`, `DrawLine`, …) or textures (`LoadTexture`, `DrawTexture`, …) and/or `DrawText`
@@ -230,17 +244,32 @@ WHILE NOT WindowShouldClose()
     LET x = x + speed * GetAxisX()
     LET y = y + speed * GetAxisY()
 
-    BeginDrawing()
     ClearBackground(20, 20, 30, 255)
     DrawCircle(x, y, 30, 255, 100, 100, 255)
     DrawText("WASD to move", 10, 10, 20, 255, 255, 255, 255)
-    EndDrawing()
 WEND
 
 CloseWindow()
 ```
 
 Run it: `cyberbasic templates/2d_game.bas`
+
+---
+
+## Full 2D command reference
+
+All 2D-relevant commands in one place. See [API_REFERENCE.md](../API_REFERENCE.md) for details.
+
+- **Window:** `InitWindow`, `SetTargetFPS`, `GetScreenWidth`, `GetScreenHeight`, `GetScreenCenterX`, `GetScreenCenterY`, `CloseWindow`, `WindowShouldClose`
+- **Frame:** `ClearBackground` and your draw calls in the loop. The compiler does not inject any frame or mode calls.
+- **Camera:** `SetCamera2D`, `SetCamera2DCenter`, `GetWorldToScreen2D`, `GetScreenToWorld2D`; `GAME.SetCamera2DFollow`, `GAME.UpdateCamera2D`
+- **Primitives:** `DrawRectangle`, `DrawRectangleLines`, `DrawRectangleRounded`, `DrawCircle`, `DrawCircleLines`, `DrawLine`, `DrawLineEx`, `DrawTriangle`, `DrawPixel`
+- **Textures:** `LoadTexture`, `DrawTexture`, `DrawTextureEx`, `DrawTextureRec`, `UnloadTexture`
+- **Text:** `DrawText`, `DrawTextEx`, `MeasureText`, `LoadFont`, `UnloadFont`
+- **Math / distance:** `Distance2D`, `Lerp`, `Vector2Lerp`, `Vector2MoveTowards`, `Vector2Distance`
+- **Collision:** `CheckCollisionPointRec`, `CheckCollisionRecs`
+- **Game loop / input:** `DeltaTime`, `WHILE NOT WindowShouldClose() … WEND`, `GetAxisX`, `GetAxisY`; `GAME.MoveHorizontal2D`, `GAME.Jump2D`, `GAME.SyncSpriteToBody2D`
+- **Colors:** `NewColor`, and color constants (`Red`, `Green`, `White`, etc.)
 
 ---
 

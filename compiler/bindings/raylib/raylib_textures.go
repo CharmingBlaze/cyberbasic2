@@ -36,6 +36,34 @@ func registerTextures(v *vm.VM) {
 		}
 		return nil, nil
 	})
+	v.RegisterForeign("LoadSprite", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("LoadSprite requires (path)")
+		}
+		path := toString(args[0])
+		tex := rl.LoadTexture(path)
+		texMu.Lock()
+		texCounter++
+		id := fmt.Sprintf("tex_%d", texCounter)
+		textures[id] = tex
+		texMu.Unlock()
+		return id, nil
+	})
+	v.RegisterForeign("DrawSprite", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("DrawSprite requires (spriteId, x, y)")
+		}
+		id := toString(args[0])
+		texMu.Lock()
+		tex, ok := textures[id]
+		texMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown texture id: %s", id)
+		}
+		x, y := toInt32(args[1]), toInt32(args[2])
+		rl.DrawTexture(tex, x, y, rl.White)
+		return nil, nil
+	})
 	v.RegisterForeign("LoadRenderTexture", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
 			return nil, fmt.Errorf("LoadRenderTexture requires (width, height)")

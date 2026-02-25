@@ -4,8 +4,26 @@ package raylib
 import (
 	"cyberbasic/compiler/vm"
 	"fmt"
+	"math"
+	"sync"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
+)
+
+type modelAnimState struct {
+	ModelId      string
+	AnimId       string
+	CurrentTime  float64
+	FPS          float64
+	Loop         bool
+	CurrentFrame int32
+	FrameCount   int32
+}
+
+var (
+	modelAnimStates   = make(map[string]*modelAnimState)
+	modelAnimStateCtr int
+	modelAnimStateMu  sync.Mutex
 )
 
 func register3D(v *vm.VM) {
@@ -19,6 +37,130 @@ func register3D(v *vm.VM) {
 		camera3D.Fovy = 60.0
 		camera3D.Projection = rl.CameraPerspective
 		return nil, nil
+	})
+	// CAMERA3D() returns a new camera id; use SetCameraPosition/Target/Up/Fovy/Projection then SetCurrentCamera(id) before BeginMode3D()
+	v.RegisterForeign("CAMERA3D", func(args []interface{}) (interface{}, error) {
+		camMu.Lock()
+		camCounter++
+		id := fmt.Sprintf("cam_%d", camCounter)
+		cameras[id] = rl.Camera3D{
+			Position:   rl.Vector3{X: 0, Y: 0, Z: 0},
+			Target:     rl.Vector3{X: 0, Y: 0, Z: -1},
+			Up:         rl.Vector3{X: 0, Y: 1, Z: 0},
+			Fovy:       60,
+			Projection: rl.CameraPerspective,
+		}
+		camMu.Unlock()
+		return id, nil
+	})
+	v.RegisterForeign("SetCameraPosition", func(args []interface{}) (interface{}, error) {
+		if len(args) == 3 {
+			// SetCameraPosition(x, y, z): set global/default camera position
+			camera3D.Position = rl.Vector3{X: toFloat32(args[0]), Y: toFloat32(args[1]), Z: toFloat32(args[2])}
+			return nil, nil
+		}
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetCameraPosition requires (x, y, z) or (cameraId, x, y, z)")
+		}
+		id := toString(args[0])
+		camMu.Lock()
+		defer camMu.Unlock()
+		c, ok := cameras[id]
+		if !ok {
+			return nil, fmt.Errorf("unknown camera id: %s", id)
+		}
+		c.Position = rl.Vector3{X: toFloat32(args[1]), Y: toFloat32(args[2]), Z: toFloat32(args[3])}
+		cameras[id] = c
+		return nil, nil
+	})
+	v.RegisterForeign("SetCameraTarget", func(args []interface{}) (interface{}, error) {
+		if len(args) == 3 {
+			tx, ty, tz := toFloat32(args[0]), toFloat32(args[1]), toFloat32(args[2])
+			camera3D.Target = rl.Vector3{X: tx, Y: ty, Z: tz}
+			orbitStateMu.Lock()
+			orbitTargetX, orbitTargetY, orbitTargetZ = tx, ty, tz
+			orbitStateMu.Unlock()
+			return nil, nil
+		}
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetCameraTarget requires (x, y, z) or (cameraId, x, y, z)")
+		}
+		id := toString(args[0])
+		camMu.Lock()
+		defer camMu.Unlock()
+		c, ok := cameras[id]
+		if !ok {
+			return nil, fmt.Errorf("unknown camera id: %s", id)
+		}
+		c.Target = rl.Vector3{X: toFloat32(args[1]), Y: toFloat32(args[2]), Z: toFloat32(args[3])}
+		cameras[id] = c
+		return nil, nil
+	})
+	v.RegisterForeign("SetCameraUp", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetCameraUp requires (cameraId, x, y, z)")
+		}
+		id := toString(args[0])
+		camMu.Lock()
+		defer camMu.Unlock()
+		c, ok := cameras[id]
+		if !ok {
+			return nil, fmt.Errorf("unknown camera id: %s", id)
+		}
+		c.Up = rl.Vector3{X: toFloat32(args[1]), Y: toFloat32(args[2]), Z: toFloat32(args[3])}
+		cameras[id] = c
+		return nil, nil
+	})
+	v.RegisterForeign("SetCameraFovy", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetCameraFovy requires (cameraId, fovy)")
+		}
+		id := toString(args[0])
+		camMu.Lock()
+		defer camMu.Unlock()
+		c, ok := cameras[id]
+		if !ok {
+			return nil, fmt.Errorf("unknown camera id: %s", id)
+		}
+		c.Fovy = toFloat32(args[1])
+		cameras[id] = c
+		return nil, nil
+	})
+	v.RegisterForeign("SetCameraProjection", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetCameraProjection requires (cameraId, projection)")
+		}
+		id := toString(args[0])
+		proj := toInt32(args[1])
+		camMu.Lock()
+		defer camMu.Unlock()
+		c, ok := cameras[id]
+		if !ok {
+			return nil, fmt.Errorf("unknown camera id: %s", id)
+		}
+		c.Projection = rl.CameraProjection(proj)
+		cameras[id] = c
+		return nil, nil
+	})
+	v.RegisterForeign("SetCurrentCamera", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SetCurrentCamera requires (cameraId)")
+		}
+		id := toString(args[0])
+		camMu.Lock()
+		c, ok := cameras[id]
+		camMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown camera id: %s", id)
+		}
+		camera3D = c
+		return nil, nil
+	})
+	v.RegisterForeign("CAMERA_PERSPECTIVE", func(args []interface{}) (interface{}, error) {
+		return int(rl.CameraPerspective), nil
+	})
+	v.RegisterForeign("CAMERA_ORTHOGRAPHIC", func(args []interface{}) (interface{}, error) {
+		return int(rl.CameraOrthographic), nil
 	})
 	v.RegisterForeign("BeginMode3D", func(args []interface{}) (interface{}, error) {
 		rl.BeginMode3D(camera3D)
@@ -39,6 +181,28 @@ func register3D(v *vm.VM) {
 		id := fmt.Sprintf("model_%d", modelCounter)
 		models[id] = model
 		modelMu.Unlock()
+		return id, nil
+	})
+	v.RegisterForeign("LoadModelAnimated", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("LoadModelAnimated requires (path)")
+		}
+		path := toString(args[0])
+		model := rl.LoadModel(path)
+		modelMu.Lock()
+		modelCounter++
+		id := fmt.Sprintf("model_%d", modelCounter)
+		models[id] = model
+		modelMu.Unlock()
+		anims := rl.LoadModelAnimations(path)
+		animMu.Lock()
+		for _, a := range anims {
+			animCounter++
+			animId := fmt.Sprintf("anim_%d", animCounter)
+			animations[animId] = a
+			lastLoadedAnimIds = append(lastLoadedAnimIds, animId)
+		}
+		animMu.Unlock()
 		return id, nil
 	})
 	v.RegisterForeign("LoadModelFromMesh", func(args []interface{}) (interface{}, error) {
@@ -72,11 +236,62 @@ func register3D(v *vm.VM) {
 		if ok {
 			rl.UnloadModel(model)
 		}
+		modelStateMu.Lock()
+		delete(modelColors, id)
+		delete(modelAngles, id)
+		modelStateMu.Unlock()
 		return nil, nil
 	})
-	v.RegisterForeign("DrawModel", func(args []interface{}) (interface{}, error) {
+	// LoadCube(size): create a cube model (GenMeshCube + LoadModelFromMesh); returns model id
+	v.RegisterForeign("LoadCube", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("LoadCube requires (size)")
+		}
+		s := toFloat32(args[0])
+		mesh := rl.GenMeshCube(s, s, s)
+		meshMu.Lock()
+		meshCounter++
+		meshId := fmt.Sprintf("mesh_%d", meshCounter)
+		meshes[meshId] = mesh
+		meshMu.Unlock()
+		model := rl.LoadModelFromMesh(mesh)
+		modelMu.Lock()
+		modelCounter++
+		id := fmt.Sprintf("model_%d", modelCounter)
+		models[id] = model
+		modelMu.Unlock()
+		return id, nil
+	})
+	// SetModelColor(modelId, r, g, b, a): store tint for simplified DrawModel
+	v.RegisterForeign("SetModelColor", func(args []interface{}) (interface{}, error) {
 		if len(args) < 5 {
-			return nil, fmt.Errorf("DrawModel requires (id, posX, posY, posZ, scale) and optional tint")
+			return nil, fmt.Errorf("SetModelColor requires (modelId, r, g, b, a)")
+		}
+		id := toString(args[0])
+		c := rl.NewColor(toUint8(args[1]), toUint8(args[2]), toUint8(args[3]), toUint8(args[4]))
+		modelStateMu.Lock()
+		modelColors[id] = c
+		modelStateMu.Unlock()
+		return nil, nil
+	})
+	// RotateModel(modelId, speedDegPerSec): add speed*GetFrameTime() to stored angle (radians) for this model
+	v.RegisterForeign("RotateModel", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("RotateModel requires (modelId, speedDegPerSec)")
+		}
+		id := toString(args[0])
+		speedDeg := toFloat32(args[1])
+		dt := rl.GetFrameTime()
+		radPerSec := speedDeg * (3.14159265 / 180)
+		modelStateMu.Lock()
+		modelAngles[id] += radPerSec * dt
+		modelStateMu.Unlock()
+		return nil, nil
+	})
+	// DrawModelSimple(id, x, y, z [, angle]): draw with scale 1, axis Y; uses SetModelColor tint and RotateModel angle when omitted
+	v.RegisterForeign("DrawModelSimple", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("DrawModelSimple requires (id, x, y, z) or (id, x, y, z, angle)")
 		}
 		id := toString(args[0])
 		modelMu.Lock()
@@ -86,10 +301,54 @@ func register3D(v *vm.VM) {
 			return nil, fmt.Errorf("unknown model id: %s", id)
 		}
 		pos := rl.Vector3{X: toFloat32(args[1]), Y: toFloat32(args[2]), Z: toFloat32(args[3])}
-		scale := toFloat32(args[4])
+		var angle float32
+		if len(args) >= 5 {
+			angle = toFloat32(args[4])
+		} else {
+			modelStateMu.Lock()
+			angle = modelAngles[id]
+			modelStateMu.Unlock()
+		}
+		modelStateMu.Lock()
+		c := modelColors[id]
+		modelStateMu.Unlock()
+		if c.A == 0 && c.R == 0 && c.G == 0 && c.B == 0 {
+			c = rl.White
+		}
+		rotAxis := rl.Vector3{X: 0, Y: 1, Z: 0}
+		scale := rl.Vector3{X: 1, Y: 1, Z: 1}
+		rl.DrawModelEx(model, pos, rotAxis, angle, scale, c)
+		return nil, nil
+	})
+	v.RegisterForeign("DrawModel", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("DrawModel requires (id, posX, posY, posZ, scale) or (id, VECTOR3, scale [, tint])")
+		}
+		id := toString(args[0])
+		modelMu.Lock()
+		model, ok := models[id]
+		modelMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown model id: %s", id)
+		}
+		var pos rl.Vector3
+		var scale float32
+		var tintStart int
+		if sl, ok := args[1].([]interface{}); ok && len(sl) >= 3 {
+			pos = rl.Vector3{X: toFloat32(sl[0]), Y: toFloat32(sl[1]), Z: toFloat32(sl[2])}
+			scale = toFloat32(args[2])
+			tintStart = 3
+		} else {
+			if len(args) < 5 {
+				return nil, fmt.Errorf("DrawModel requires (id, posX, posY, posZ, scale) and optional tint")
+			}
+			pos = rl.Vector3{X: toFloat32(args[1]), Y: toFloat32(args[2]), Z: toFloat32(args[3])}
+			scale = toFloat32(args[4])
+			tintStart = 5
+		}
 		c := rl.White
-		if len(args) >= 9 {
-			c = argsToColor(args, 5)
+		if len(args) >= tintStart+4 {
+			c = argsToColor(args, tintStart)
 		}
 		rl.DrawModel(model, pos, scale, c)
 		return nil, nil
@@ -694,6 +953,94 @@ func register3D(v *vm.VM) {
 		}
 		return lastLoadedAnimIds[index], nil
 	})
+	v.RegisterForeign("PlayModelAnimation", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("PlayModelAnimation requires (modelId, animId)")
+		}
+		modelId := toString(args[0])
+		animId := toString(args[1])
+		modelMu.Lock()
+		model, okModel := models[modelId]
+		modelMu.Unlock()
+		if !okModel {
+			return nil, nil
+		}
+		animMu.Lock()
+		anim, okAnim := animations[animId]
+		animMu.Unlock()
+		if !okAnim {
+			return nil, nil
+		}
+		rl.UpdateModelAnimation(model, anim, 0)
+		modelMu.Lock()
+		models[modelId] = model
+		modelMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetModelTexture", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetModelTexture requires (modelId, textureId)")
+		}
+		modelId := toString(args[0])
+		texId := toString(args[1])
+		modelMu.Lock()
+		model, okModel := models[modelId]
+		modelMu.Unlock()
+		if !okModel {
+			return nil, fmt.Errorf("unknown model id: %s", modelId)
+		}
+		texMu.Lock()
+		tex, okTex := textures[texId]
+		texMu.Unlock()
+		if !okTex {
+			return nil, fmt.Errorf("unknown texture id: %s", texId)
+		}
+		if model.MaterialCount > 0 && model.Materials != nil {
+			// raylib-go: Materials is *Material, Maps is *MaterialMap; set diffuse texture
+			model.Materials.Maps.Texture = tex
+		}
+		modelMu.Lock()
+		models[modelId] = model
+		modelMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetMaterialTexture", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetMaterialTexture requires (modelId, textureId)")
+		}
+		modelId := toString(args[0])
+		texId := toString(args[1])
+		modelMu.Lock()
+		model, okModel := models[modelId]
+		modelMu.Unlock()
+		if !okModel {
+			return nil, fmt.Errorf("unknown model id: %s", modelId)
+		}
+		texMu.Lock()
+		tex, okTex := textures[texId]
+		texMu.Unlock()
+		if !okTex {
+			return nil, fmt.Errorf("unknown texture id: %s", texId)
+		}
+		if model.MaterialCount > 0 && model.Materials != nil {
+			model.Materials.Maps.Texture = tex
+		}
+		modelMu.Lock()
+		models[modelId] = model
+		modelMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetMaterialColor", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("SetMaterialColor requires (modelId, r, g, b, a)")
+		}
+		id := toString(args[0])
+		c := rl.NewColor(toUint8(args[1]), toUint8(args[2]), toUint8(args[3]), toUint8(args[4]))
+		modelStateMu.Lock()
+		modelColors[id] = c
+		modelStateMu.Unlock()
+		return nil, nil
+	})
 
 	v.RegisterForeign("UpdateModelAnimation", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {
@@ -813,5 +1160,323 @@ func register3D(v *vm.VM) {
 			return false, nil
 		}
 		return rl.IsModelAnimationValid(model, anim), nil
+	})
+
+	v.RegisterForeign("GetModelAnimationFrameCount", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return 0, nil
+		}
+		animId := toString(args[0])
+		animMu.Lock()
+		anim, ok := animations[animId]
+		animMu.Unlock()
+		if !ok {
+			return 0, nil
+		}
+		return int(anim.FrameCount), nil
+	})
+
+	// --- Model animation state (time-based playback) ---
+	v.RegisterForeign("CreateModelAnimState", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("CreateModelAnimState requires (modelId, animId, fps [, loop])")
+		}
+		modelId := toString(args[0])
+		animId := toString(args[1])
+		fps := toFloat64(args[2])
+		if fps <= 0 {
+			fps = 24
+		}
+		loop := true
+		if len(args) >= 4 && args[3] != nil {
+			switch x := args[3].(type) {
+			case bool:
+				loop = x
+			case int:
+				loop = x != 0
+			case float64:
+				loop = x != 0
+			}
+		}
+		modelMu.Lock()
+		_, okModel := models[modelId]
+		modelMu.Unlock()
+		if !okModel {
+			return nil, fmt.Errorf("unknown model id: %s", modelId)
+		}
+		animMu.Lock()
+		anim, okAnim := animations[animId]
+		animMu.Unlock()
+		if !okAnim {
+			return nil, fmt.Errorf("unknown animation id: %s", animId)
+		}
+		frameCount := anim.FrameCount
+		if frameCount <= 0 {
+			frameCount = 1
+		}
+		modelAnimStateMu.Lock()
+		modelAnimStateCtr++
+		stateId := fmt.Sprintf("modelanim_%d", modelAnimStateCtr)
+		modelAnimStates[stateId] = &modelAnimState{
+			ModelId:      modelId,
+			AnimId:       animId,
+			FPS:          fps,
+			Loop:         loop,
+			FrameCount:   frameCount,
+		}
+		modelAnimStateMu.Unlock()
+		return stateId, nil
+	})
+
+	v.RegisterForeign("UpdateModelAnimState", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("UpdateModelAnimState requires (stateId, deltaTime)")
+		}
+		stateId := toString(args[0])
+		dt := toFloat64(args[1])
+		modelAnimStateMu.Lock()
+		st, ok := modelAnimStates[stateId]
+		modelAnimStateMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown model anim state id: %s", stateId)
+		}
+		st.CurrentTime += dt
+		frame := int32(st.CurrentTime * st.FPS)
+		if st.Loop && st.FrameCount > 0 {
+			for frame >= st.FrameCount {
+				frame -= st.FrameCount
+			}
+			for frame < 0 {
+				frame += st.FrameCount
+			}
+		} else {
+			if frame >= st.FrameCount {
+				frame = st.FrameCount - 1
+			}
+			if frame < 0 {
+				frame = 0
+			}
+		}
+		st.CurrentFrame = frame
+		modelMu.Lock()
+		model, okModel := models[st.ModelId]
+		modelMu.Unlock()
+		if !okModel {
+			return nil, nil
+		}
+		animMu.Lock()
+		anim, okAnim := animations[st.AnimId]
+		animMu.Unlock()
+		if !okAnim {
+			return nil, nil
+		}
+		rl.UpdateModelAnimation(model, anim, frame)
+		modelMu.Lock()
+		models[st.ModelId] = model
+		modelMu.Unlock()
+		return nil, nil
+	})
+
+	v.RegisterForeign("SetModelAnimStateFrame", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetModelAnimStateFrame requires (stateId, frameIndex)")
+		}
+		stateId := toString(args[0])
+		idx := toInt32(args[1])
+		modelAnimStateMu.Lock()
+		st, ok := modelAnimStates[stateId]
+		modelAnimStateMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown model anim state id: %s", stateId)
+		}
+		if idx < 0 {
+			idx = 0
+		}
+		if idx >= st.FrameCount {
+			idx = st.FrameCount - 1
+		}
+		st.CurrentFrame = idx
+		st.CurrentTime = float64(idx) / st.FPS
+		modelMu.Lock()
+		model, okModel := models[st.ModelId]
+		modelMu.Unlock()
+		if !okModel {
+			return nil, nil
+		}
+		animMu.Lock()
+		anim, okAnim := animations[st.AnimId]
+		animMu.Unlock()
+		if !okAnim {
+			return nil, nil
+		}
+		rl.UpdateModelAnimation(model, anim, idx)
+		modelMu.Lock()
+		models[st.ModelId] = model
+		modelMu.Unlock()
+		return nil, nil
+	})
+
+	v.RegisterForeign("GetModelAnimStateFrame", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return 0, nil
+		}
+		stateId := toString(args[0])
+		modelAnimStateMu.Lock()
+		defer modelAnimStateMu.Unlock()
+		st, ok := modelAnimStates[stateId]
+		if !ok {
+			return 0, nil
+		}
+		return int(st.CurrentFrame), nil
+	})
+
+	v.RegisterForeign("DestroyModelAnimState", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		stateId := toString(args[0])
+		modelAnimStateMu.Lock()
+		delete(modelAnimStates, stateId)
+		modelAnimStateMu.Unlock()
+		return nil, nil
+	})
+
+	// --- Lighting (state stored for custom shaders; raylib has no built-in lighting) ---
+	v.RegisterForeign("ENABLELIGHTING", func(args []interface{}) (interface{}, error) {
+		lightingOn = true
+		return nil, nil
+	})
+	v.RegisterForeign("LIGHT", func(args []interface{}) (interface{}, error) {
+		lightMu.Lock()
+		lightCtr++
+		id := fmt.Sprintf("light_%d", lightCtr)
+		lightIds[id] = true
+		lightMu.Unlock()
+		return id, nil
+	})
+	v.RegisterForeign("LIGHT_DIRECTIONAL", func(args []interface{}) (interface{}, error) {
+		return 0, nil
+	})
+	v.RegisterForeign("CreateLight", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("CreateLight requires (type, x, y, z)")
+		}
+		lightType := toInt32(args[0])
+		x, y, z := toFloat32(args[1]), toFloat32(args[2]), toFloat32(args[3])
+		lightMu.Lock()
+		lightCtr++
+		id := fmt.Sprintf("light_%d", lightCtr)
+		lightIds[id] = true
+		lightMu.Unlock()
+		lightDataMu.Lock()
+		lightData[id] = &struct {
+			Type      int
+			X, Y, Z   float32
+			R, G, B   uint8
+			Intensity float32
+			DirX, DirY, DirZ float32
+		}{Type: int(lightType), X: x, Y: y, Z: z, R: 255, G: 255, B: 255, Intensity: 1}
+		lightDataMu.Unlock()
+		return id, nil
+	})
+	v.RegisterForeign("SetLightType", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetLightType requires (lightId, type)")
+		}
+		id := toString(args[0])
+		lightDataMu.Lock()
+		if d, ok := lightData[id]; ok {
+			d.Type = int(toInt32(args[1]))
+		}
+		lightDataMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetLightPosition", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetLightPosition requires (lightId, x, y, z)")
+		}
+		id := toString(args[0])
+		lightDataMu.Lock()
+		if d, ok := lightData[id]; ok {
+			d.X, d.Y, d.Z = toFloat32(args[1]), toFloat32(args[2]), toFloat32(args[3])
+		}
+		lightDataMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetLightTarget", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetLightTarget requires (lightId, x, y, z)")
+		}
+		id := toString(args[0])
+		tx, ty, tz := toFloat32(args[1]), toFloat32(args[2]), toFloat32(args[3])
+		lightDataMu.Lock()
+		if d, ok := lightData[id]; ok {
+			dx, dy, dz := tx-d.X, ty-d.Y, tz-d.Z
+			len := float32(math.Sqrt(float64(dx*dx + dy*dy + dz*dz)))
+			if len > 1e-6 {
+				d.DirX, d.DirY, d.DirZ = dx/len, dy/len, dz/len
+			}
+		}
+		lightDataMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetLightColor", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetLightColor requires (lightId, r, g, b)")
+		}
+		id := toString(args[0])
+		lightDataMu.Lock()
+		if d, ok := lightData[id]; ok {
+			d.R = uint8(toFloat64(args[1])) & 0xff
+			d.G = uint8(toFloat64(args[2])) & 0xff
+			d.B = uint8(toFloat64(args[3])) & 0xff
+		}
+		lightDataMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetLightIntensity", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetLightIntensity requires (lightId, amount)")
+		}
+		id := toString(args[0])
+		lightDataMu.Lock()
+		if d, ok := lightData[id]; ok {
+			d.Intensity = toFloat32(args[1])
+		}
+		lightDataMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetLightDirection", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetLightDirection requires (lightId, x, y, z)")
+		}
+		id := toString(args[0])
+		dx, dy, dz := toFloat32(args[1]), toFloat32(args[2]), toFloat32(args[3])
+		lightDataMu.Lock()
+		if d, ok := lightData[id]; ok {
+			len := float32(math.Sqrt(float64(dx*dx + dy*dy + dz*dz)))
+			if len > 1e-6 {
+				d.DirX, d.DirY, d.DirZ = dx/len, dy/len, dz/len
+			}
+		}
+		lightDataMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("EnableShadows", func(args []interface{}) (interface{}, error) {
+		shadowsEnabled = true
+		return nil, nil
+	})
+	v.RegisterForeign("DisableShadows", func(args []interface{}) (interface{}, error) {
+		shadowsEnabled = false
+		return nil, nil
+	})
+	v.RegisterForeign("SETAMBIENTLIGHT", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("SETAMBIENTLIGHT requires (r, g, b)")
+		}
+		ambientR = toFloat32(args[0])
+		ambientG = toFloat32(args[1])
+		ambientB = toFloat32(args[2])
+		return nil, nil
 	})
 }

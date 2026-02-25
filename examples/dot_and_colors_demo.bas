@@ -1,22 +1,17 @@
-// Dot notation and color constants demo
-// Uses RL.ClearBackground(RL.DarkGray), RL.White, GetMousePosition().x
+// Dot notation and color constants demo - flat API
+// Uses ClearBackground, GetMouseX, DrawText, DrawRectangle
 
-RL.InitWindow(800, 450, "Dot and Colors Demo")
-RL.SetTargetFPS(60)
+InitWindow(800, 450, "Dot and Colors Demo")
+SetTargetFPS(60)
 
-DIM mx AS Float
-DIM pos AS Vector2
+WHILE NOT WindowShouldClose()
+  VAR mx = GetMouseX()
+  ClearBackground(80, 80, 80, 255)
+  DrawText("Mouse X: " + STR(mx), 20, 20, 20, 255, 255, 255, 255)
+  DrawRectangle(100, 100, 200, 80, 0, 100, 255, 255)
+  DrawRectangle(400, 200, 150, 150, 255, 220, 0, 255)
+  DrawText("Close window to exit", 20, 420, 14, 200, 200, 200, 255)
+WEND
 
-REPEAT
-  RL.BeginDrawing()
-  RL.ClearBackground(RL.DarkGray)
-  pos = RL.GetMousePosition()
-  mx = pos.x
-  RL.DrawText("Mouse X: " + STR(mx), 20, 20, 20, RL.White)
-  RL.DrawRectangle(100, 100, 200, 80, RL.Blue)
-  RL.DrawRectangle(400, 200, 150, 150, RL.Yellow)
-  RL.EndDrawing()
-UNTIL RL.WindowShouldClose()
-
-RL.CloseWindow()
+CloseWindow()
 PRINT "Done."

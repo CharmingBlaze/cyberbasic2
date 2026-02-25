@@ -25,8 +25,19 @@ var (
 	modelCounter int
 	modelMu      sync.Mutex
 
-	camera3D rl.Camera3D
-	camera2D rl.Camera2D
+	camera3D   rl.Camera3D
+	camera2D   rl.Camera2D
+	cameras    = make(map[string]rl.Camera3D)
+	camCounter int
+	camMu      sync.Mutex
+
+	lightIds   = make(map[string]bool)
+	lightCtr   int
+	lightMu    sync.Mutex
+	ambientR   float32
+	ambientG   float32
+	ambientB   float32
+	lightingOn bool
 
 	renderTextures   = make(map[string]rl.RenderTexture2D)
 	renderTexCounter int
@@ -89,6 +100,81 @@ var (
 	lastCodepointsMu sync.Mutex
 	lastTextSplit   []string
 	lastTextSplitMu sync.Mutex
+
+	// Orbit camera state (used by CameraZoom, CameraRotate(dx,dy), UpdateCamera, MouseOrbitCamera)
+	orbitTargetX   float32
+	orbitTargetY   float32
+	orbitTargetZ   float32
+	orbitAngle     float32
+	orbitPitch     float32
+	orbitDistance  float32
+	orbitStateMu   sync.Mutex
+
+	// FPS MouseLook state (yaw, pitch in radians)
+	mouseLookYaw   float32
+	mouseLookPitch float32
+	mouseLookMu    sync.Mutex
+
+	// Per-model state for simplified DrawModel / RotateModel / SetModelColor
+	modelColors   = make(map[string]rl.Color)
+	modelAngles   = make(map[string]float32) // radians
+	modelStateMu  sync.Mutex
+
+	// Camera clip plane (stored for custom projection if needed)
+	cameraNearZ float32
+	cameraFarZ  float32
+
+	// Camera shake state
+	cameraShakeAmount    float32
+	cameraShakeDuration  float32
+	cameraShakeMu        sync.Mutex
+
+	// CollisionBox(id): center (x,y,z) + half-extents (hw,hh,hd)
+	collisionBoxes   = make(map[string]struct{ Cx, Cy, Cz, Hw, Hh, Hd float64 })
+	collisionBoxSeq  int
+	collisionBoxMu   sync.Mutex
+
+	// CreateLight / SetLight* state
+	lightData   = make(map[string]*struct {
+		Type       int
+		X, Y, Z    float32
+		R, G, B    uint8
+		Intensity  float32
+		DirX, DirY, DirZ float32
+	})
+	lightDataMu sync.Mutex
+	shadowsEnabled bool
+
+	// RemoveShader() ends current shader mode
+	currentShaderId string
+	currentShaderMu sync.Mutex
+
+	// Skybox / sky
+	skyboxEnabled bool
+	skyColorR, skyColorG, skyColorB uint8 = 135, 206, 235
+
+	// Post-processing (state only; actual effects need RT + shaders)
+	bloomEnabled      bool
+	bloomIntensity    float32
+	motionBlurEnabled bool
+	crtFilterEnabled  bool
+	pixelateSize      int32
+
+	// Terrain: id -> height grid and optional model
+	terrainHeights   = make(map[string][]float32)
+	terrainWidth     = make(map[string]int)
+	terrainDepth     = make(map[string]int)
+	terrainScale     = make(map[string]float32)
+	terrainTexId     = make(map[string]string)
+	terrainMaterial  = make(map[string]string)
+	terrainSeq       int
+	terrainMu        sync.Mutex
+	terrainBrushSize     float32 = 3
+	terrainBrushStrength float32 = 0.1
+	terrainUndoStack     = make(map[string][]float32) // terrainId -> previous heights copy
+
+	// Skybox: cubemap texture id (optional); drawing uses SetSkyColor clear or cubemap
+	skyboxTexId string
 )
 
 // getRand returns the seedable RNG, creating it with a time-based seed if never set.
@@ -205,6 +291,7 @@ func argsToVector2Slice(args []interface{}, startIndex, count int) []rl.Vector2 
 
 // RegisterRaylib registers all raylib-go functions with the VM (modular: core, input, shapes, text, textures, 3d, audio, fonts, misc, game).
 func RegisterRaylib(v *vm.VM) {
+	registerFlags(v)
 	registerCore(v)
 	registerInput(v)
 	registerShapes(v)
@@ -218,5 +305,11 @@ func RegisterRaylib(v *vm.VM) {
 	registerMisc(v)
 	registerMath(v)
 	registerGame(v)
+	registerAnim2D(v)
 	registerUI(v)
+	registerRaygui(v)
+	registerFog(v)
+	registerViews(v)
+	registerEditor(v)
+	registerAdvanced(v)
 }

@@ -6,6 +6,7 @@ package ecs
 import (
 	"fmt"
 	"strconv"
+	"strings"
 	"sync"
 
 	"cyberbasic/compiler/vm"
@@ -53,6 +54,7 @@ type compSprite struct {
 	Visible   bool
 }
 type compHealth struct{ Current, Max float64 }
+type compParent struct{ ParentID string }
 
 var (
 	worldsMu sync.RWMutex
@@ -68,13 +70,31 @@ type worldState struct {
 	compNames map[string]bool                    // allowed component type names
 }
 
+// canonicalComponentType returns the canonical name (e.g. "Transform") or "" if unknown. Case-insensitive.
+func canonicalComponentType(s string) string {
+	s = strings.TrimSpace(s)
+	s = strings.Trim(s, "\"'`")
+	switch strings.ToLower(s) {
+	case "transform":
+		return "Transform"
+	case "sprite":
+		return "Sprite"
+	case "health":
+		return "Health"
+	case "parent":
+		return "Parent"
+	default:
+		return ""
+	}
+}
+
 func newWorldState() *worldState {
 	ws := &worldState{
 		entities:  []string{},
 		comps:     make(map[string]map[string]interface{}),
 		compNames: make(map[string]bool),
 	}
-	for _, n := range []string{"Transform", "Sprite", "Health"} {
+	for _, n := range []string{"Transform", "Sprite", "Health", "Parent"} {
 		ws.compNames[n] = true
 	}
 	return ws
@@ -152,15 +172,16 @@ func RegisterECS(v *vm.VM) {
 		}
 		wid := toString(args[0])
 		eid := toString(args[1])
-		ctype := toString(args[2])
+		ctypeRaw := toString(args[2])
+		ctype := canonicalComponentType(ctypeRaw)
 		worldsMu.RLock()
 		ws, ok := worlds[wid]
 		worldsMu.RUnlock()
 		if !ok {
 			return nil, fmt.Errorf("unknown world: %s", wid)
 		}
-		if !ws.compNames[ctype] {
-			return nil, fmt.Errorf("unknown component type: %s (use Transform, Sprite, Health)", ctype)
+		if ctype == "" || !ws.compNames[ctype] {
+			return nil, fmt.Errorf("unknown component type: %q (use Transform, Sprite, Health, Parent)", ctypeRaw)
 		}
 		var data interface{}
 		switch ctype {
@@ -186,6 +207,12 @@ func RegisterECS(v *vm.VM) {
 				cur, max = toFloat64(args[3]), toFloat64(args[4])
 			}
 			data = &compHealth{Current: cur, Max: max}
+		case "Parent":
+			parentId := ""
+			if len(args) >= 4 {
+				parentId = toString(args[3])
+			}
+			data = &compParent{ParentID: parentId}
 		default:
 			return nil, fmt.Errorf("unknown component type: %s", ctype)
 		}
@@ -204,7 +231,7 @@ func RegisterECS(v *vm.VM) {
 		}
 		wid := toString(args[0])
 		eid := toString(args[1])
-		ctype := toString(args[2])
+		ctype := canonicalComponentType(toString(args[2]))
 		worldsMu.RLock()
 		ws, ok := worlds[wid]
 		worldsMu.RUnlock()
@@ -223,7 +250,7 @@ func RegisterECS(v *vm.VM) {
 		}
 		wid := toString(args[0])
 		eid := toString(args[1])
-		ctype := toString(args[2])
+		ctype := canonicalComponentType(toString(args[2]))
 		worldsMu.RLock()
 		ws, ok := worlds[wid]
 		worldsMu.RUnlock()
@@ -266,6 +293,42 @@ func RegisterECS(v *vm.VM) {
 		return nil, nil
 	})
 
+	// Entity placement: alias for SetTransform
+	v.RegisterForeign("ECS.PlaceEntity", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("ECS.PlaceEntity requires (worldId, entityId, x, y, z)")
+		}
+		wid := toString(args[0])
+		eid := toString(args[1])
+		x, y, z := toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])
+		worldsMu.RLock()
+		ws, ok := worlds[wid]
+		worldsMu.RUnlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown world: %s", wid)
+		}
+		ws.mu.Lock()
+		defer ws.mu.Unlock()
+		if m, ok := ws.comps[eid]["Transform"].(*compTransform); ok {
+			m.X, m.Y, m.Z = x, y, z
+		}
+		return nil, nil
+	})
+
+	// Scene graph: world position (local + parent chain)
+	v.RegisterForeign("ECS.GetWorldPositionX", func(args []interface{}) (interface{}, error) {
+		x, _, _ := getWorldPosition(toString(args[0]), toString(args[1]))
+		return x, nil
+	})
+	v.RegisterForeign("ECS.GetWorldPositionY", func(args []interface{}) (interface{}, error) {
+		_, y, _ := getWorldPosition(toString(args[0]), toString(args[1]))
+		return y, nil
+	})
+	v.RegisterForeign("ECS.GetWorldPositionZ", func(args []interface{}) (interface{}, error) {
+		_, _, z := getWorldPosition(toString(args[0]), toString(args[1]))
+		return z, nil
+	})
+
 	// Getters for Health
 	v.RegisterForeign("ECS.GetHealthCurrent", func(args []interface{}) (interface{}, error) {
 		return getCompFloatHealth(args, func(c *compHealth) float64 { return c.Current })
@@ -290,7 +353,10 @@ func RegisterECS(v *vm.VM) {
 		}
 		types := make([]string, 0, len(args)-1)
 		for i := 1; i < len(args); i++ {
-			types = append(types, toString(args[i]))
+			t := canonicalComponentType(toString(args[i]))
+			if t != "" {
+				types = append(types, t)
+			}
 		}
 		ws.mu.RLock()
 		defer ws.mu.RUnlock()
@@ -316,7 +382,7 @@ func RegisterECS(v *vm.VM) {
 			return nil, fmt.Errorf("ECS.QueryEntity requires (worldId, componentType, index)")
 		}
 		wid := toString(args[0])
-		ctype := toString(args[1])
+		ctype := canonicalComponentType(toString(args[1]))
 		idx := toInt(args[2])
 		worldsMu.RLock()
 		ws, ok := worlds[wid]
@@ -337,6 +403,165 @@ func RegisterECS(v *vm.VM) {
 		}
 		return nil, nil
 	})
+
+	// Unprefixed aliases (use default world "default")
+	const defaultWorld = "default"
+	v.RegisterForeign("CreateEntity", func(args []interface{}) (interface{}, error) {
+		worldsMu.Lock()
+		ws, ok := worlds[defaultWorld]
+		if !ok {
+			ws = newWorldState()
+			worlds[defaultWorld] = ws
+		}
+		ws.mu.Lock()
+		ws.nextEid++
+		eid := fmt.Sprintf("e%d", ws.nextEid)
+		ws.entities = append(ws.entities, eid)
+		ws.comps[eid] = make(map[string]interface{})
+		ws.mu.Unlock()
+		worldsMu.Unlock()
+		return eid, nil
+	})
+	v.RegisterForeign("AddComponent", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("AddComponent requires (entityId, componentType, ...)")
+		}
+		eid := toString(args[0])
+		ctypeRaw := toString(args[1])
+		ctype := canonicalComponentType(ctypeRaw)
+		worldsMu.RLock()
+		ws, ok := worlds[defaultWorld]
+		worldsMu.RUnlock()
+		if !ok {
+			worldsMu.Lock()
+			ws = newWorldState()
+			worlds[defaultWorld] = ws
+			worldsMu.Unlock()
+		}
+		if ctype == "" || !ws.compNames[ctype] {
+			return nil, fmt.Errorf("unknown component type: %q", ctypeRaw)
+		}
+		var data interface{}
+		switch ctype {
+		case "Transform":
+			x, y, z := 0.0, 0.0, 0.0
+			if len(args) >= 5 {
+				x, y, z = toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])
+			}
+			data = &compTransform{X: x, Y: y, Z: z}
+		case "Sprite":
+			texId := ""
+			visible := true
+			if len(args) >= 3 {
+				texId = toString(args[2])
+			}
+			if len(args) >= 4 {
+				visible = toInt(args[3]) != 0
+			}
+			data = &compSprite{TextureId: texId, Visible: visible}
+		case "Health":
+			cur, max := 100.0, 100.0
+			if len(args) >= 4 {
+				cur, max = toFloat64(args[2]), toFloat64(args[3])
+			}
+			data = &compHealth{Current: cur, Max: max}
+		case "Parent":
+			parentId := ""
+			if len(args) >= 3 {
+				parentId = toString(args[2])
+			}
+			data = &compParent{ParentID: parentId}
+		default:
+			return nil, fmt.Errorf("unknown component type: %s", ctype)
+		}
+		ws.mu.Lock()
+		if ws.comps[eid] == nil {
+			ws.comps[eid] = make(map[string]interface{})
+		}
+		ws.comps[eid][ctype] = data
+		ws.mu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("GetComponent", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("GetComponent requires (entityId, componentType)")
+		}
+		eid := toString(args[0])
+		ctype := canonicalComponentType(toString(args[1]))
+		worldsMu.RLock()
+		ws, ok := worlds[defaultWorld]
+		worldsMu.RUnlock()
+		if !ok {
+			return map[string]interface{}{}, nil
+		}
+		ws.mu.RLock()
+		c, ok := ws.comps[eid][ctype]
+		ws.mu.RUnlock()
+		if !ok {
+			return map[string]interface{}{}, nil
+		}
+		out := make(map[string]interface{})
+		if t, ok := c.(*compTransform); ok {
+			out["x"], out["y"], out["z"] = t.X, t.Y, t.Z
+		}
+		if h, ok := c.(*compHealth); ok {
+			out["current"], out["max"] = h.Current, h.Max
+		}
+		return out, nil
+	})
+	v.RegisterForeign("RemoveComponent", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("RemoveComponent requires (entityId, componentType)")
+		}
+		eid := toString(args[0])
+		ctype := canonicalComponentType(toString(args[1]))
+		worldsMu.RLock()
+		ws, ok := worlds[defaultWorld]
+		worldsMu.RUnlock()
+		if !ok {
+			return nil, nil
+		}
+		ws.mu.Lock()
+		delete(ws.comps[eid], ctype)
+		ws.mu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("RunSystem", func(args []interface{}) (interface{}, error) {
+		// No-op; ECS runs by querying and iterating in script
+		return nil, nil
+	})
+}
+
+func getWorldPosition(wid, eid string) (x, y, z float64) {
+	return getWorldPositionVisited(wid, eid, make(map[string]bool))
+}
+
+func getWorldPositionVisited(wid, eid string, visited map[string]bool) (x, y, z float64) {
+	if visited[eid] {
+		return 0, 0, 0
+	}
+	visited[eid] = true
+	worldsMu.RLock()
+	ws, ok := worlds[wid]
+	worldsMu.RUnlock()
+	if !ok {
+		return 0, 0, 0
+	}
+	ws.mu.RLock()
+	comps := ws.comps[eid]
+	ws.mu.RUnlock()
+	if comps == nil {
+		return 0, 0, 0
+	}
+	var lx, ly, lz float64
+	if t, ok := comps["Transform"].(*compTransform); ok {
+		lx, ly, lz = t.X, t.Y, t.Z
+	}
+	if p, ok := comps["Parent"].(*compParent); ok && p.ParentID != "" {
+		px, py, pz := getWorldPositionVisited(wid, p.ParentID, visited)
+		return px + lx, py + ly, pz + lz
+	}
+	return lx, ly, lz
 }
 
 func getCompFloat(args []interface{}, compType string, get func(*compTransform) float64) (interface{}, error) {

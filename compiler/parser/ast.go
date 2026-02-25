@@ -12,7 +12,6 @@ const (
 	NodeIfStatement
 	NodeForStatement
 	NodeWhileStatement
-	NodeMainStatement
 	NodeFunctionDecl
 	NodeSubDecl
 	NodeAssignment
@@ -36,12 +35,15 @@ const (
 	NodeTypeDecl
 	NodeCompoundAssign
 	NodeExitLoop
+	NodeContinueLoop
+	NodeAssertStatement
 	NodeModuleStatement
 	NodeOnEventStatement
 	NodeStartCoroutineStatement
 	NodeYieldStatement
 	NodeWaitSecondsStatement
 	NodeJSONIndexAccess
+	NodeDictLiteral
 )
 
 // Node represents a node in the Abstract Syntax Tree
@@ -72,10 +74,17 @@ type Statement struct {
 func (s *Statement) Type() NodeType { return NodeStatement }
 func (s *Statement) String() string { return s.Value.String() }
 
-// IfStatement represents an IF...THEN...ELSE...ENDIF block
+// ElseIfBranch represents one ELSEIF condition THEN block in an IF statement.
+type ElseIfBranch struct {
+	Condition Node
+	Block     *Block
+}
+
+// IfStatement represents an IF...THEN...[ELSEIF...THEN...]*[ELSE...]ENDIF block
 type IfStatement struct {
 	Condition Node
 	ThenBlock *Block
+	ElseIfs   []ElseIfBranch
 	ElseBlock *Block
 }
 
@@ -83,6 +92,10 @@ func (i *IfStatement) Type() NodeType { return NodeIfStatement }
 func (i *IfStatement) String() string {
 	result := "IF " + i.Condition.String() + " THEN\n"
 	result += i.ThenBlock.String()
+	for _, b := range i.ElseIfs {
+		result += "ELSEIF " + b.Condition.String() + " THEN\n"
+		result += b.Block.String()
+	}
 	if i.ElseBlock != nil {
 		result += "ELSE\n" + i.ElseBlock.String()
 	}
@@ -119,14 +132,6 @@ func (w *WhileStatement) Type() NodeType { return NodeWhileStatement }
 func (w *WhileStatement) String() string {
 	return "WHILE " + w.Condition.String() + "\n" + w.Body.String() + "WEND"
 }
-
-// MainStatement represents Main ... EndMain (main game loop)
-type MainStatement struct {
-	Body *Block
-}
-
-func (m *MainStatement) Type() NodeType { return NodeMainStatement }
-func (m *MainStatement) String() string { return "Main ... EndMain" }
 
 // FunctionDecl represents a function declaration (optionally inside a Module)
 type FunctionDecl struct {
@@ -257,13 +262,35 @@ type CompoundAssign struct {
 func (a *CompoundAssign) Type() NodeType { return NodeCompoundAssign }
 func (a *CompoundAssign) String() string { return a.Variable + " " + a.Op + " " + a.Value.String() }
 
-// ExitLoopStatement represents EXIT FOR or EXIT WHILE.
+// ExitLoopStatement represents EXIT FOR or EXIT WHILE (or BREAK FOR / BREAK WHILE).
 type ExitLoopStatement struct {
 	Kind string // "FOR" or "WHILE"
 }
 
 func (e *ExitLoopStatement) Type() NodeType { return NodeExitLoop }
 func (e *ExitLoopStatement) String() string  { return "EXIT " + e.Kind }
+
+// ContinueLoopStatement represents CONTINUE FOR or CONTINUE WHILE.
+type ContinueLoopStatement struct {
+	Kind string // "FOR" or "WHILE"
+}
+
+func (c *ContinueLoopStatement) Type() NodeType { return NodeContinueLoop }
+func (c *ContinueLoopStatement) String() string { return "CONTINUE " + c.Kind }
+
+// AssertStatement represents ASSERT condition [, message].
+type AssertStatement struct {
+	Condition Node
+	Message   Node // optional; nil = use default "assertion failed"
+}
+
+func (a *AssertStatement) Type() NodeType { return NodeAssertStatement }
+func (a *AssertStatement) String() string {
+	if a.Message != nil {
+		return "ASSERT " + a.Condition.String() + ", " + a.Message.String()
+	}
+	return "ASSERT " + a.Condition.String()
+}
 
 // MemberAccess represents dot notation: expr.member (e.g. pos.x, GetMousePosition().y)
 type MemberAccess struct {
@@ -282,6 +309,29 @@ type JSONIndexAccess struct {
 
 func (j *JSONIndexAccess) Type() NodeType { return NodeJSONIndexAccess }
 func (j *JSONIndexAccess) String() string { return j.Object.String() + "[\"" + j.Key + "\"]" }
+
+// DictPair is one key-value pair in a dict literal (key is string; value is expression).
+type DictPair struct {
+	Key   string
+	Value Node
+}
+
+// DictLiteral represents { "key": value } or { key = value } literal.
+type DictLiteral struct {
+	Pairs []DictPair
+}
+
+func (d *DictLiteral) Type() NodeType { return NodeDictLiteral }
+func (d *DictLiteral) String() string {
+	s := "{"
+	for i, p := range d.Pairs {
+		if i > 0 {
+			s += ", "
+		}
+		s += "\"" + p.Key + "\": " + p.Value.String()
+	}
+	return s + "}"
+}
 
 // BinaryOp represents a binary operation
 type BinaryOp struct {

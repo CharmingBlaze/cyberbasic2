@@ -123,16 +123,16 @@ Path is relative to the current file; one per line.
 
 ## Window and game loop (minimal)
 
-Use **Main() ... EndMain** for the main loop (auto frame wrap); **DeltaTime()** for frame delta. You do **not** need BeginDrawing/EndDrawing inside Main() or the auto-wrapped WHILE.
+Use **WHILE NOT WindowShouldClose() ... WEND** (or **REPEAT ... UNTIL WindowShouldClose()**) for the main loop. No auto-wrap; code compiles as written (DBPro-style). **DeltaTime()** for frame delta.
 
 ```basic
 InitWindow(800, 600, "Title")
 SetTargetFPS(60)
 
-Main()
+WHILE NOT WindowShouldClose()
     ClearBackground(20, 20, 30, 255)
     // draw here; use DeltaTime() for frame-based movement
-EndMain
+WEND
 
 CloseWindow()
 ```

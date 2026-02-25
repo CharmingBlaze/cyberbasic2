@@ -12,20 +12,22 @@ Complete guide to making games with CyberBasic: game loop, input, GAME.* helpers
 6. [Collision callbacks (2D)](#collision-callbacks-2d)
 7. [ECS (Entity-Component System)](#ecs-entity-component-system)
 8. [Quality of life](#quality-of-life)
-9. [Best practices](#best-practices)
-10. [Physics stubs](#physics-stubs)
+9. [State machines](#state-machines)
+10. [Best practices](#best-practices)
+11. [Physics stubs](#physics-stubs)
+12. [2D and 3D quick reference](#2d-and-3d-quick-reference)
 
 ---
 
 ## Game loop pattern
 
-Every game uses the same structure. Prefer **Main() ... EndMain** and **DeltaTime()**:
+Every game uses the same structure. Use **WHILE NOT WindowShouldClose() ... WEND** (or **REPEAT ... UNTIL WindowShouldClose()**) and **DeltaTime()**:
 
 ```basic
 InitWindow(800, 600, "My Game")
 SetTargetFPS(60)
 
-Main()
+WHILE NOT WindowShouldClose()
     // 1. Delta time (for movement and physics)
     VAR dt = DeltaTime()
     IF dt > 0.05 THEN LET dt = 0.016   // Clamp for physics stability
@@ -36,15 +38,15 @@ Main()
     // 3. Physics step (if using Box2D or Bullet)
     // BOX2D.Step(...) or BULLET.Step(...)
 
-    // 4. Draw (no BeginDrawing/EndDrawing needed inside Main)
+    // 4. Draw
     ClearBackground(20, 20, 30, 255)
     // Draw 2D/3D and UI
-EndMain
+WEND
 
 CloseWindow()
 ```
 
-You can also use `WHILE NOT WindowShouldClose() ... WEND`; both forms are automatically wrapped with BeginDrawing/EndDrawing.
+The compiler does not inject any frame or mode calls; your loop compiles as written (DBPro-style).
 
 See [2D Graphics Guide](2D_GRAPHICS_GUIDE.md) and [3D Graphics Guide](3D_GRAPHICS_GUIDE.md) for the 2D and 3D game checklists and full examples.
 
@@ -110,7 +112,7 @@ These functions simplify camera and movement in 2D and 3D games.
 
 ### 2D camera follow
 
-Set a target Box2D body; the 2D camera follows it each frame. In the loop, after BOX2D.Step call **GAME.UpdateCamera2D()**, then use BeginMode2D() / EndMode2D() as usual. Example:
+Set a target Box2D body; the 2D camera follows it each frame. In the loop, after BOX2D.Step call **GAME.UpdateCamera2D()**. Example:
 
 ```basic
 GAME.SetCamera2DFollow(worldId, bodyId, xOffset, yOffset)
@@ -120,7 +122,7 @@ GAME.UpdateCamera2D()
 
 ### 3D orbit camera
 
-**GAME.CameraOrbit(targetX, targetY, targetZ, angleRad, pitchRad, distance)** sets the 3D camera to orbit around a point. Call it each frame (e.g. after getting the player position from Bullet), then **BeginDrawing()**, **BeginMode3D()**, draw, **EndMode3D()**, **EndDrawing()**.
+**GAME.CameraOrbit(targetX, targetY, targetZ, angleRad, pitchRad, distance)** sets the 3D camera to orbit around a point. Call it each frame (e.g. after getting the player position from Bullet), then draw.
 
 ### 3D WASD + jump (Bullet)
 
@@ -153,10 +155,8 @@ WHILE NOT WindowShouldClose()
     VAR px = BOX2D.GetPositionX("w", "player")
     VAR py = BOX2D.GetPositionY("w", "player")
 
-    BeginDrawing()
     ClearBackground(30, 30, 50, 255)
     DrawRectangle(px - 16, py - 16, 32, 32, 255, 100, 100, 255)
-    EndDrawing()
 WEND
 
 BOX2D.DestroyWorld("w")
@@ -186,13 +186,9 @@ WHILE NOT WindowShouldClose()
     VAR pz = BULLET.GetPositionZ("w", "player")
     GAME.CameraOrbit(px, py + 1.5, pz, camAngle, 0.2, 10)
 
-    BeginDrawing()
     ClearBackground(50, 50, 60, 255)
-    BeginMode3D()
     DrawCube(0, -0.5, 0, 25, 1, 25, 0, 128, 0, 255)
     DrawSphere(px, py, pz, 0.5, 255, 0, 0, 255)
-    EndMode3D()
-    EndDrawing()
 WEND
 
 BULLET.DestroyWorld("w")
@@ -232,11 +228,45 @@ See **[ECS Guide](ECS_GUIDE.md)** for the full API and [examples/ecs_demo.bas](.
 
 ---
 
+## GUI
+
+Use **BeginUI()** … **EndUI()** each frame and add widgets: **Label**, **Button**, **Slider**, **Checkbox**, **TextBox**, **Dropdown**, **ProgressBar**, **WindowBox** / **EndWindowBox**, **GroupBox** / **EndGroupBox**. Call after ClearBackground in your game loop. See **[GUI Guide](GUI_GUIDE.md)** and [API_REFERENCE.md](../API_REFERENCE.md) (section UI).
+
+---
+
 ## Quality of life
 
 - **GAME.AssetPath("hero.png")** → `"assets/hero.png"` so you can keep art in an `assets/` folder.
 - **GAME.ClampDelta(0.05)** → use instead of raw `DeltaTime()`/`GetFrameTime()` when stepping physics to avoid large steps after a stall.
 - **GAME.ShowDebug()** or **ShowDebug("extra line")** – draw FPS (and optional text) for quick debugging.
+
+---
+
+## State machines
+
+CyberBasic does not have built-in STATE/TRANSITION syntax. You can implement a state machine with a variable and **SELECT CASE**, or by calling different Subs per state:
+
+**Using a state variable and SELECT CASE:**
+
+```basic
+DIM gameState AS Integer   // 0=menu, 1=playing, 2=paused, 3=gameover
+gameState = 0
+
+WHILE NOT WindowShouldClose()
+  SELECT CASE gameState
+    CASE 0
+      // Draw menu; if Start pressed then gameState = 1
+    CASE 1
+      // Update and draw game; if Pause then gameState = 2
+    CASE 2
+      // Draw pause screen; if Resume then gameState = 1
+    CASE 3
+      // Draw game over; if Restart then gameState = 1
+  END SELECT
+WEND
+```
+
+**Using Subs per state:** keep a variable (e.g. `state`) and call `UpdateMenu()`, `UpdatePlaying()`, `DrawMenu()`, `DrawPlaying()` from the main loop based on `state`; set `state` inside those Subs when transitioning.
 
 ---
 
@@ -247,7 +277,7 @@ See **[ECS Guide](ECS_GUIDE.md)** for the full API and [examples/ecs_demo.bas](.
 3. **Load resources once** – Load textures, fonts, models at startup; unload in cleanup.
 4. **Use GetAxisX/GetAxisY** for simple 2D movement.
 5. **Organize with functions** – e.g. `UpdatePlayer()`, `DrawPlayer()`, `UpdateEnemies()` called from the main loop.
-6. **Use BeginDrawing/EndDrawing** – All drawing between `BeginDrawing()` and `EndDrawing()` each frame.
+6. **Draw each frame** – ClearBackground and your draw calls in the loop.
 
 ---
 
@@ -259,6 +289,38 @@ Some Box2D and Bullet APIs are **stubbed (no-op)** until implemented:
 - **Bullet:** SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, SetGravity3D, SetLinearFactor3D, SetAngularFactor3D, SetCCD3D, and joint creation (CreateHingeJoint3D, CreateSliderJoint3D, etc.) and SetJointLimits3D / SetJointMotor3D are stubs.
 
 Core features (world, bodies, step, position/velocity, apply force, raycast) work. See [API_REFERENCE.md](../API_REFERENCE.md) for the full list.
+
+---
+
+## 2D and 3D quick reference
+
+### 2D game quick reference
+
+| Task | Commands |
+|------|----------|
+| Loop & time | `WHILE NOT WindowShouldClose() … WEND`, `DeltaTime()` |
+| Window / center | `InitWindow`, `GetScreenWidth`, `GetScreenHeight`, `GetScreenCenterX`, `GetScreenCenterY` |
+| Camera | `SetCamera2D`, `SetCamera2DCenter`; with Box2D: `GAME.SetCamera2DFollow`, `GAME.UpdateCamera2D` |
+| Draw | `ClearBackground`, draw calls (`DrawRectangle`, `DrawCircle`, `DrawTexture`, `DrawText`). |
+| Input | `GetAxisX`, `GetAxisY`, `IsKeyDown` |
+| Distance | `Distance2D(x1, y1, x2, y2)` |
+| Physics (optional) | `BOX2D.CreateWorld`, `BOX2D.Step`, `GAME.MoveHorizontal2D`, `GAME.Jump2D` |
+
+Full list: [2D Graphics Guide – Full 2D command reference](2D_GRAPHICS_GUIDE.md#full-2d-command-reference).
+
+### 3D game quick reference
+
+| Task | Commands |
+|------|----------|
+| Loop & time | `WHILE NOT WindowShouldClose() … WEND`, `DeltaTime()` or `GetFrameTime()` |
+| Window / center | `InitWindow`, `GetScreenCenterX`, `GetScreenCenterY` |
+| Camera | `SetCamera3D`; orbit: `GAME.CameraOrbit`, `GAME.SetCamera3DOrbit`, `GAME.UpdateCamera3D` |
+| Draw | `ClearBackground`, `DrawCube`, `DrawSphere`, `DrawModel`, fog if needed |
+| Movement | `GAME.MoveWASD`, `GAME.SnapToGround3D` |
+| Distance | `Distance3D(x1, y1, z1, x2, y2, z2)` |
+| Physics (optional) | `BULLET.CreateWorld`, `BULLET.Step`, `BULLET.GetPositionX/Y/Z` |
+
+Full list: [3D Graphics Guide – Full 3D command reference](3D_GRAPHICS_GUIDE.md#full-3d-command-reference).
 
 ---
 

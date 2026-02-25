@@ -4,20 +4,20 @@ Minimal snippets to get a game running.
 
 ## 2D game (move a circle)
 
-The loop `WHILE NOT WindowShouldClose() ... WEND` and **Main() ... EndMain** are automatically wrapped with a draw frame; you don't call BeginDrawing/EndDrawing. Prefer **Main() ... EndMain** and **DeltaTime()** for the main game loop.
+Use **WHILE NOT WindowShouldClose() ... WEND** (or **REPEAT ... UNTIL WindowShouldClose()**) for the main loop. No auto-wrap; code compiles as written (DBPro-style). **DeltaTime()** for frame delta.
 
 ```basic
 InitWindow(800, 600, "My Game")
 SetTargetFPS(60)
 VAR x = 400
 VAR y = 300
-Main()
+WHILE NOT WindowShouldClose()
   VAR dt = DeltaTime()
   LET x = x + 100 * dt * GetAxisX()
   LET y = y + 100 * dt * GetAxisY()
   ClearBackground(20, 20, 30, 255)
   DrawCircle(x, y, 30, 255, 100, 100, 255)
-EndMain
+WEND
 CloseWindow()
 ```
 
@@ -39,15 +39,14 @@ REPEAT
   LET py = BULLET.GetPositionY("w", "player")
   LET pz = BULLET.GetPositionZ("w", "player")
   GAME.CameraOrbit(px, py+1.5, pz, camAngle, 0.2, 10)
-  RL.BeginDrawing()
   RL.ClearBackground(RL.SkyBlue)
-  RL.BeginMode3D()
   RL.DrawCube(0, -0.5, 0, 25, 1, 25, RL.DarkGreen)
   RL.DrawSphere(px, py, pz, 0.5, RL.Red)
-  RL.EndMode3D()
-  RL.EndDrawing()
 UNTIL RL.WindowShouldClose()
 RL.CloseWindow()
 ```
 
-**Movement:** Use **GetAxisX()** / **GetAxisY()** for -1/0/1, or **GAME.MoveWASD** / **MoveHorizontal2D** for full 2D/3D. **Delta time:** **DeltaTime()** or **GetFrameTime()**; clamp with `IF dt > 0.05 THEN LET dt = 0.016` for physics. See [API_REFERENCE.md](API_REFERENCE.md) and [examples/README.md](examples/README.md).
+**Movement:** Use **GetAxisX()** / **GetAxisY()** for -1/0/1, or **GAME.MoveWASD** / **MoveHorizontal2D** for full 2D/3D. **Delta time:** **DeltaTime()** or **GetFrameTime()**; clamp with `IF dt > 0.05 THEN LET dt = 0.016` for physics.  
+**Center screen:** **GetScreenCenterX()**, **GetScreenCenterY()** – center UI or spawn. **Distance:** **Distance2D(x1, y1, x2, y2)** and **Distance3D(x1, y1, z1, x2, y2, z2)** for simple distance.  
+**Multi-window (same .bas):** **IsWindowProcess()**, **SpawnWindow(port, title, w, h)**, **ConnectToParent()**; main uses **AcceptTimeout** to get connection, then **Send**/ **Receive**. See [docs/MULTI_WINDOW.md](docs/MULTI_WINDOW.md).  
+Full 2D/3D command lists: [2D Graphics Guide](docs/2D_GRAPHICS_GUIDE.md#full-2d-command-reference), [3D Graphics Guide](docs/3D_GRAPHICS_GUIDE.md#full-3d-command-reference). See [API_REFERENCE.md](API_REFERENCE.md) and [examples/README.md](examples/README.md).

@@ -50,6 +50,27 @@ VAR n = Add(2, 3)
 	}
 }
 
+func TestCompileElseIf(t *testing.T) {
+	src := `Function Choose(op, a, b)
+  If op = 1 Then
+    Return a + b
+  ElseIf op = 2 Then
+    Return a * b
+  Else
+    Return 0
+  End If
+EndFunction
+VAR n = Choose(1, 3, 4)
+`
+	chunk := mustCompile(t, src)
+	if !chunkContainsOp(chunk, vm.OpJumpIfFalse) {
+		t.Error("expected OpJumpIfFalse for IF/ELSEIF")
+	}
+	if _, ok := chunk.Functions["choose"]; !ok {
+		t.Error("expected chunk.Functions to contain 'choose'")
+	}
+}
+
 func TestCompileModuleFunctionCall(t *testing.T) {
 	src := `Module M
   Function F(x)
@@ -121,5 +142,55 @@ StartCoroutine Co()
 	}
 	if !chunkContainsOp(chunk, vm.OpWaitSeconds) {
 		t.Error("expected chunk to contain OpWaitSeconds")
+	}
+}
+
+// chunkHasConstant returns true if chunk.Constants contains the given string (e.g. "begindrawing").
+func chunkHasConstant(chunk *vm.Chunk, name string) bool {
+	for _, c := range chunk.Constants {
+		if s, ok := c.(string); ok && s == name {
+			return true
+		}
+	}
+	return false
+}
+
+// TestGameLoopFrameWrap asserts that WHILE NOT WindowShouldClose() ... WEND gets automatic
+// BeginDrawing, EndDrawing, BeginMode2D, EndMode2D so the user doesn't need to call them.
+func TestGameLoopFrameWrap(t *testing.T) {
+	src := `InitWindow(800, 600, "test")
+WHILE NOT WindowShouldClose()
+  ClearBackground(0, 0, 0, 255)
+WEND
+CloseWindow()
+`
+	chunk := mustCompile(t, src)
+	for _, name := range []string{"begindrawing", "enddrawing", "beginmode2d", "endmode2d"} {
+		if !chunkHasConstant(chunk, name) {
+			t.Errorf("expected chunk to contain frame-wrap constant %q", name)
+		}
+	}
+	// 2D loop should not inject 3D mode
+	if chunkHasConstant(chunk, "beginmode3d") {
+		t.Errorf("2D loop should not contain beginmode3d")
+	}
+}
+
+// TestGameLoopFrameWrap3D asserts that a WHILE NOT WindowShouldClose() loop with 3D drawing
+// gets automatic BeginMode3D/EndMode3D instead of 2D.
+func TestGameLoopFrameWrap3D(t *testing.T) {
+	src := `InitWindow(800, 600, "test")
+SetCamera3D(0, 10, 10, 0, 0, 0, 0, 1, 0)
+WHILE NOT WindowShouldClose()
+  ClearBackground(0, 0, 0, 255)
+  DrawCube(0, 0, 0, 2, 2, 2, 255, 0, 0, 255)
+WEND
+CloseWindow()
+`
+	chunk := mustCompile(t, src)
+	for _, name := range []string{"begindrawing", "enddrawing", "beginmode3d", "endmode3d"} {
+		if !chunkHasConstant(chunk, name) {
+			t.Errorf("expected 3D loop to contain frame-wrap constant %q", name)
+		}
 	}
 }

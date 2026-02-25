@@ -19,11 +19,17 @@ ECS is always available; no extra setup. Call **ECS.CreateWorld** to get a world
 | **ECS.RemoveComponent** | (worldId, entityId, componentType) |
 | **ECS.GetTransformX/Y/Z** | (worldId, entityId) → number |
 | **ECS.SetTransform** | (worldId, entityId, x, y, z) |
+| **ECS.PlaceEntity** | (worldId, entityId, x, y, z) — same as SetTransform (entity placement) |
+| **ECS.GetWorldPositionX/Y/Z** | (worldId, entityId) → number (world position including parent chain) |
 | **ECS.GetHealthCurrent/Max** | (worldId, entityId) → number |
 | **ECS.QueryCount** | (worldId, componentType1 [, componentType2...]) → count |
 | **ECS.QueryEntity** | (worldId, componentType, index) → entityId or empty string |
 
-**Component types:** **Transform** (x, y, z), **Sprite** (textureId, visible), **Health** (current, max). Add with **ECS.AddComponent(worldId, entityId, "Transform", x, y, z)** (and similarly for Sprite, Health).
+**Component types:** **Transform** (x, y, z), **Sprite** (textureId, visible), **Health** (current, max), **Parent** (parentEntityId). Add with **ECS.AddComponent(worldId, entityId, "Transform", x, y, z)** and **ECS.AddComponent(worldId, entityId, "Parent", parentEntityId)** for hierarchy.
+
+**Scene graph:** Add a **Parent** component with the parent's entity ID. **ECS.GetWorldPositionX/Y/Z** return the position in world space (local transform plus all parent transforms). Use for nested objects (e.g. turret on a ship).
+
+**Entity placement:** Use **ECS.PlaceEntity(worldId, entityId, x, y, z)** to set an entity's position (equivalent to **ECS.SetTransform**). Create entities with **ECS.CreateEntity**, add **Transform**, then place with **PlaceEntity** or **SetTransform**.
 
 ## Example
 

@@ -30,7 +30,7 @@ DIM enemies[100] AS Enemy
 - **VAR** and **LET** declare and assign (VAR is modern style).
 - **DIM** declares (optionally with **AS** type); arrays: `DIM a[n]` or `DIM a[m,n]`.
 - **CONST** name = expression (compile-time constant).
-- **Null literal:** Use **Nil** or **Null** (case-insensitive) to represent a missing value. Assign and compare: `VAR x = Nil`, `IF result = Null THEN ...`, `IF result <> Nil THEN ...`. **IsNull(value)** returns true when the value is null (e.g. `IF IsNull(ReadFile("x.txt")) THEN ...`).
+- **Null literal:** Use **Nil**, **Null**, or **None** (case-insensitive) to represent a missing value. Assign and compare: `VAR x = Nil`, `IF result = Null THEN ...`, `IF result <> None THEN ...`. **IsNull(value)** returns true when the value is null (e.g. `IF IsNull(ReadFile("x.txt")) THEN ...`).
 
 **User types:**
 
@@ -46,12 +46,17 @@ END TYPE
 
 **Dot notation:** `p.x = 100`, `p.y = 200`, `p.health = 100`.
 
-**Enums:**
+**Enums:** Single-line (`ENUM Name : a, b = 2, c`) or multi-line with **END ENUM** / **ENDENUM**. Name is optional (unnamed enum). Use **Enum.getValue(enumName, valueName)**, **Enum.getName(enumName, value)**, **Enum.hasValue(enumName, valueName)** at runtime.
 
 ```basic
 ENUM Color : Red, Green, Blue
 ENUM State : Idle = 0, Walk = 1, Jump = 2
+ENUM Direction
+    North, South, East, West
+END ENUM
 ```
+
+**Dictionary literals:** `{ "key": value }` (JSON-style) or `{ key = value }` (BASIC-style). Keys can be string, number, or identifier. Use **GetJSONKey(dict, key)** to read; **CreateDict()** and **SetDictKey** for building; **Dictionary.has/keys/values/size/remove/clear/merge/get** for operations.
 
 ### 1.2 Control flow
 
@@ -87,19 +92,20 @@ END SELECT
 EXIT FOR
 EXIT WHILE
 
-Main()
-    // main game loop (equivalent to WHILE NOT WindowShouldClose() with automatic BeginDrawing/EndDrawing)
-    ...
-EndMain
+WHILE NOT WindowShouldClose()
+    ClearBackground(0, 0, 0, 255)
+    // ... draw calls ...
+WEND
 ```
 
 ### 1.3 Compound assignment
 
+Use `+=`, `-=`, `*=`, `/=` for in-place updates. LET is optional when the statement starts with a variable name.
+
 ```basic
-x += 1
-y -= 2
-a *= 3
-b /= 4
+camAngle -= GetMouseDeltaX() * 0.002
+camPitch += GetMouseDeltaY() * 0.002
+camDist = Clamp(camDist, 3, 25)
 ```
 
 ### 1.4 Functions and subs
@@ -161,20 +167,21 @@ PRINT "hi"   // inline comment
 
 Comments are **only** `//` (line) and `/* */` (block).
 
-### 1.9 Includes and libraries
+### 1.9 Includes and import (modularity)
 
-At the top of a line (optionally after whitespace), use **#include "path"** to insert the contents of another `.bas` file. The path is relative to the file containing the line. One directive per line. Use for shared code or libraries.
+At the top of a line (optionally after whitespace), use **#include "path"** or **IMPORT "path"** to insert the contents of another `.bas` file. The path is relative to the file containing the line. One directive per line. Use for shared code, libraries, or packaging. Both directives behave the same (file is inlined; cycles are avoided).
 
 ```basic
 #include "lib/utils.bas"
-#include "game_helpers.bas"
+IMPORT "math.bas"
+IMPORT "graphics.bas"
 ```
 
 ---
 
 ## 2. Math, vectors, timers, random
 
-- **Math:** `Sin`, `Cos`, `Tan`, `Sqrt`, `Abs`, `Clamp`, `Lerp`, `Random`, `GetRandomValue`, `SetRandomSeed`
+- **Math:** `Sin`, `Cos`, `Tan`, `Sqrt`, `Abs`, `Random`, `GetRandomValue`, `SetRandomSeed`. **Std:** `Radians(degrees)`, `Degrees(radians)`, `AngleWrap(angle)` (wrap to [-π, π]). **Raylib:** `Clamp(value, min, max)`, `Lerp(start, end, amount)`, `Wrap(value, min, max)` – see [API_REFERENCE.md](API_REFERENCE.md).
 - **Vectors:** Vector2/Vector3 types and helpers; raylib math (Vector2Add, Vector3Scale, etc.) – see [API_REFERENCE.md](API_REFERENCE.md)
 - **Time:** `GetFrameTime`, **DeltaTime** (same as GetFrameTime; preferred for frame delta), `SetTargetFPS`, `GetFPS`, `GetTime`
 
@@ -191,7 +198,7 @@ See [API_REFERENCE.md](API_REFERENCE.md) for the full list.
 
 ## 4. 2D graphics
 
-- **Frame:** Inside **Main()** or the auto-wrapped **WHILE NOT WindowShouldClose() ... WEND** you do **not** need to call BeginDrawing/EndDrawing; the runtime wraps the loop. For other loops, use `BeginDrawing()` and `EndDrawing()`. `ClearBackground(r, g, b, a)` each frame.
+- **Frame:** The compiler does not inject any frame or mode calls; your code compiles as written (DBPro-style). Use `ClearBackground(r, g, b, a)` and your draw calls in the loop.
 - **Primitives:** `DrawRectangle`, `DrawCircle`, `DrawLine`, `DrawTriangle`, `DrawPixel`, etc.
 - **Textures:** `LoadTexture(path)`, `DrawTexture(id, x, y)`, `DrawTextureEx`, `DrawTextureRec`, `UnloadTexture`
 - **Text:** `DrawText(text, x, y, fontSize, r, g, b, a)`, `MeasureText`, `LoadFont`, `DrawTextEx`
@@ -203,7 +210,7 @@ See [docs/2D_GRAPHICS_GUIDE.md](docs/2D_GRAPHICS_GUIDE.md) and [API_REFERENCE.md
 ## 5. 3D graphics
 
 - **Camera:** `SetCamera3D(posX, posY, posZ, targetX, targetY, targetZ, upX, upY, upZ)`; for orbit use **GAME.CameraOrbit(...)** each frame
-- **Mode:** `BeginMode3D()` / `EndMode3D()`
+- **3D drawing:** See raylib bindings for 3D primitives and models.
 - **Primitives:** `DrawCube`, `DrawSphere`, `DrawPlane`, `DrawLine3D`, `DrawGrid`, etc.
 - **Models:** `LoadModel(path)`, `DrawModel(id, x, y, z, scale)`, `DrawModelEx`, `UnloadModel`; **GenMeshCube**, **GenMeshSphere**, **LoadModelFromMesh**
 
@@ -251,31 +258,29 @@ Use **ECS.*** from the library binding: `ECS.CreateWorld`, `ECS.CreateEntity`, `
 
 ## 12. UI (minimal)
 
-`BeginUI()`, `Label(text)`, `Button(text)` → boolean, `EndUI()`. Call between BeginDrawing and EndDrawing. See [API_REFERENCE.md](API_REFERENCE.md).
+`BeginUI()`, `Label(text)`, `Button(text)` → boolean, `EndUI()`. See [API_REFERENCE.md](API_REFERENCE.md).
 
 ---
 
 ## 13. Typical game loop (2D)
 
-Use **Main() ... EndMain** for the main loop; no need to call BeginDrawing/EndDrawing. **DeltaTime()** returns frame delta (same as GetFrameTime).
+Use **WHILE NOT WindowShouldClose() ... WEND** (or **REPEAT ... UNTIL WindowShouldClose()**) for the main loop. No auto-wrap; your code compiles as written. **DeltaTime()** returns frame delta (same as GetFrameTime).
 
 ```basic
 InitWindow(800, 450, "CyberBasic Game")
 SetTargetFPS(60)
 
-Main()
+WHILE NOT WindowShouldClose()
     VAR dt = DeltaTime()
     IF dt > 0.05 THEN LET dt = 0.016
     // Input and logic...
     // BOX2D.Step("w", dt, 8, 3)
     ClearBackground(20, 20, 30, 255)
     DrawRectangle(playerX, playerY, 32, 32, 255, 255, 255, 255)
-EndMain
+WEND
 
 CloseWindow()
 ```
-
-You can also use `WHILE NOT WindowShouldClose() ... WEND` (automatically wrapped with BeginDrawing/EndDrawing).
 
 ---
 

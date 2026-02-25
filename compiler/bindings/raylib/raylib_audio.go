@@ -296,6 +296,75 @@ func registerAudio(v *vm.VM) {
 		}
 		return rl.IsMusicStreamPlaying(m), nil
 	})
+	// Aliases: LoadMusic, PlayMusic, PauseMusic, ResumeMusic, IsMusicPlaying
+	v.RegisterForeign("LoadMusic", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("LoadMusic requires (path)")
+		}
+		path := toString(args[0])
+		stream := rl.LoadMusicStream(path)
+		musicMu.Lock()
+		musicCounter++
+		id := fmt.Sprintf("music_%d", musicCounter)
+		music[id] = stream
+		musicMu.Unlock()
+		return id, nil
+	})
+	v.RegisterForeign("PlayMusic", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("PlayMusic requires (musicId)")
+		}
+		id := toString(args[0])
+		musicMu.Lock()
+		m, ok := music[id]
+		musicMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown music id: %s", id)
+		}
+		rl.PlayMusicStream(m)
+		return nil, nil
+	})
+	v.RegisterForeign("PauseMusic", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("PauseMusic requires (musicId)")
+		}
+		id := toString(args[0])
+		musicMu.Lock()
+		m, ok := music[id]
+		musicMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown music id: %s", id)
+		}
+		rl.PauseMusicStream(m)
+		return nil, nil
+	})
+	v.RegisterForeign("ResumeMusic", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("ResumeMusic requires (musicId)")
+		}
+		id := toString(args[0])
+		musicMu.Lock()
+		m, ok := music[id]
+		musicMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown music id: %s", id)
+		}
+		rl.ResumeMusicStream(m)
+		return nil, nil
+	})
+	v.RegisterForeign("IsMusicPlaying", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("IsMusicPlaying requires (musicId)")
+		}
+		id := toString(args[0])
+		musicMu.Lock()
+		m, ok := music[id]
+		musicMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown music id: %s", id)
+		}
+		return rl.IsMusicStreamPlaying(m), nil
+	})
 	v.RegisterForeign("SeekMusicStream", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
 			return nil, fmt.Errorf("SeekMusicStream requires (id, position)")

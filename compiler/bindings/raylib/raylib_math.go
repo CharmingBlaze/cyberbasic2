@@ -261,7 +261,32 @@ func registerMath(v *vm.VM) {
 		return rl.Vector2Equals(p, q), nil
 	})
 
-	// Vector3 math
+	// Vec2(x, y): return [x, y] for use with Vector2* functions
+	v.RegisterForeign("Vec2", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("Vec2 requires (x, y)")
+		}
+		return []interface{}{toFloat64(args[0]), toFloat64(args[1])}, nil
+	})
+	v.RegisterForeign("Vector2", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("Vector2 requires (x, y)")
+		}
+		return []interface{}{toFloat64(args[0]), toFloat64(args[1])}, nil
+	})
+	// Vector3 constructor and math
+	v.RegisterForeign("VECTOR3", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("VECTOR3 requires (x, y, z)")
+		}
+		return []interface{}{toFloat64(args[0]), toFloat64(args[1]), toFloat64(args[2])}, nil
+	})
+	v.RegisterForeign("Vec3", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("Vec3 requires (x, y, z)")
+		}
+		return []interface{}{toFloat64(args[0]), toFloat64(args[1]), toFloat64(args[2])}, nil
+	})
 	v.RegisterForeign("Vector3Zero", func(args []interface{}) (interface{}, error) {
 		return vec3ToSlice(rl.Vector3Zero()), nil
 	})
@@ -392,6 +417,37 @@ func registerMath(v *vm.VM) {
 	v.RegisterForeign("Vector3Normalize", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {
 			return nil, fmt.Errorf("Vector3Normalize requires (x, y, z)")
+		}
+		vec := rl.Vector3{X: toFloat32(args[0]), Y: toFloat32(args[1]), Z: toFloat32(args[2])}
+		return vec3ToSlice(rl.Vector3Normalize(vec)), nil
+	})
+	// Vec3* aliases (same as Vector3*): Vec3Add(a,b)=6 args, Vec3Sub 6, Vec3Scale(v,s)=4, Vec3Normalize(v)=3
+	v.RegisterForeign("Vec3Add", func(args []interface{}) (interface{}, error) {
+		if len(args) < 6 {
+			return nil, fmt.Errorf("Vec3Add requires (x1,y1,z1, x2,y2,z2)")
+		}
+		v1 := rl.Vector3{X: toFloat32(args[0]), Y: toFloat32(args[1]), Z: toFloat32(args[2])}
+		v2 := rl.Vector3{X: toFloat32(args[3]), Y: toFloat32(args[4]), Z: toFloat32(args[5])}
+		return vec3ToSlice(rl.Vector3Add(v1, v2)), nil
+	})
+	v.RegisterForeign("Vec3Sub", func(args []interface{}) (interface{}, error) {
+		if len(args) < 6 {
+			return nil, fmt.Errorf("Vec3Sub requires (x1,y1,z1, x2,y2,z2)")
+		}
+		v1 := rl.Vector3{X: toFloat32(args[0]), Y: toFloat32(args[1]), Z: toFloat32(args[2])}
+		v2 := rl.Vector3{X: toFloat32(args[3]), Y: toFloat32(args[4]), Z: toFloat32(args[5])}
+		return vec3ToSlice(rl.Vector3Subtract(v1, v2)), nil
+	})
+	v.RegisterForeign("Vec3Scale", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("Vec3Scale requires (x, y, z, scalar)")
+		}
+		vec := rl.Vector3{X: toFloat32(args[0]), Y: toFloat32(args[1]), Z: toFloat32(args[2])}
+		return vec3ToSlice(rl.Vector3Scale(vec, toFloat32(args[3]))), nil
+	})
+	v.RegisterForeign("Vec3Normalize", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("Vec3Normalize requires (x, y, z)")
 		}
 		vec := rl.Vector3{X: toFloat32(args[0]), Y: toFloat32(args[1]), Z: toFloat32(args[2])}
 		return vec3ToSlice(rl.Vector3Normalize(vec)), nil

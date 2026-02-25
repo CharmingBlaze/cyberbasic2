@@ -15,7 +15,8 @@ type Compiler struct {
 	vm            *vm.VM
 	constIndices  map[string]byte            // const name -> chunk constant index (set during generateCode)
 	typeDefs      map[string]*parser.TypeDecl // UDT name (lowercase) -> TYPE definition (filled in first pass)
-	loopExitStack [][]int                    // for EXIT FOR / EXIT WHILE: positions of jump offsets to patch
+	loopExitStack     [][]int // for EXIT FOR / EXIT WHILE: positions of jump offsets to patch
+	loopContinueStack [][]int // for CONTINUE FOR / CONTINUE WHILE: positions of jump offsets to patch (target = loop head)
 	userFuncs        map[string]bool            // user Sub/Function names (lowercase) for call resolution during codegen
 	funcParamIndices map[string]int             // when compiling a function body: param name -> stack index 0,1,2,...
 	eventPatchList         []eventPatch               // (patchPos, OnEventStatement) for patching handler offsets
@@ -179,8 +180,6 @@ func (c *Compiler) compileStatement(stmt parser.Node, chunk *vm.Chunk) error {
 		return c.compileForStatement(node, chunk)
 	case *parser.WhileStatement:
 		return c.compileWhileStatement(node, chunk)
-	case *parser.MainStatement:
-		return c.compileMainStatement(node, chunk)
 	case *parser.FunctionDecl:
 		return c.compileFunctionDecl(node, chunk)
 	case *parser.SubDecl:
@@ -207,6 +206,10 @@ func (c *Compiler) compileStatement(stmt parser.Node, chunk *vm.Chunk) error {
 		return c.compileRepeatStatement(node, chunk)
 	case *parser.ExitLoopStatement:
 		return c.compileExitLoopStatement(node, chunk)
+	case *parser.ContinueLoopStatement:
+		return c.compileContinueLoopStatement(node, chunk)
+	case *parser.AssertStatement:
+		return c.compileAssertStatement(node, chunk)
 	case *parser.OnEventStatement:
 		return c.compileOnEventStatement(node, chunk)
 	case *parser.StartCoroutineStatement:
@@ -248,9 +251,46 @@ func (c *Compiler) compileExpression(expr parser.Node, chunk *vm.Chunk) error {
 		return c.compileMemberAccess(node, chunk)
 	case *parser.JSONIndexAccess:
 		return c.compileJSONIndexAccess(node, chunk)
+	case *parser.DictLiteral:
+		return c.compileDictLiteral(node, chunk)
 	default:
 		return fmt.Errorf("unsupported expression type: %T", expr)
 	}
+}
+
+// compileDictLiteral compiles { k: v, ... } as CreateDict then SetDictKey for each pair.
+func (c *Compiler) compileDictLiteral(node *parser.DictLiteral, chunk *vm.Chunk) error {
+	ci := chunk.WriteConstant("createdict")
+	if ci > 255 {
+		return fmt.Errorf("too many constants")
+	}
+	chunk.Write(byte(vm.OpCallForeign))
+	chunk.Write(byte(ci))
+	chunk.Write(byte(0))
+	for i, p := range node.Pairs {
+		if i > 0 {
+			chunk.Write(byte(vm.OpDup))
+		}
+		keyIdx := chunk.WriteConstant(p.Key)
+		if keyIdx > 255 {
+			return fmt.Errorf("too many constants for dict key")
+		}
+		if err := c.compileExpression(p.Value, chunk); err != nil {
+			return err
+		}
+		setIdx := chunk.WriteConstant("setdictkey")
+		if setIdx > 255 {
+			return fmt.Errorf("too many constants")
+		}
+		chunk.Write(byte(vm.OpCallForeign))
+		chunk.Write(byte(setIdx))
+		chunk.Write(byte(3))
+		// After SetDictKey we have (map, map) when i>0 because we dup'd; pop the duplicate
+		if i < len(node.Pairs)-1 {
+			chunk.Write(byte(vm.OpPop))
+		}
+	}
+	return nil
 }
 
 // compileJSONIndexAccess compiles obj["key"] as GetJSONKey(obj, "key")
@@ -553,6 +593,10 @@ func (c *Compiler) compileBinaryOp(op *parser.BinaryOp, chunk *vm.Chunk) error {
 		chunk.Write(byte(vm.OpDiv))
 	case "%":
 		chunk.Write(byte(vm.OpMod))
+	case "^":
+		chunk.Write(byte(vm.OpPower))
+	case "\\":
+		chunk.Write(byte(vm.OpIntDiv))
 	case "=", "==":
 		chunk.Write(byte(vm.OpEqual))
 	case "<>":
@@ -569,6 +613,8 @@ func (c *Compiler) compileBinaryOp(op *parser.BinaryOp, chunk *vm.Chunk) error {
 		chunk.Write(byte(vm.OpAnd))
 	case "or":
 		chunk.Write(byte(vm.OpOr))
+	case "xor":
+		chunk.Write(byte(vm.OpXor))
 	default:
 		return fmt.Errorf("unsupported binary operator: %s", op.Operator)
 	}
@@ -1049,10 +1095,10 @@ func (c *Compiler) compileSelectCaseStatement(s *parser.SelectCaseStatement, chu
 	return nil
 }
 
-// compileExitLoopStatement compiles EXIT FOR or EXIT WHILE (jump to end of innermost loop).
+// compileExitLoopStatement compiles EXIT FOR or EXIT WHILE (or BREAK) (jump to end of innermost loop).
 func (c *Compiler) compileExitLoopStatement(e *parser.ExitLoopStatement, chunk *vm.Chunk) error {
 	if len(c.loopExitStack) == 0 {
-		return fmt.Errorf("EXIT %s outside loop", e.Kind)
+		return fmt.Errorf("EXIT/BREAK %s outside loop", e.Kind)
 	}
 	chunk.Write(byte(vm.OpJump))
 	chunk.Write(byte(0))
@@ -1061,12 +1107,51 @@ func (c *Compiler) compileExitLoopStatement(e *parser.ExitLoopStatement, chunk *
 	return nil
 }
 
+// compileContinueLoopStatement compiles CONTINUE FOR or CONTINUE WHILE (jump to loop head of innermost matching loop).
+func (c *Compiler) compileContinueLoopStatement(cl *parser.ContinueLoopStatement, chunk *vm.Chunk) error {
+	if len(c.loopContinueStack) == 0 {
+		return fmt.Errorf("CONTINUE %s outside loop", cl.Kind)
+	}
+	chunk.Write(byte(vm.OpJump))
+	chunk.Write(byte(0))
+	chunk.Write(byte(0))
+	c.loopContinueStack[len(c.loopContinueStack)-1] = append(c.loopContinueStack[len(c.loopContinueStack)-1], len(chunk.Code)-2)
+	return nil
+}
+
+// compileAssertStatement compiles ASSERT condition [, message] to condition + message + CallForeign Assert(2).
+func (c *Compiler) compileAssertStatement(a *parser.AssertStatement, chunk *vm.Chunk) error {
+	if err := c.compileExpression(a.Condition, chunk); err != nil {
+		return err
+	}
+	if a.Message != nil {
+		if err := c.compileExpression(a.Message, chunk); err != nil {
+			return err
+		}
+	} else {
+		idx := chunk.WriteConstant("assertion failed")
+		chunk.Write(byte(vm.OpLoadConst))
+		chunk.Write(byte(idx))
+	}
+	idx := chunk.WriteConstant("assert")
+	chunk.Write(byte(vm.OpCallForeign))
+	chunk.Write(byte(idx))
+	chunk.Write(byte(2))
+	return nil
+}
+
 // compileRepeatStatement compiles REPEAT ... UNTIL condition (jump back when condition false)
 func (c *Compiler) compileRepeatStatement(r *parser.RepeatStatement, chunk *vm.Chunk) error {
 	loopStart := len(chunk.Code)
 	wrapFrame := isGameLoopCondition(r.Condition, true)
+	use3D := wrapFrame && r.Body != nil && bodyContains3DDraw(r.Body.Statements)
 	if wrapFrame {
 		c.emitFrameWrap(chunk, "BeginDrawing")
+		if use3D {
+			c.emitFrameWrap(chunk, "BeginMode3D")
+		} else {
+			c.emitFrameWrap(chunk, "BeginMode2D")
+		}
 	}
 	for _, stmt := range r.Body.Statements {
 		if err := c.compileStatement(stmt, chunk); err != nil {
@@ -1074,6 +1159,11 @@ func (c *Compiler) compileRepeatStatement(r *parser.RepeatStatement, chunk *vm.C
 		}
 	}
 	if wrapFrame {
+		if use3D {
+			c.emitFrameWrap(chunk, "EndMode3D")
+		} else {
+			c.emitFrameWrap(chunk, "EndMode2D")
+		}
 		c.emitFrameWrap(chunk, "EndDrawing")
 	}
 	if err := c.compileExpression(r.Condition, chunk); err != nil {
@@ -1087,7 +1177,7 @@ func (c *Compiler) compileRepeatStatement(r *parser.RepeatStatement, chunk *vm.C
 	return nil
 }
 
-// compileIfStatement compiles an IF statement
+// compileIfStatement compiles an IF statement (with optional ELSEIF and ELSE)
 func (c *Compiler) compileIfStatement(ifStmt *parser.IfStatement, chunk *vm.Chunk) error {
 	// Compile condition
 	err := c.compileExpression(ifStmt.Condition, chunk)
@@ -1095,7 +1185,7 @@ func (c *Compiler) compileIfStatement(ifStmt *parser.IfStatement, chunk *vm.Chun
 		return err
 	}
 
-	// Emit jump if false (2-byte offset)
+	// Emit jump if false (skip then block; go to first ELSEIF or ELSE or end)
 	chunk.Write(byte(vm.OpJumpIfFalse))
 	chunk.Write(byte(0))
 	chunk.Write(byte(0))
@@ -1109,29 +1199,56 @@ func (c *Compiler) compileIfStatement(ifStmt *parser.IfStatement, chunk *vm.Chun
 		}
 	}
 
-	// Calculate jump offset
-	if ifStmt.ElseBlock != nil {
-		// Jump over else block
+	// Jump over all ELSEIF/ELSE to end (patched later)
+	chunk.Write(byte(vm.OpJump))
+	chunk.Write(byte(0))
+	chunk.Write(byte(0))
+	endJumpPos := len(chunk.Code) - 2
+
+	// Patch first "jump if false" to here (start of first ELSEIF or ELSE or after end)
+	chunk.PatchJumpOffset(jumpPos, len(chunk.Code)-jumpPos-2)
+
+	var endJumpPositions []int
+	endJumpPositions = append(endJumpPositions, endJumpPos)
+
+	// Compile each ELSEIF branch
+	for _, branch := range ifStmt.ElseIfs {
+		err = c.compileExpression(branch.Condition, chunk)
+		if err != nil {
+			return err
+		}
+		chunk.Write(byte(vm.OpJumpIfFalse))
+		chunk.Write(byte(0))
+		chunk.Write(byte(0))
+		elseIfJumpPos := len(chunk.Code) - 2
+
+		for _, stmt := range branch.Block.Statements {
+			err = c.compileStatement(stmt, chunk)
+			if err != nil {
+				return err
+			}
+		}
 		chunk.Write(byte(vm.OpJump))
 		chunk.Write(byte(0))
 		chunk.Write(byte(0))
-		elseJumpPos := len(chunk.Code) - 2
+		elseIfEndPos := len(chunk.Code) - 2
+		endJumpPositions = append(endJumpPositions, elseIfEndPos)
+		chunk.PatchJumpOffset(elseIfJumpPos, len(chunk.Code)-elseIfJumpPos-2)
+	}
 
-		// Fix the first jump offset (skip to after then block)
-		chunk.PatchJumpOffset(jumpPos, len(chunk.Code)-jumpPos-2)
-
-		// Compile else block
+	// Optional ELSE block
+	if ifStmt.ElseBlock != nil {
 		for _, stmt := range ifStmt.ElseBlock.Statements {
 			err = c.compileStatement(stmt, chunk)
 			if err != nil {
 				return err
 			}
 		}
+	}
 
-		// Fix the else jump offset
-		chunk.PatchJumpOffset(elseJumpPos, len(chunk.Code)-elseJumpPos-2)
-	} else {
-		chunk.PatchJumpOffset(jumpPos, len(chunk.Code)-jumpPos-2)
+	// Patch all "jump to end" offsets (after then block and after each ELSEIF block)
+	for _, pos := range endJumpPositions {
+		chunk.PatchJumpOffset(pos, len(chunk.Code)-pos-2)
 	}
 
 	return nil
@@ -1140,6 +1257,7 @@ func (c *Compiler) compileIfStatement(ifStmt *parser.IfStatement, chunk *vm.Chun
 // compileForStatement compiles a FOR loop
 func (c *Compiler) compileForStatement(forStmt *parser.ForStatement, chunk *vm.Chunk) error {
 	c.loopExitStack = append(c.loopExitStack, nil)
+	c.loopContinueStack = append(c.loopContinueStack, nil)
 	// Initialize loop variable
 	err := c.compileExpression(forStmt.Start, chunk)
 	if err != nil {
@@ -1178,6 +1296,8 @@ func (c *Compiler) compileForStatement(forStmt *parser.ForStatement, chunk *vm.C
 		}
 	}
 
+	// CONTINUE FOR jumps here (increment then re-check condition)
+	continueTargetIP := len(chunk.Code)
 	// Increment loop variable
 	err = c.compileIdentifier(&parser.Identifier{Name: forStmt.Variable}, chunk)
 	if err != nil {
@@ -1212,6 +1332,11 @@ func (c *Compiler) compileForStatement(forStmt *parser.ForStatement, chunk *vm.C
 		chunk.PatchJumpOffset(pos, len(chunk.Code)-pos-2)
 	}
 	c.loopExitStack = c.loopExitStack[:len(c.loopExitStack)-1]
+	// Patch CONTINUE FOR jumps to increment
+	for _, pos := range c.loopContinueStack[len(c.loopContinueStack)-1] {
+		chunk.PatchJumpOffset(pos, continueTargetIP-pos-2)
+	}
+	c.loopContinueStack = c.loopContinueStack[:len(c.loopContinueStack)-1]
 
 	return nil
 }
@@ -1238,7 +1363,70 @@ func isGameLoopCondition(condition parser.Node, forRepeat bool) bool {
 	return ok && normWindowShouldCloseName(call.Name) == "windowshouldclose" && len(call.Arguments) == 0
 }
 
-// emitFrameWrap emits a no-arg foreign call (BeginDrawing or EndDrawing). Used for automatic frame wrapping.
+// bodyContains3DDraw returns true if the given statements (or any nested block) contain a 3D draw call (DrawCube, DrawSphere, DrawModel, etc.).
+func bodyContains3DDraw(nodes []parser.Node) bool {
+	for _, n := range nodes {
+		if nodeContains3DDraw(n) {
+			return true
+		}
+	}
+	return false
+}
+
+var threeDDrawNames = map[string]bool{
+	"drawcube": true, "drawcubewires": true, "drawsphere": true, "drawspherewires": true,
+	"drawmodel": true, "drawmodelsimple": true, "drawmodelex": true, "drawmodelwires": true, "drawplane": true,
+	"drawline3d": true, "drawpoint3d": true, "drawcircle3d": true, "drawgrid": true,
+	"drawcylinder": true, "drawcylinderwires": true, "drawray": true, "drawtriangle3d": true,
+	"beginmode3d": true,
+}
+
+func nodeContains3DDraw(node parser.Node) bool {
+	switch n := node.(type) {
+	case *parser.Call:
+		name := normWindowShouldCloseName(n.Name)
+		return threeDDrawNames[name]
+	case *parser.Statement:
+		return n.Value != nil && nodeContains3DDraw(n.Value)
+	case *parser.IfStatement:
+		if n.ThenBlock != nil && bodyContains3DDraw(n.ThenBlock.Statements) {
+			return true
+		}
+		if n.ElseBlock != nil && bodyContains3DDraw(n.ElseBlock.Statements) {
+			return true
+		}
+		return false
+	case *parser.ForStatement:
+		if n.Body != nil {
+			return bodyContains3DDraw(n.Body.Statements)
+		}
+		return false
+	case *parser.WhileStatement:
+		if n.Body != nil {
+			return bodyContains3DDraw(n.Body.Statements)
+		}
+		return false
+	case *parser.RepeatStatement:
+		if n.Body != nil {
+			return bodyContains3DDraw(n.Body.Statements)
+		}
+		return false
+	case *parser.SelectCaseStatement:
+		for _, c := range n.Cases {
+			if c.Block != nil && bodyContains3DDraw(c.Block.Statements) {
+				return true
+			}
+		}
+		if n.ElseBlock != nil && bodyContains3DDraw(n.ElseBlock.Statements) {
+			return true
+		}
+		return false
+	default:
+		return false
+	}
+}
+
+// emitFrameWrap emits a no-arg foreign call (BeginDrawing, EndDrawing, BeginMode2D, EndMode2D). Used for automatic frame wrapping.
 func (c *Compiler) emitFrameWrap(chunk *vm.Chunk, name string) {
 	idx := chunk.WriteConstant(strings.ToLower(name))
 	if idx > 255 {
@@ -1249,43 +1437,14 @@ func (c *Compiler) emitFrameWrap(chunk *vm.Chunk, name string) {
 	chunk.Write(byte(0))
 }
 
-// compileMainStatement compiles Main ... EndMain (game loop with frame wrap)
-func (c *Compiler) compileMainStatement(m *parser.MainStatement, chunk *vm.Chunk) error {
-	loopStart := len(chunk.Code)
-	idx := chunk.WriteConstant("windowshouldclose")
-	if idx > 255 {
-		return fmt.Errorf("too many constants for foreign call")
-	}
-	chunk.Write(byte(vm.OpCallForeign))
-	chunk.Write(byte(idx))
-	chunk.Write(byte(0))
-	chunk.Write(byte(vm.OpJumpIfTrue))
-	chunk.Write(byte(0))
-	chunk.Write(byte(0))
-	exitJumpPos := len(chunk.Code) - 2
-
-	c.emitFrameWrap(chunk, "BeginDrawing")
-	for _, stmt := range m.Body.Statements {
-		if err := c.compileStatement(stmt, chunk); err != nil {
-			return err
-		}
-	}
-	c.emitFrameWrap(chunk, "EndDrawing")
-
-	chunk.Write(byte(vm.OpJump))
-	chunk.Write(byte(0))
-	chunk.Write(byte(0))
-	chunk.PatchJumpOffset(len(chunk.Code)-2, loopStart-len(chunk.Code))
-	chunk.PatchJumpOffset(exitJumpPos, len(chunk.Code)-exitJumpPos-2)
-	return nil
-}
-
 // compileWhileStatement compiles a WHILE loop
 func (c *Compiler) compileWhileStatement(whileStmt *parser.WhileStatement, chunk *vm.Chunk) error {
 	c.loopExitStack = append(c.loopExitStack, nil)
-	// Loop start
+	c.loopContinueStack = append(c.loopContinueStack, nil)
+	// Loop start (CONTINUE WHILE jumps here)
 	loopStart := len(chunk.Code)
 	wrapFrame := isGameLoopCondition(whileStmt.Condition, false)
+	use3D := wrapFrame && whileStmt.Body != nil && bodyContains3DDraw(whileStmt.Body.Statements)
 
 	// Compile condition
 	err := c.compileExpression(whileStmt.Condition, chunk)
@@ -1301,6 +1460,11 @@ func (c *Compiler) compileWhileStatement(whileStmt *parser.WhileStatement, chunk
 
 	if wrapFrame {
 		c.emitFrameWrap(chunk, "BeginDrawing")
+		if use3D {
+			c.emitFrameWrap(chunk, "BeginMode3D")
+		} else {
+			c.emitFrameWrap(chunk, "BeginMode2D")
+		}
 	}
 
 	// Compile loop body
@@ -1312,6 +1476,11 @@ func (c *Compiler) compileWhileStatement(whileStmt *parser.WhileStatement, chunk
 	}
 
 	if wrapFrame {
+		if use3D {
+			c.emitFrameWrap(chunk, "EndMode3D")
+		} else {
+			c.emitFrameWrap(chunk, "EndMode2D")
+		}
 		c.emitFrameWrap(chunk, "EndDrawing")
 	}
 
@@ -1328,6 +1497,11 @@ func (c *Compiler) compileWhileStatement(whileStmt *parser.WhileStatement, chunk
 		chunk.PatchJumpOffset(pos, len(chunk.Code)-pos-2)
 	}
 	c.loopExitStack = c.loopExitStack[:len(c.loopExitStack)-1]
+	// Patch CONTINUE WHILE jumps to condition
+	for _, pos := range c.loopContinueStack[len(c.loopContinueStack)-1] {
+		chunk.PatchJumpOffset(pos, loopStart-pos-2)
+	}
+	c.loopContinueStack = c.loopContinueStack[:len(c.loopContinueStack)-1]
 
 	return nil
 }
@@ -1582,7 +1756,13 @@ func (c *Compiler) resolveUDTConstantMember(td *parser.TypeDecl, memberLower str
 }
 
 // compileEnumStatement compiles ENUM Name : a, b = 2, c ... members as constants (auto-increment from 0 or explicit value).
+// Also records enum name -> member -> value in chunk.Enums for Enum.getValue/getName/hasValue at runtime.
 func (c *Compiler) compileEnumStatement(es *parser.EnumStatement, chunk *vm.Chunk) error {
+	enumName := strings.ToLower(es.Name)
+	if chunk.Enums == nil {
+		chunk.Enums = make(map[string]vm.EnumMembers)
+	}
+	members := make(vm.EnumMembers)
 	nextVal := int64(0)
 	for _, m := range es.Members {
 		if m.Value != nil {
@@ -1595,13 +1775,16 @@ func (c *Compiler) compileEnumStatement(es *parser.EnumStatement, chunk *vm.Chun
 				return fmt.Errorf("enum member %s: %w", m.Name, err)
 			}
 		}
+		memLower := strings.ToLower(m.Name)
+		members[memLower] = nextVal
 		idx := chunk.WriteConstant(nextVal)
 		if idx > 255 {
 			return fmt.Errorf("too many constants")
 		}
-		c.constIndices[strings.ToLower(m.Name)] = byte(idx)
+		c.constIndices[memLower] = byte(idx)
 		nextVal++
 	}
+	chunk.Enums[enumName] = members
 	return nil
 }
 

@@ -6,6 +6,7 @@ Complete guide to all CyberBasic documentation.
 
 - **[Getting Started Guide](GETTING_STARTED.md)** – Installation, building, running your first program
 - **[Quick Reference](QUICK_REFERENCE.md)** – One-page syntax reference for daily use
+- **[BASIC Programming Guide](BASIC_PROGRAMMING_GUIDE.md)** – Step-by-step tutorial: variables, types, I/O, errors
 
 ## Language Reference
 
@@ -15,6 +16,14 @@ Complete guide to all CyberBasic documentation.
   - Control flow (IF/THEN, FOR/NEXT, WHILE/WEND, REPEAT/UNTIL, SELECT CASE)
   - Functions, subs, modules, dot notation
   - Includes (#include "file.bas"), events, coroutines, compound assignment
+
+- **[Libraries and includes](LIBRARIES.md)** – Multi-file projects, reusing .bas files as libraries
+
+- **[Block Structure Guide](BLOCK_STRUCTURE_GUIDE.md)** – END keywords (ENDIF / END IF, ENDFUNCTION / END FUNCTION, ENDSUB / END SUB, END MODULE, ELSEIF), single-word vs two-word forms, examples and best practices
+
+- **[Program Structure](PROGRAM_STRUCTURE.md)** – Comments (`//`), feature list, block quick reference, example skeleton
+
+- **[Command Reference](COMMAND_REFERENCE.md)** – Structured command set: window, input, math, camera, 3D, 2D, audio, file, game loop, utility
 
 ## Game Development
 
@@ -26,27 +35,51 @@ Complete guide to all CyberBasic documentation.
   - Best practices
 
 - **[2D Graphics Guide](2D_GRAPHICS_GUIDE.md)** – 2D rendering reference
-  - Window and frame (InitWindow, ClearBackground; BeginDrawing/EndDrawing only when not using Main() or auto-wrapped WHILE)
+  - Window and frame (InitWindow, ClearBackground; no auto-wrap, compiles as written)
   - Primitives, textures, text, colors
-  - 2D camera (SetCamera2D, BeginMode2D, EndMode2D)
+  - 2D camera (SetCamera2D)
   - 2D game checklist
 
 - **[3D Graphics Guide](3D_GRAPHICS_GUIDE.md)** – 3D rendering reference
   - 3D camera (SetCamera3D, GAME.CameraOrbit)
   - Primitives, models, meshes
-  - BeginMode3D/EndMode3D
   - 3D game checklist
+  - **3D editor and level builder** (GetMouseRay, PickGroundPlane, level objects, SaveLevel/LoadLevel)
+
+- **[Windows, scaling, and splitscreen](WINDOWS_AND_VIEWS.md)** – Window commands, DPI/scaling, views and split-screen
+  - Window and config flags (FLAG_*), blend modes (BLEND_*)
+  - GetScreenWidth/Height vs GetRenderWidth/Height, GetWindowScaleDPI, GetScaleDPI
+  - CreateView, SetViewTarget, DrawView; GetViewX/Y/Width/Height, SetViewPosition/SetViewSize/SetViewRect
+  - CreateSplitscreenLeftRight, CreateSplitscreenTopBottom, CreateSplitscreenFour; splitscreen recipe
+
+- **[Multiple windows from one .bas](MULTI_WINDOW.md)** – Spawn extra windows (child processes) and talk via NET
+  - IsWindowProcess(), GetWindowTitle/Width/Height, SpawnWindow(port, title, width, height), ConnectToParent()
+  - Script pattern: branch on IsWindowProcess(); main Host + SpawnWindow + AcceptTimeout; child ConnectToParent + InitWindow + loop
 
 - **[ECS Guide](ECS_GUIDE.md)** – Entity-Component System (via library)
   - Create world, entities, components
   - Queries and iteration
   - Example (ecs_demo.bas)
 
+- **[Multiplayer (TCP)](MULTIPLAYER.md)** – Simple TCP client/server
+  - Connect, Send, Receive, Disconnect (client)
+  - Host, Accept, CloseServer (server)
+  - Line-based messages, game-loop usage
+
+- **[GUI Guide](GUI_GUIDE.md)** – Immediate-mode UI
+  - BeginUI, EndUI, Label, Button, Slider, Checkbox, TextBox, Dropdown, ProgressBar
+  - WindowBox, GroupBox, layout and examples
+
 ## API and Reference
 
 - **[API Reference (API_REFERENCE.md)](../API_REFERENCE.md)** – All bindings (raylib, Box2D, Bullet, GAME, ECS, std)
 - **[Cheatsheet (CHEATSHEET.md)](../CHEATSHEET.md)** – First 10 lines for 2D and 3D games
 - **[Modules (MODULES.md)](../MODULES.md)** – Codebase layout and adding bindings
+
+## Compatibility
+
+- **[DarkBASIC Pro compatibility (DBP_COMPAT.md)](DBP_COMPAT.md)** – Map DBP commands to CyberBasic (existing or new)
+- **[DBP gap list (DBP_GAP.md)](DBP_GAP.md)** – Commands added for DBP parity (Left, Right, Mid, Len, Chr, Asc, Str, Val, Rnd, Int, CopyFile, ListDir, ExecuteFile)
 
 ## Examples
 
@@ -65,6 +98,6 @@ Complete guide to all CyberBasic documentation.
 | **Use ECS** | [ECS Guide](ECS_GUIDE.md) → [API Reference](../API_REFERENCE.md) |
 | **Look up a function** | [API Reference](../API_REFERENCE.md) |
 
-**Full feature set:** CyberBasic supports **full 2D** and **full 3D** graphics, **full 2D physics** (Box2D), **full 3D physics** (Bullet), **full ECS** (entity-component system), and **minimal GUI** (BeginUI, Label, Button, EndUI). See the guides above for each area.
+**Full feature set:** CyberBasic supports **full 2D** and **full 3D** graphics, **full 2D physics** (Box2D), **full 3D physics** (Bullet), **full ECS** (entity-component system), **GUI** (BeginUI, Label, Button, Slider, Checkbox, etc.), and **multiplayer** (TCP Connect/Send/Receive, Host/Accept). See the guides above for each area.
 
 All documentation lives in the `docs/` directory and the project root. Start with [Getting Started](GETTING_STARTED.md).

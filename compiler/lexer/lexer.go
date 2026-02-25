@@ -121,6 +121,10 @@ func (l *Lexer) NextToken() Token {
 		}
 	case '%':
 		tok = Token{Type: TokenMod, Value: "%", Line: l.line, Col: l.col - 1}
+	case '^':
+		tok = Token{Type: TokenPower, Value: "^", Line: l.line, Col: l.col - 1}
+	case '\\':
+		tok = Token{Type: TokenIntDiv, Value: "\\", Line: l.line, Col: l.col - 1}
 	case '(':
 		tok = Token{Type: TokenLeftParen, Value: "(", Line: l.line, Col: l.col - 1}
 	case ')':
@@ -129,6 +133,10 @@ func (l *Lexer) NextToken() Token {
 		tok = Token{Type: TokenLeftBracket, Value: "[", Line: l.line, Col: l.col - 1}
 	case ']':
 		tok = Token{Type: TokenRightBracket, Value: "]", Line: l.line, Col: l.col - 1}
+	case '{':
+		tok = Token{Type: TokenLeftBrace, Value: "{", Line: l.line, Col: l.col - 1}
+	case '}':
+		tok = Token{Type: TokenRightBrace, Value: "}", Line: l.line, Col: l.col - 1}
 	case ',':
 		tok = Token{Type: TokenComma, Value: ",", Line: l.line, Col: l.col - 1}
 	case ':':

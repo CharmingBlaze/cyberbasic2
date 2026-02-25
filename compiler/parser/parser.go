@@ -53,7 +53,9 @@ func (p *Parser) isBlockTerminator() bool {
 	}
 	switch p.peek().Type {
 	case lexer.TokenEndIf, lexer.TokenWend, lexer.TokenNext, lexer.TokenUntil,
-		lexer.TokenEndSelect, lexer.TokenEnd, lexer.TokenCase, lexer.TokenEndMain:
+		lexer.TokenEndSelect, lexer.TokenEnd, lexer.TokenCase,
+		lexer.TokenElseIf, lexer.TokenElse,
+		lexer.TokenEndFunction, lexer.TokenEndSub, lexer.TokenEndModule:
 		return true
 	default:
 		return false
@@ -76,8 +78,6 @@ func (p *Parser) statement() (Node, error) {
 		return p.forStatement()
 	case lexer.TokenWhile:
 		return p.whileStatement()
-	case lexer.TokenMain:
-		return p.mainStatement()
 	case lexer.TokenFunction:
 		return p.functionDecl()
 	case lexer.TokenSub:
@@ -114,8 +114,12 @@ func (p *Parser) statement() (Node, error) {
 		return p.quitStatement()
 	case lexer.TokenRepeat:
 		return p.repeatStatement()
-	case lexer.TokenExit:
+	case lexer.TokenExit, lexer.TokenBreak:
 		return p.exitLoopStatement()
+	case lexer.TokenContinue:
+		return p.continueLoopStatement()
+	case lexer.TokenAssert:
+		return p.assertStatement()
 	case lexer.TokenLet:
 		p.advance() // skip LET
 		return p.assignmentOrCall()
@@ -149,26 +153,46 @@ func (p *Parser) ifStatement() (Node, error) {
 		return nil, &Error{Message: "expected THEN after IF condition", Line: p.line(), Col: p.col()}
 	}
 
-	thenBlock, err := p.block()
+	thenBlock, err := p.block(true) // true = allow single-line IF (stop at newline+IF)
 	if err != nil {
 		return nil, err
 	}
 
+	var elseIfs []ElseIfBranch
+	for p.match(lexer.TokenElseIf) {
+		cond, err := p.expression()
+		if err != nil {
+			return nil, err
+		}
+		if !p.match(lexer.TokenThen) {
+			return nil, &Error{Message: "expected THEN after ELSEIF condition", Line: p.line(), Col: p.col()}
+		}
+		blk, err := p.block(true)
+		if err != nil {
+			return nil, err
+		}
+		elseIfs = append(elseIfs, ElseIfBranch{Condition: cond, Block: blk})
+	}
+
 	var elseBlock *Block
 	if p.match(lexer.TokenElse) {
-		elseBlock, err = p.block()
+		elseBlock, err = p.block(false)
 		if err != nil {
 			return nil, err
 		}
 	}
 
-	if !p.match(lexer.TokenEndIf) {
-		return nil, &Error{Message: "expected ENDIF", Line: p.line(), Col: p.col()}
+	// Single-line IF: one statement and we're not at ENDIF/END IF/ELSE/ELSEIF => no ENDIF required
+	if len(thenBlock.Statements) == 1 && len(elseIfs) == 0 && elseBlock == nil && !p.checkEndIf() && !p.check(lexer.TokenElse) && !p.check(lexer.TokenElseIf) {
+		// do not consume ENDIF
+	} else if !p.matchEndIf() {
+		return nil, &Error{Message: "expected ENDIF or END IF", Line: p.line(), Col: p.col()}
 	}
 
 	return &IfStatement{
 		Condition: condition,
 		ThenBlock: thenBlock,
+		ElseIfs:   elseIfs,
 		ElseBlock: elseBlock,
 	}, nil
 }
@@ -208,7 +232,7 @@ func (p *Parser) forStatement() (Node, error) {
 		}
 	}
 
-	body, err := p.block()
+	body, err := p.block(false)
 	if err != nil {
 		return nil, err
 	}
@@ -235,7 +259,7 @@ func (p *Parser) whileStatement() (Node, error) {
 		return nil, err
 	}
 
-	body, err := p.block()
+	body, err := p.block(false)
 	if err != nil {
 		return nil, err
 	}
@@ -248,24 +272,6 @@ func (p *Parser) whileStatement() (Node, error) {
 		Condition: condition,
 		Body:      body,
 	}, nil
-}
-
-// mainStatement parses Main [()] ... EndMain
-func (p *Parser) mainStatement() (Node, error) {
-	p.advance() // Skip Main
-	if p.match(lexer.TokenLeftParen) {
-		if !p.match(lexer.TokenRightParen) {
-			return nil, &Error{Message: "expected ')' after Main", Line: p.line(), Col: p.col()}
-		}
-	}
-	body, err := p.block()
-	if err != nil {
-		return nil, err
-	}
-	if !p.match(lexer.TokenEndMain) {
-		return nil, &Error{Message: "expected EndMain", Line: p.line(), Col: p.col()}
-	}
-	return &MainStatement{Body: body}, nil
 }
 
 // functionDecl parses FUNCTION...END FUNCTION
@@ -302,17 +308,20 @@ func (p *Parser) functionDecl() (Node, error) {
 		returnType = p.previous().Value
 	}
 
-	body, err := p.block()
+	body, err := p.block(false)
 	if err != nil {
 		return nil, err
 	}
 
-	if !p.match(lexer.TokenEnd) {
-		return nil, &Error{Message: "expected END", Line: p.line(), Col: p.col()}
-	}
-
-	if !p.match(lexer.TokenFunction) {
-		return nil, &Error{Message: "expected FUNCTION after END", Line: p.line(), Col: p.col()}
+	// ENDFUNCTION (single-word) or END FUNCTION (two words)
+	if p.match(lexer.TokenEndFunction) {
+		// consumed
+	} else if p.match(lexer.TokenEnd) {
+		if !p.match(lexer.TokenFunction) {
+			return nil, &Error{Message: "expected FUNCTION after END", Line: p.line(), Col: p.col()}
+		}
+	} else {
+		return nil, &Error{Message: "expected ENDFUNCTION or END FUNCTION", Line: p.line(), Col: p.col()}
 	}
 
 	return &FunctionDecl{
@@ -349,17 +358,20 @@ func (p *Parser) subDecl() (Node, error) {
 		}
 	}
 
-	body, err := p.block()
+	body, err := p.block(false)
 	if err != nil {
 		return nil, err
 	}
 
-	if !p.match(lexer.TokenEnd) {
-		return nil, &Error{Message: "expected END", Line: p.line(), Col: p.col()}
-	}
-
-	if !p.match(lexer.TokenSub) {
-		return nil, &Error{Message: "expected SUB after END", Line: p.line(), Col: p.col()}
+	// ENDSUB (single-word) or END SUB (two words)
+	if p.match(lexer.TokenEndSub) {
+		// consumed
+	} else if p.match(lexer.TokenEnd) {
+		if !p.match(lexer.TokenSub) {
+			return nil, &Error{Message: "expected SUB after END", Line: p.line(), Col: p.col()}
+		}
+	} else {
+		return nil, &Error{Message: "expected ENDSUB or END SUB", Line: p.line(), Col: p.col()}
 	}
 
 	return &SubDecl{
@@ -381,11 +393,13 @@ func (p *Parser) moduleDecl() (Node, error) {
 		for p.match(lexer.TokenNewLine) {
 			continue
 		}
-		if p.check(lexer.TokenEnd) {
+		// ENDMODULE (single-word) or END MODULE (two words); only consume END when next is MODULE
+		if p.match(lexer.TokenEndModule) {
+			break
+		}
+		if p.check(lexer.TokenEnd) && p.current+1 < len(p.tokens) && p.tokens[p.current+1].Type == lexer.TokenModule {
 			p.advance()
-			if !p.match(lexer.TokenModule) {
-				return nil, &Error{Message: "expected MODULE after END", Line: p.line(), Col: p.col()}
-			}
+			p.advance()
 			break
 		}
 		if p.check(lexer.TokenFunction) {
@@ -441,7 +455,7 @@ func (p *Parser) onEventStatement() (Node, error) {
 			return nil, &Error{Message: "expected ')' after key", Line: p.line(), Col: p.col()}
 		}
 	}
-	body, err := p.block()
+	body, err := p.block(false)
 	if err != nil {
 		return nil, err
 	}
@@ -518,20 +532,85 @@ func (p *Parser) constStatement() (Node, error) {
 	return &ConstStatement{Decls: decls}, nil
 }
 
-// enumStatement parses ENUM Name : member1, member2 = expr, ...
+// checkEndEnum returns true if current position is ENDENUM or END ENUM.
+func (p *Parser) checkEndEnum() bool {
+	if p.isAtEnd() {
+		return false
+	}
+	if p.check(lexer.TokenEndEnum) {
+		return true
+	}
+	return p.check(lexer.TokenEnd) && p.current+1 < len(p.tokens) && p.tokens[p.current+1].Type == lexer.TokenEnum
+}
+
+// matchEndEnum consumes ENDENUM or END ENUM; returns true if matched.
+func (p *Parser) matchEndEnum() bool {
+	if p.match(lexer.TokenEndEnum) {
+		return true
+	}
+	if p.check(lexer.TokenEnd) && p.current+1 < len(p.tokens) && p.tokens[p.current+1].Type == lexer.TokenEnum {
+		p.advance()
+		p.advance()
+		return true
+	}
+	return false
+}
+
+// enumStatement parses ENUM [Name] : member1, ... or ENUM [Name] newline member1 ... END ENUM (multi-line/unnamed).
 func (p *Parser) enumStatement() (Node, error) {
 	p.advance() // Skip ENUM
-	if !p.match(lexer.TokenIdentifier) {
-		return nil, &Error{Message: "expected enum name after ENUM", Line: p.line(), Col: p.col()}
+	enumName := ""
+	if p.match(lexer.TokenIdentifier) {
+		enumName = p.previous().Value
 	}
-	enumName := p.previous().Value
-	if !p.match(lexer.TokenColon) {
-		return nil, &Error{Message: "expected ':' after enum name", Line: p.line(), Col: p.col()}
+	// Single-line form: ENUM Name : a, b = 2, c
+	if enumName != "" && p.match(lexer.TokenColon) {
+		var members []EnumMember
+		for {
+			if !p.match(lexer.TokenIdentifier) {
+				return nil, &Error{Message: "expected enum member name", Line: p.line(), Col: p.col()}
+			}
+			memName := p.previous().Value
+			var value Node
+			if p.match(lexer.TokenAssign) {
+				var err error
+				value, err = p.expression()
+				if err != nil {
+					return nil, err
+				}
+			}
+			members = append(members, EnumMember{Name: memName, Value: value})
+			if !p.match(lexer.TokenComma) {
+				break
+			}
+		}
+		for p.match(lexer.TokenNewLine) {
+			continue
+		}
+		if p.matchEndEnum() {
+			// consumed
+		} else if p.check(lexer.TokenEnd) {
+			p.advance()
+			if !p.match(lexer.TokenEnum) {
+				return nil, &Error{Message: "expected ENUM after END", Line: p.line(), Col: p.col()}
+			}
+		}
+		return &EnumStatement{Name: enumName, Members: members}, nil
+	}
+	// Multi-line form: ENUM [Name] newline members... END ENUM (unnamed if no name)
+	for p.match(lexer.TokenNewLine) {
+		continue
 	}
 	var members []EnumMember
-	for {
+	for !p.isAtEnd() && !p.checkEndEnum() {
+		for p.match(lexer.TokenNewLine) {
+			continue
+		}
+		if p.checkEndEnum() {
+			break
+		}
 		if !p.match(lexer.TokenIdentifier) {
-			return nil, &Error{Message: "expected enum member name", Line: p.line(), Col: p.col()}
+			return nil, &Error{Message: "expected enum member name or END ENUM", Line: p.line(), Col: p.col()}
 		}
 		memName := p.previous().Value
 		var value Node
@@ -543,19 +622,18 @@ func (p *Parser) enumStatement() (Node, error) {
 			}
 		}
 		members = append(members, EnumMember{Name: memName, Value: value})
-		if !p.match(lexer.TokenComma) {
+		for p.match(lexer.TokenNewLine) {
+			continue
+		}
+		if p.match(lexer.TokenComma) {
+			continue
+		}
+		if p.checkEndEnum() {
 			break
 		}
 	}
-	// Consume optional "End Enum" so top-level parser does not see stray End
-	for p.match(lexer.TokenNewLine) {
-		continue
-	}
-	if p.check(lexer.TokenEnd) {
-		p.advance()
-		if !p.match(lexer.TokenEnum) {
-			return nil, &Error{Message: "expected ENUM after END", Line: p.line(), Col: p.col()}
-		}
+	if !p.matchEndEnum() {
+		return nil, &Error{Message: "expected END ENUM or ENDENUM", Line: p.line(), Col: p.col()}
 	}
 	return &EnumStatement{Name: enumName, Members: members}, nil
 }
@@ -891,18 +969,28 @@ func (p *Parser) assignmentOrCall() (Node, error) {
 	}
 }
 
-// block parses a block of statements
-func (p *Parser) block() (*Block, error) {
+// block parses a block of statements. When stopAtNewlineIf is true (IF then-block only),
+// a single statement followed by newline and IF causes an early return so the next IF is not consumed.
+func (p *Parser) block(stopAtNewlineIf bool) (*Block, error) {
 	block := &Block{}
 
 	for !p.isAtEnd() && !p.check(lexer.TokenEndIf) && !p.check(lexer.TokenNext) &&
-		!p.check(lexer.TokenWend) && !p.check(lexer.TokenEnd) {
+		!p.check(lexer.TokenWend) && !p.check(lexer.TokenEnd) &&
+		!p.check(lexer.TokenElseIf) && !p.check(lexer.TokenElse) &&
+		!p.check(lexer.TokenEndFunction) && !p.check(lexer.TokenEndSub) && !p.check(lexer.TokenEndModule) {
 		stmt, err := p.statement()
 		if err != nil {
 			return nil, err
 		}
 		if stmt != nil {
 			block.Statements = append(block.Statements, stmt)
+			if stopAtNewlineIf && len(block.Statements) == 1 {
+				for p.match(lexer.TokenNewLine) {
+				}
+				if p.check(lexer.TokenIf) {
+					return block, nil
+				}
+			}
 		}
 		if p.match(lexer.TokenNewLine) {
 			continue
@@ -1022,16 +1110,45 @@ func (p *Parser) repeatStatement() (Node, error) {
 	return &RepeatStatement{Body: body, Condition: cond}, nil
 }
 
-// exitLoopStatement parses EXIT FOR or EXIT WHILE.
+// exitLoopStatement parses EXIT FOR, EXIT WHILE, BREAK FOR, or BREAK WHILE.
 func (p *Parser) exitLoopStatement() (Node, error) {
-	p.advance() // EXIT
+	p.advance() // EXIT or BREAK
 	if p.match(lexer.TokenFor) {
 		return &ExitLoopStatement{Kind: "FOR"}, nil
 	}
 	if p.match(lexer.TokenWhile) {
 		return &ExitLoopStatement{Kind: "WHILE"}, nil
 	}
-	return nil, &Error{Message: "expected FOR or WHILE after EXIT", Line: p.line(), Col: p.col()}
+	return nil, &Error{Message: "expected FOR or WHILE after EXIT/BREAK", Line: p.line(), Col: p.col()}
+}
+
+// continueLoopStatement parses CONTINUE FOR or CONTINUE WHILE.
+func (p *Parser) continueLoopStatement() (Node, error) {
+	p.advance() // CONTINUE
+	if p.match(lexer.TokenFor) {
+		return &ContinueLoopStatement{Kind: "FOR"}, nil
+	}
+	if p.match(lexer.TokenWhile) {
+		return &ContinueLoopStatement{Kind: "WHILE"}, nil
+	}
+	return nil, &Error{Message: "expected FOR or WHILE after CONTINUE", Line: p.line(), Col: p.col()}
+}
+
+// assertStatement parses ASSERT condition [, message].
+func (p *Parser) assertStatement() (Node, error) {
+	p.advance() // ASSERT
+	cond, err := p.expression()
+	if err != nil {
+		return nil, err
+	}
+	var msg Node
+	if p.match(lexer.TokenComma) {
+		msg, err = p.expression()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return &AssertStatement{Condition: cond, Message: msg}, nil
 }
 
 // expression parses an expression
@@ -1041,20 +1158,36 @@ func (p *Parser) expression() (Node, error) {
 
 // logicalOr parses OR operations
 func (p *Parser) logicalOr() (Node, error) {
-	left, err := p.logicalAnd()
+	left, err := p.logicalXor()
 	if err != nil {
 		return nil, err
 	}
 
 	for p.match(lexer.TokenOr) {
 		op := p.previous().Value
-		right, err := p.logicalAnd()
+		right, err := p.logicalXor()
 		if err != nil {
 			return nil, err
 		}
 		left = &BinaryOp{Operator: op, Left: left, Right: right}
 	}
 
+	return left, nil
+}
+
+// logicalXor parses XOR operations
+func (p *Parser) logicalXor() (Node, error) {
+	left, err := p.logicalAnd()
+	if err != nil {
+		return nil, err
+	}
+	for p.match(lexer.TokenXor) {
+		right, err := p.logicalAnd()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryOp{Operator: "XOR", Left: left, Right: right}
+	}
 	return left, nil
 }
 
@@ -1134,22 +1267,38 @@ func (p *Parser) term() (Node, error) {
 	return left, nil
 }
 
-// factor parses multiplication, division, and modulo
+// factor parses multiplication, division, modulo, and integer division
 func (p *Parser) factor() (Node, error) {
-	left, err := p.unary()
+	left, err := p.power()
 	if err != nil {
 		return nil, err
 	}
 
-	for p.match(lexer.TokenMultiply, lexer.TokenDivide, lexer.TokenMod) {
+	for p.match(lexer.TokenMultiply, lexer.TokenDivide, lexer.TokenMod, lexer.TokenIntDiv) {
 		op := p.previous().Value
-		right, err := p.unary()
+		right, err := p.power()
 		if err != nil {
 			return nil, err
 		}
 		left = &BinaryOp{Operator: op, Left: left, Right: right}
 	}
 
+	return left, nil
+}
+
+// power parses exponentiation (right-associative): unary (^ power)*
+func (p *Parser) power() (Node, error) {
+	left, err := p.unary()
+	if err != nil {
+		return nil, err
+	}
+	for p.match(lexer.TokenPower) {
+		right, err := p.power()
+		if err != nil {
+			return nil, err
+		}
+		left = &BinaryOp{Operator: "^", Left: left, Right: right}
+	}
 	return left, nil
 }
 
@@ -1176,6 +1325,51 @@ func (p *Parser) unary() (Node, error) {
 	return p.primary()
 }
 
+// dictLiteral parses { "key": value } or { key = value } (JSON-style or BASIC-style).
+func (p *Parser) dictLiteral() (Node, error) {
+	p.advance() // {
+	var pairs []DictPair
+	for !p.check(lexer.TokenRightBrace) && !p.isAtEnd() {
+		for p.match(lexer.TokenNewLine) {
+			continue
+		}
+		var key string
+		if p.match(lexer.TokenString) {
+			key = p.previous().Value
+			if !p.match(lexer.TokenColon) {
+				return nil, &Error{Message: "expected ':' after string key in dict", Line: p.line(), Col: p.col()}
+			}
+		} else if p.match(lexer.TokenIdentifier) {
+			key = p.previous().Value
+			if !p.match(lexer.TokenAssign) {
+				return nil, &Error{Message: "expected '=' after identifier key in dict", Line: p.line(), Col: p.col()}
+			}
+		} else if p.match(lexer.TokenNumber) {
+			key = p.previous().Value
+			if !p.match(lexer.TokenColon) {
+				return nil, &Error{Message: "expected ':' after number key in dict", Line: p.line(), Col: p.col()}
+			}
+		} else {
+			return nil, &Error{Message: "expected string, identifier, or number key in dict", Line: p.line(), Col: p.col()}
+		}
+		value, err := p.expression()
+		if err != nil {
+			return nil, err
+		}
+		pairs = append(pairs, DictPair{Key: key, Value: value})
+		for p.match(lexer.TokenNewLine) {
+			continue
+		}
+		if !p.match(lexer.TokenComma) {
+			break
+		}
+	}
+	if !p.match(lexer.TokenRightBrace) {
+		return nil, &Error{Message: "expected '}' to close dict literal", Line: p.line(), Col: p.col()}
+	}
+	return &DictLiteral{Pairs: pairs}, nil
+}
+
 // primary parses primary expressions
 func (p *Parser) primary() (Node, error) {
 	switch p.peek().Type {
@@ -1192,6 +1386,8 @@ func (p *Parser) primary() (Node, error) {
 	case lexer.TokenNil:
 		p.advance()
 		return &NilLiteral{}, nil
+	case lexer.TokenLeftBrace:
+		return p.dictLiteral()
 	case lexer.TokenShouldClose:
 		p.advance()
 		if p.match(lexer.TokenLeftParen) {
@@ -1342,6 +1538,33 @@ func (p *Parser) check(t lexer.TokenType) bool {
 		return false
 	}
 	return p.peek().Type == t
+}
+
+// checkEndIf returns true if the current position is ENDIF or END IF (two words).
+func (p *Parser) checkEndIf() bool {
+	if p.isAtEnd() {
+		return false
+	}
+	if p.check(lexer.TokenEndIf) {
+		return true
+	}
+	if p.check(lexer.TokenEnd) && p.current+1 < len(p.tokens) && p.tokens[p.current+1].Type == lexer.TokenIf {
+		return true
+	}
+	return false
+}
+
+// matchEndIf consumes ENDIF or END IF (two words); returns true if matched.
+func (p *Parser) matchEndIf() bool {
+	if p.match(lexer.TokenEndIf) {
+		return true
+	}
+	if p.check(lexer.TokenEnd) && p.current+1 < len(p.tokens) && p.tokens[p.current+1].Type == lexer.TokenIf {
+		p.advance() // END
+		p.advance() // IF
+		return true
+	}
+	return false
 }
 
 func (p *Parser) isAtEnd() bool {

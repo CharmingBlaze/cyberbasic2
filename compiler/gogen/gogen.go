@@ -381,10 +381,19 @@ func emitFor(f *parser.ForStatement, spritePos *map[string]string, indent string
 	return b.String(), nil
 }
 
-func blockContainsSync(statements []parser.Node) bool {
+func blockContainsDrawOrSync(statements []parser.Node) bool {
 	for _, s := range statements {
 		if g, ok := s.(*parser.GameCommand); ok && strings.EqualFold(g.Command, "sync") {
 			return true
+		}
+		// Any draw-like call (ClearBackground, DrawCircle, etc.) - treat as needing frame
+		if st, ok := s.(*parser.Statement); ok && st.Value != nil {
+			if c, ok := st.Value.(*parser.Call); ok {
+				nm := strings.ToLower(c.Name)
+				if strings.HasSuffix(nm, "background") || strings.HasPrefix(nm, "draw") {
+					return true
+				}
+			}
 		}
 	}
 	return false
@@ -402,8 +411,8 @@ func emitWhile(w *parser.WhileStatement, spritePos *map[string]string, indent st
 	tab := indent + "\t"
 	var b strings.Builder
 	b.WriteString(fmt.Sprintf("for %s {\n", cond))
-	// So that drawing is inside the frame: start frame at loop entry
-	if blockContainsSync(w.Body.Statements) {
+	injectFrame := blockContainsDrawOrSync(w.Body.Statements)
+	if injectFrame {
 		b.WriteString(tab + "rl.BeginDrawing()\n")
 		b.WriteString(tab + "rl.ClearBackground(rl.NewColor(20, 20, 30, 255))\n")
 	}
@@ -415,6 +424,9 @@ func emitWhile(w *parser.WhileStatement, spritePos *map[string]string, indent st
 		if line != "" {
 			b.WriteString(tab + line + "\n")
 		}
+	}
+	if injectFrame {
+		b.WriteString(tab + "rl.EndDrawing()\n")
 	}
 	b.WriteString(indent + "}")
 	return b.String(), nil

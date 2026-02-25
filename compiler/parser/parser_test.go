@@ -82,6 +82,59 @@ End Function
 	}
 }
 
+func TestParseEndIfTwoWords(t *testing.T) {
+	src := `If x > 0 Then
+  Print("positive")
+End If
+`
+	prog := mustParse(t, src)
+	if len(prog.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(prog.Statements))
+	}
+	_, ok := prog.Statements[0].(*IfStatement)
+	if !ok {
+		t.Fatalf("expected IfStatement, got %T", prog.Statements[0])
+	}
+}
+
+func TestParseEndFunctionSingleWord(t *testing.T) {
+	src := `Function Add(a, b)
+  Return a + b
+EndFunction
+Print Add(1, 2)
+`
+	prog := mustParse(t, src)
+	if len(prog.Statements) != 2 {
+		t.Fatalf("expected 2 statements, got %d", len(prog.Statements))
+	}
+	_, ok := prog.Statements[0].(*FunctionDecl)
+	if !ok {
+		t.Fatalf("expected FunctionDecl, got %T", prog.Statements[0])
+	}
+}
+
+func TestParseElseIf(t *testing.T) {
+	src := `If op = "add" Then
+  Return x + y
+ElseIf op = "mul" Then
+  Return x * y
+Else
+  Return 0
+End If
+`
+	prog := mustParse(t, src)
+	if len(prog.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(prog.Statements))
+	}
+	ifStmt, ok := prog.Statements[0].(*IfStatement)
+	if !ok {
+		t.Fatalf("expected IfStatement, got %T", prog.Statements[0])
+	}
+	if len(ifStmt.ElseIfs) != 1 {
+		t.Fatalf("expected 1 ElseIf branch, got %d", len(ifStmt.ElseIfs))
+	}
+}
+
 func TestParseSelectCase(t *testing.T) {
 	src := `Select Case x
   Case 1

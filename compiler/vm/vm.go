@@ -322,11 +322,13 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		varIndex := int(vm.chunk.Code[vm.ip])
 		vm.ip++
 
-		if len(vm.stack) == 0 {
-			return fmt.Errorf("stack underflow")
+		var value Value
+		if len(vm.stack) > 0 {
+			value = vm.pop()
+		} else {
+			// Defensive: avoid crash when compiler emitted StoreVar without preceding value (e.g. first VAR in some paths)
+			value = nil
 		}
-
-		value := vm.pop()
 
 		// Ensure stack is large enough for variable storage (append so we don't overwrite existing slots)
 		for len(vm.stack) <= varIndex {
@@ -354,6 +356,15 @@ func (vm *VM) executeInstruction(instruction byte) error {
 
 		value, exists := vm.globals[key]
 		if !exists {
+			// Allow 0-arg foreign functions as constants (e.g. KEY_W, KEY_A)
+			if fn := vm.foreign[key]; fn != nil {
+				result, err := fn(nil)
+				if err != nil {
+					return fmt.Errorf("global/constant %s: %w", varName, err)
+				}
+				vm.push(result)
+				break
+			}
 			return fmt.Errorf("undefined global variable: %s", varName)
 		}
 		vm.push(value)
@@ -427,6 +438,24 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		}
 		vm.push(result)
 
+	case OpPower:
+		b := vm.pop()
+		a := vm.pop()
+		result, err := vm.power(a, b)
+		if err != nil {
+			return err
+		}
+		vm.push(result)
+
+	case OpIntDiv:
+		b := vm.pop()
+		a := vm.pop()
+		result, err := vm.intDiv(a, b)
+		if err != nil {
+			return err
+		}
+		vm.push(result)
+
 	case OpNeg:
 		a := vm.pop()
 		result, err := vm.negate(a)
@@ -490,6 +519,12 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		b := vm.pop()
 		a := vm.pop()
 		vm.push(vm.isTruthy(a) || vm.isTruthy(b))
+
+	case OpXor:
+		b := vm.pop()
+		a := vm.pop()
+		va, vb := vm.isTruthy(a), vm.isTruthy(b)
+		vm.push(va != vb)
 
 	case OpNot:
 		a := vm.pop()
@@ -1861,6 +1896,21 @@ func (vm *VM) modulo(a, b Value) (Value, error) {
 		}
 	}
 	return nil, fmt.Errorf("invalid operands for modulo")
+}
+
+func (vm *VM) power(a, b Value) (Value, error) {
+	af := valueToFloat64(a)
+	bf := valueToFloat64(b)
+	return math.Pow(af, bf), nil
+}
+
+func (vm *VM) intDiv(a, b Value) (Value, error) {
+	af := valueToFloat64(a)
+	bf := valueToFloat64(b)
+	if bf == 0 {
+		return nil, fmt.Errorf("division by zero")
+	}
+	return int(math.Trunc(af / bf)), nil
 }
 
 func (vm *VM) negate(a Value) (Value, error) {

@@ -46,6 +46,31 @@ func registerCore(v *vm.VM) {
 		rl.EndDrawing()
 		return nil, nil
 	})
+	// BeginFrame(): alias for BeginDrawing (start frame)
+	v.RegisterForeign("BeginFrame", func(args []interface{}) (interface{}, error) {
+		rl.BeginDrawing()
+		return nil, nil
+	})
+	// EndFrame(): alias for EndDrawing (end frame)
+	v.RegisterForeign("EndFrame", func(args []interface{}) (interface{}, error) {
+		rl.EndDrawing()
+		return nil, nil
+	})
+	// SetUpdateFunction(func), SetDrawFunction(func): no-op (use WHILE NOT WindowShouldClose() ... WEND and call your update/draw logic manually).
+	v.RegisterForeign("SetUpdateFunction", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("SetDrawFunction", func(args []interface{}) (interface{}, error) { return nil, nil })
+	// Run(): no-op; run your game loop with WHILE NOT WindowShouldClose() ... WEND.
+	v.RegisterForeign("Run", func(args []interface{}) (interface{}, error) { return nil, nil })
+	// Background(r, g, b): clear with RGB, alpha 255
+	v.RegisterForeign("Background", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			rl.ClearBackground(rl.Black)
+			return nil, nil
+		}
+		r, g, b := toInt32(args[0]), toInt32(args[1]), toInt32(args[2])
+		rl.ClearBackground(rl.NewColor(uint8(r), uint8(g), uint8(b), 255))
+		return nil, nil
+	})
 	v.RegisterForeign("ClearBackground", func(args []interface{}) (interface{}, error) {
 		if len(args) == 0 {
 			rl.ClearBackground(rl.Black)
@@ -140,6 +165,14 @@ func registerCore(v *vm.VM) {
 		setRandSeed(int64(seed))
 		return nil, nil
 	})
+	v.RegisterForeign("SeedRandom", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SeedRandom requires (seed)")
+		}
+		seed := toInt32(args[0])
+		setRandSeed(int64(seed))
+		return nil, nil
+	})
 	v.RegisterForeign("SetWindowState", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("SetWindowState requires (flags)")
@@ -176,6 +209,16 @@ func registerCore(v *vm.VM) {
 		}
 		rl.TakeScreenshot(toString(args[0]))
 		return nil, nil
+	})
+	v.RegisterForeign("Screenshot", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("Screenshot requires (path)")
+		}
+		rl.TakeScreenshot(toString(args[0]))
+		return nil, nil
+	})
+	v.RegisterForeign("IsFullscreen", func(args []interface{}) (interface{}, error) {
+		return rl.IsWindowFullscreen(), nil
 	})
 	v.RegisterForeign("OpenURL", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
@@ -315,6 +358,11 @@ func registerCore(v *vm.VM) {
 		scale := rl.GetWindowScaleDPI()
 		return []interface{}{float64(scale.X), float64(scale.Y)}, nil
 	})
+	v.RegisterForeign("GetScaleDPI", func(args []interface{}) (interface{}, error) {
+		scale := rl.GetWindowScaleDPI()
+		avg := (float64(scale.X) + float64(scale.Y)) / 2
+		return avg, nil
+	})
 	v.RegisterForeign("GetMonitorPosition", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("GetMonitorPosition requires (monitor)")
@@ -372,6 +420,12 @@ func registerCore(v *vm.VM) {
 			camera2D.Target = rl.Vector2{X: toFloat32(args[2]), Y: toFloat32(args[3])}
 			camera2D.Rotation = toFloat32(args[4])
 			camera2D.Zoom = toFloat32(args[5])
+		} else {
+			// Default: 1:1 screen coords so automatic game-loop 2D works (Zoom=0 would render blank)
+			camera2D.Offset = rl.Vector2{}
+			camera2D.Target = rl.Vector2{}
+			camera2D.Rotation = 0
+			camera2D.Zoom = 1
 		}
 		rl.BeginMode2D(camera2D)
 		return nil, nil
@@ -431,11 +485,60 @@ func registerCore(v *vm.VM) {
 		if !ok {
 			return nil, fmt.Errorf("unknown shader id: %s", id)
 		}
+		currentShaderMu.Lock()
+		currentShaderId = id
+		currentShaderMu.Unlock()
 		rl.BeginShaderMode(sh)
 		return nil, nil
 	})
 	v.RegisterForeign("EndShaderMode", func(args []interface{}) (interface{}, error) {
+		currentShaderMu.Lock()
+		currentShaderId = ""
+		currentShaderMu.Unlock()
 		rl.EndShaderMode()
+		return nil, nil
+	})
+	v.RegisterForeign("ApplyShader", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("ApplyShader requires (shaderId)")
+		}
+		id := toString(args[0])
+		shaderMu.Lock()
+		sh, ok := shaders[id]
+		shaderMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown shader id: %s", id)
+		}
+		currentShaderMu.Lock()
+		currentShaderId = id
+		currentShaderMu.Unlock()
+		rl.BeginShaderMode(sh)
+		return nil, nil
+	})
+	v.RegisterForeign("RemoveShader", func(args []interface{}) (interface{}, error) {
+		currentShaderMu.Lock()
+		currentShaderId = ""
+		currentShaderMu.Unlock()
+		rl.EndShaderMode()
+		return nil, nil
+	})
+	v.RegisterForeign("SetShaderUniform", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("SetShaderUniform requires (shaderId, name, value)")
+		}
+		id := toString(args[0])
+		name := toString(args[1])
+		val := toFloat32(args[2])
+		shaderMu.Lock()
+		sh, ok := shaders[id]
+		shaderMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown shader id: %s", id)
+		}
+		loc := rl.GetShaderLocation(sh, name)
+		if loc >= 0 {
+			rl.SetShaderValue(sh, loc, []float32{val}, rl.ShaderUniformFloat)
+		}
 		return nil, nil
 	})
 	v.RegisterForeign("LoadShader", func(args []interface{}) (interface{}, error) {

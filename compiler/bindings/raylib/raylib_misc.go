@@ -19,9 +19,22 @@ func registerMisc(v *vm.VM) {
 		delta := rl.GetMouseDelta()
 		return []interface{}{float64(delta.X), float64(delta.Y)}, nil
 	})
+	v.RegisterForeign("GetMouseDeltaX", func(args []interface{}) (interface{}, error) {
+		return float64(rl.GetMouseDelta().X), nil
+	})
+	v.RegisterForeign("GetMouseDeltaY", func(args []interface{}) (interface{}, error) {
+		return float64(rl.GetMouseDelta().Y), nil
+	})
 	v.RegisterForeign("NewColor", func(args []interface{}) (interface{}, error) {
 		if len(args) < 4 {
 			return nil, fmt.Errorf("NewColor requires (r, g, b, a)")
+		}
+		r, g, b, a := toUint8(args[0]), toUint8(args[1]), toUint8(args[2]), toUint8(args[3])
+		return int(r)<<24 | int(g)<<16 | int(b)<<8 | int(a), nil
+	})
+	v.RegisterForeign("Color", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("Color requires (r, g, b, a)")
 		}
 		r, g, b, a := toUint8(args[0]), toUint8(args[1]), toUint8(args[2]), toUint8(args[3])
 		return int(r)<<24 | int(g)<<16 | int(b)<<8 | int(a), nil

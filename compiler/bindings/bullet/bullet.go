@@ -76,9 +76,12 @@ type world struct {
 	mu      sync.RWMutex
 }
 
+const defaultPhysicsWorld = "default"
+
 var (
-	worlds   = make(map[string]*world)
-	worldMu  sync.RWMutex
+	worlds    = make(map[string]*world)
+	worldMu   sync.RWMutex
+	physicsBodySeq int
 	lastRay  struct {
 		hit    bool
 		p      vec3
@@ -1046,6 +1049,139 @@ func registerFlat3D(v *vm.VM) {
 			return 0.0, nil
 		}
 		return b.collisions[idx].normal.z, nil
+	})
+
+	// --- High-level physics (default world "default") ---
+	v.RegisterForeign("PhysicsEnable", func(args []interface{}) (interface{}, error) {
+		getOrCreateWorld(defaultPhysicsWorld, 0, -9.81, 0)
+		return nil, nil
+	})
+	v.RegisterForeign("PhysicsDisable", func(args []interface{}) (interface{}, error) {
+		worldMu.Lock()
+		delete(worlds, defaultPhysicsWorld)
+		worldMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("PhysicsSetGravity", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("PhysicsSetGravity requires (x, y, z)")
+		}
+		w := getOrCreateWorld(defaultPhysicsWorld, toFloat64(args[0]), toFloat64(args[1]), toFloat64(args[2]))
+		w.mu.Lock()
+		w.gravity = vec3{toFloat64(args[0]), toFloat64(args[1]), toFloat64(args[2])}
+		w.mu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("CreateRigidBody", func(args []interface{}) (interface{}, error) {
+		mass := 1.0
+		if len(args) >= 2 {
+			mass = toFloat64(args[1])
+		}
+		worldMu.Lock()
+		physicsBodySeq++
+		bid := fmt.Sprintf("body_%d", physicsBodySeq)
+		worldMu.Unlock()
+		w := getOrCreateWorld(defaultPhysicsWorld, 0, -9.81, 0)
+		w.mu.Lock()
+		w.bodies[bid] = &body{
+			id:       bid,
+			position: vec3{0, 0, 0},
+			halfExt:  vec3{0.5, 0.5, 0.5},
+			mass:     mass,
+			active:   true,
+			scale:    vec3{1, 1, 1},
+		}
+		w.mu.Unlock()
+		return bid, nil
+	})
+	v.RegisterForeign("ApplyForce", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("ApplyForce requires (bodyId, fx, fy, fz)")
+		}
+		w := getWorld(defaultPhysicsWorld)
+		if w == nil {
+			return nil, nil
+		}
+		w.mu.Lock()
+		b := w.bodies[toString(args[0])]
+		if b != nil && b.mass > 0 {
+			dt := 1.0 / 60.0
+			b.velocity.x += toFloat64(args[1]) / b.mass * dt
+			b.velocity.y += toFloat64(args[2]) / b.mass * dt
+			b.velocity.z += toFloat64(args[3]) / b.mass * dt
+		}
+		w.mu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("ApplyImpulse", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("ApplyImpulse requires (bodyId, ix, iy, iz)")
+		}
+		w := getWorld(defaultPhysicsWorld)
+		if w == nil {
+			return nil, nil
+		}
+		w.mu.Lock()
+		b := w.bodies[toString(args[0])]
+		if b != nil && b.mass > 0 {
+			m := b.mass
+			b.velocity.x += toFloat64(args[1]) / m
+			b.velocity.y += toFloat64(args[2]) / m
+			b.velocity.z += toFloat64(args[3]) / m
+		}
+		w.mu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetBodyVelocity", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetBodyVelocity requires (bodyId, vx, vy, vz)")
+		}
+		w := getWorld(defaultPhysicsWorld)
+		if w == nil {
+			return nil, nil
+		}
+		w.mu.Lock()
+		b := w.bodies[toString(args[0])]
+		if b != nil {
+			b.velocity = vec3{toFloat64(args[1]), toFloat64(args[2]), toFloat64(args[3])}
+		}
+		w.mu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("GetBodyVelocity", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return []interface{}{0.0, 0.0, 0.0}, nil
+		}
+		w := getWorld(defaultPhysicsWorld)
+		if w == nil {
+			return []interface{}{0.0, 0.0, 0.0}, nil
+		}
+		w.mu.RLock()
+		b := w.bodies[toString(args[0])]
+		vx, vy, vz := 0.0, 0.0, 0.0
+		if b != nil {
+			vx, vy, vz = b.velocity.x, b.velocity.y, b.velocity.z
+		}
+		w.mu.RUnlock()
+		return []interface{}{vx, vy, vz}, nil
+	})
+	v.RegisterForeign("CheckCollision3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("CheckCollision3D requires (bodyIdA, bodyIdB)")
+		}
+		w := getWorld(defaultPhysicsWorld)
+		if w == nil {
+			return false, nil
+		}
+		w.mu.RLock()
+		a := w.bodies[toString(args[0])]
+		b := w.bodies[toString(args[1])]
+		w.mu.RUnlock()
+		if a == nil || b == nil {
+			return false, nil
+		}
+		_, _, _, depth := overlapBodies(a, b)
+		return depth > 0, nil
 	})
 }
 

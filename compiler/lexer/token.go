@@ -18,6 +18,8 @@ func (t TokenType) String() string {
 		return "TokenThen"
 	case TokenElse:
 		return "TokenElse"
+	case TokenElseIf:
+		return "TokenElseIf"
 	case TokenEndIf:
 		return "TokenEndIf"
 	case TokenFor:
@@ -40,6 +42,12 @@ func (t TokenType) String() string {
 		return "TokenModule"
 	case TokenEnd:
 		return "TokenEnd"
+	case TokenEndFunction:
+		return "TokenEndFunction"
+	case TokenEndSub:
+		return "TokenEndSub"
+	case TokenEndModule:
+		return "TokenEndModule"
 	case TokenReturn:
 		return "TokenReturn"
 	case TokenDim:
@@ -204,6 +212,12 @@ func (t TokenType) String() string {
 		return "TokenConst"
 	case TokenExit:
 		return "TokenExit"
+	case TokenBreak:
+		return "TokenBreak"
+	case TokenContinue:
+		return "TokenContinue"
+	case TokenAssert:
+		return "TokenAssert"
 	case TokenEnum:
 		return "TokenEnum"
 	case TokenTypeKw:
@@ -214,6 +228,8 @@ func (t TokenType) String() string {
 		return "TokenOn"
 	case TokenEndOn:
 		return "TokenEndOn"
+	case TokenEndEnum:
+		return "TokenEndEnum"
 	case TokenKeyDown:
 		return "TokenKeyDown"
 	case TokenKeyPressed:
@@ -224,10 +240,6 @@ func (t TokenType) String() string {
 		return "TokenYield"
 	case TokenWaitSeconds:
 		return "TokenWaitSeconds"
-	case TokenMain:
-		return "TokenMain"
-	case TokenEndMain:
-		return "TokenEndMain"
 	case TokenEqual:
 		return "TokenEqual"
 	case TokenNotEqual:
@@ -250,10 +262,16 @@ func (t TokenType) String() string {
 		return "TokenDivide"
 	case TokenMod:
 		return "TokenMod"
+	case TokenPower:
+		return "TokenPower"
+	case TokenIntDiv:
+		return "TokenIntDiv"
 	case TokenAnd:
 		return "TokenAnd"
 	case TokenOr:
 		return "TokenOr"
+	case TokenXor:
+		return "TokenXor"
 	case TokenNot:
 		return "TokenNot"
 	case TokenAssign:
@@ -274,6 +292,10 @@ func (t TokenType) String() string {
 		return "TokenLeftBracket"
 	case TokenRightBracket:
 		return "TokenRightBracket"
+	case TokenLeftBrace:
+		return "TokenLeftBrace"
+	case TokenRightBrace:
+		return "TokenRightBrace"
 	case TokenComma:
 		return "TokenComma"
 	case TokenColon:
@@ -303,6 +325,7 @@ const (
 	TokenIf
 	TokenThen
 	TokenElse
+	TokenElseIf
 	TokenEndIf
 	TokenFor
 	TokenTo
@@ -314,6 +337,9 @@ const (
 	TokenSub
 	TokenModule
 	TokenEnd
+	TokenEndFunction // ENDFUNCTION (single-word end of function)
+	TokenEndSub      // ENDSUB (single-word end of sub)
+	TokenEndModule   // ENDMODULE (single-word end of module)
 	TokenReturn
 	TokenDim
 	TokenAs
@@ -402,7 +428,11 @@ const (
 	TokenUntil
 	TokenConst
 	TokenExit
+	TokenBreak
+	TokenContinue
+	TokenAssert
 	TokenEnum
+	TokenEndEnum  // ENDENUM or END ENUM
 	TokenTypeKw   // TYPE keyword (UDT)
 	TokenEndType  // ENDTYPE
 	TokenOn       // ON (event)
@@ -412,8 +442,6 @@ const (
 	TokenStartCoroutine
 	TokenYield
 	TokenWaitSeconds
-	TokenMain
-	TokenEndMain
 
 	// Operators
 	TokenEqual
@@ -427,8 +455,11 @@ const (
 	TokenMultiply
 	TokenDivide
 	TokenMod
+	TokenPower   // ^ exponentiation
+	TokenIntDiv  // \ integer division
 	TokenAnd
 	TokenOr
+	TokenXor
 	TokenNot
 	TokenAssign
 	TokenPlusAssign  // +=
@@ -441,6 +472,8 @@ const (
 	TokenRightParen
 	TokenLeftBracket
 	TokenRightBracket
+	TokenLeftBrace
+	TokenRightBrace
 	TokenComma
 	TokenColon
 	TokenSemicolon
@@ -465,6 +498,7 @@ var KeywordMap = map[string]TokenType{
 	"IF":                      TokenIf,
 	"THEN":                    TokenThen,
 	"ELSE":                    TokenElse,
+	"ELSEIF":                  TokenElseIf,
 	"ENDIF":                   TokenEndIf,
 	"FOR":                     TokenFor,
 	"TO":                      TokenTo,
@@ -476,6 +510,9 @@ var KeywordMap = map[string]TokenType{
 	"SUB":                     TokenSub,
 	"MODULE":                  TokenModule,
 	"END":                     TokenEnd,
+	"ENDFUNCTION":              TokenEndFunction,
+	"ENDSUB":                   TokenEndSub,
+	"ENDMODULE":                TokenEndModule,
 	"RETURN":                  TokenReturn,
 	"DIM":                     TokenDim,
 	"AS":                      TokenAs,
@@ -489,6 +526,7 @@ var KeywordMap = map[string]TokenType{
 	"FALSE":                   TokenFalse,
 	"NIL":                     TokenNil,
 	"NULL":                    TokenNil,
+	"NONE":                    TokenNil,
 	"LOADIMAGE":               TokenLoadImage,
 	"CREATESPRITE":            TokenCreateSprite,
 	"SETSPRITEPOSITION":       TokenSetSpritePosition,
@@ -521,7 +559,12 @@ var KeywordMap = map[string]TokenType{
 	"UNTIL":                   TokenUntil,
 	"CONST":                   TokenConst,
 	"EXIT":                    TokenExit,
+	"BREAK":                   TokenBreak,
+	"CONTINUE":                TokenContinue,
+	"ASSERT":                  TokenAssert,
 	"ENUM":                    TokenEnum,
+	"XOR":                     TokenXor,
+	"ENDENUM":                 TokenEndEnum,
 	"TYPE":                    TokenTypeKw,
 	"ENDTYPE":                 TokenEndType,
 	"ON":                      TokenOn,
@@ -531,8 +574,6 @@ var KeywordMap = map[string]TokenType{
 	"STARTCOROUTINE":           TokenStartCoroutine,
 	"YIELD":                    TokenYield,
 	"WAITSECONDS":              TokenWaitSeconds,
-	"MAIN":                     TokenMain,
-	"ENDMAIN":                  TokenEndMain,
 }
 
 // OperatorMap maps operator strings to token types

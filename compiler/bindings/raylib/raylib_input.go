@@ -41,6 +41,18 @@ func registerInput(v *vm.VM) {
 		}
 		return rl.IsKeyDown(int32(toInt32(args[0]))), nil
 	})
+	v.RegisterForeign("KeyDown", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("KeyDown requires (key)")
+		}
+		return rl.IsKeyDown(int32(toInt32(args[0]))), nil
+	})
+	v.RegisterForeign("KeyPressed", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("KeyPressed requires (key)")
+		}
+		return rl.IsKeyPressed(int32(toInt32(args[0]))), nil
+	})
 	v.RegisterForeign("IsKeyReleased", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("IsKeyReleased requires (key)")
@@ -125,8 +137,71 @@ func registerInput(v *vm.VM) {
 	})
 	v.RegisterForeign("GetMousePosition", func(args []interface{}) (interface{}, error) {
 		pos := rl.GetMousePosition()
-		// Return [x, y] so GetVector2X/GetVector2Y can use it for dot notation
 		return []interface{}{float64(pos.X), float64(pos.Y)}, nil
+	})
+	v.RegisterForeign("GetMouseDelta", func(args []interface{}) (interface{}, error) {
+		delta := rl.GetMouseDelta()
+		return []interface{}{float64(delta.X), float64(delta.Y)}, nil
+	})
+	v.RegisterForeign("MouseDown", func(args []interface{}) (interface{}, error) {
+		button := rl.MouseButtonLeft
+		if len(args) >= 1 {
+			switch toInt32(args[0]) {
+			case 1:
+				button = rl.MouseButtonRight
+			case 2:
+				button = rl.MouseButtonMiddle
+			default:
+				button = rl.MouseButtonLeft
+			}
+		}
+		return rl.IsMouseButtonDown(button), nil
+	})
+	v.RegisterForeign("MousePressed", func(args []interface{}) (interface{}, error) {
+		button := rl.MouseButtonLeft
+		if len(args) >= 1 {
+			switch toInt32(args[0]) {
+			case 1:
+				button = rl.MouseButtonRight
+			case 2:
+				button = rl.MouseButtonMiddle
+			default:
+				button = rl.MouseButtonLeft
+			}
+		}
+		return rl.IsMouseButtonPressed(button), nil
+	})
+	v.RegisterForeign("MouseReleased", func(args []interface{}) (interface{}, error) {
+		button := rl.MouseButtonLeft
+		if len(args) >= 1 {
+			switch toInt32(args[0]) {
+			case 1:
+				button = rl.MouseButtonRight
+			case 2:
+				button = rl.MouseButtonMiddle
+			default:
+				button = rl.MouseButtonLeft
+			}
+		}
+		return rl.IsMouseButtonReleased(button), nil
+	})
+	v.RegisterForeign("GamepadConnected", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("GamepadConnected requires (id)")
+		}
+		return rl.IsGamepadAvailable(int32(toInt32(args[0]))), nil
+	})
+	v.RegisterForeign("GetGamepadAxis", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("GetGamepadAxis requires (id, axis)")
+		}
+		return float64(rl.GetGamepadAxisMovement(int32(toInt32(args[0])), int32(toInt32(args[1])))), nil
+	})
+	v.RegisterForeign("GamepadButtonDown", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("GamepadButtonDown requires (id, button)")
+		}
+		return rl.IsGamepadButtonDown(int32(toInt32(args[0])), int32(toInt32(args[1]))), nil
 	})
 	v.RegisterForeign("GetVector2X", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {

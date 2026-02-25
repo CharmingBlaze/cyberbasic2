@@ -12,7 +12,11 @@ import (
 	"cyberbasic/compiler/bindings/box2d"
 	"cyberbasic/compiler/bindings/bullet"
 	"cyberbasic/compiler/bindings/ecs"
+	"cyberbasic/compiler/bindings/game"
+	"cyberbasic/compiler/bindings/net"
 	"cyberbasic/compiler/bindings/raylib"
+	"cyberbasic/compiler/bindings/scene"
+	"cyberbasic/compiler/bindings/sql"
 	"cyberbasic/compiler/bindings/std"
 	"cyberbasic/compiler/gogen"
 	"cyberbasic/compiler/lexer"
@@ -34,6 +38,7 @@ func main() {
 			fmt.Println("  --gen-go [file]   Generate Go source that calls raylib directly (default: <basename>_gen.go)")
 			fmt.Println("  --debug           Enable debug output")
 			fmt.Println("  --help            Show this help")
+			fmt.Println("  (Multi-window: --window --parent=host:port --title=... --width=... --height=...)")
 			return
 		}
 	}
@@ -94,6 +99,25 @@ func main() {
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		fmt.Printf("Error: File '%s' not found\n", filename)
 		return
+	}
+
+	// Set script path for SpawnWindow (child processes re-run same .bas)
+	if absPath, err := filepath.Abs(filename); err == nil {
+		os.Setenv("CYBERBASIC_SCRIPT", absPath)
+	}
+	// Parse window-mode args so the script can branch (IsWindowProcess) and get title/size
+	for _, arg := range os.Args {
+		if arg == "--window" {
+			os.Setenv("CYBERBASIC_WINDOW", "1")
+		} else if strings.HasPrefix(arg, "--parent=") {
+			os.Setenv("CYBERBASIC_PARENT", strings.TrimPrefix(arg, "--parent="))
+		} else if strings.HasPrefix(arg, "--title=") {
+			os.Setenv("CYBERBASIC_WINDOW_TITLE", strings.TrimPrefix(arg, "--title="))
+		} else if strings.HasPrefix(arg, "--width=") {
+			os.Setenv("CYBERBASIC_WINDOW_WIDTH", strings.TrimPrefix(arg, "--width="))
+		} else if strings.HasPrefix(arg, "--height=") {
+			os.Setenv("CYBERBASIC_WINDOW_HEIGHT", strings.TrimPrefix(arg, "--height="))
+		}
 	}
 
 	// Read source file
@@ -163,12 +187,17 @@ func main() {
 
 	// Load bytecode into VM and wire runtime so game opcodes call into it
 	rt.GetVM().LoadChunk(chunk)
+	std.RegisterEnums(chunk.Enums)
 	rt.GetVM().SetRuntime(rt)
 	// Expose raylib and Bullet as foreign API: RL.*, BULLET.*
 	raylib.RegisterRaylib(rt.GetVM())
 	bullet.RegisterBullet(rt.GetVM())
 	box2d.RegisterBox2D(rt.GetVM())
 	ecs.RegisterECS(rt.GetVM())
+	net.RegisterNet(rt.GetVM())
+	scene.RegisterScene(rt.GetVM())
+	game.RegisterGame(rt.GetVM())
+	sql.RegisterSQL(rt.GetVM())
 	std.RegisterStd(rt.GetVM())
 
 	fmt.Println("Running program...")
@@ -387,18 +416,25 @@ func runExample(name string) {
 	fmt.Printf("Example '%s' completed successfully!\n", name)
 }
 
-// preprocessIncludes expands #include "file.bas" with file contents (relative to baseDir). seen prevents cycles.
+// preprocessIncludes expands #include "file.bas" and IMPORT "file.bas" with file contents (relative to baseDir). seen prevents cycles.
 func preprocessIncludes(source []byte, baseDir string, seen map[string]bool) []byte {
 	if seen == nil {
 		seen = make(map[string]bool)
 	}
 	includeRe := regexp.MustCompile(`^\s*#include\s*"([^"]+)"\s*$`)
+	importRe := regexp.MustCompile(`(?i)^\s*IMPORT\s*"([^"]+)"\s*$`)
 	var out strings.Builder
 	sc := bufio.NewScanner(strings.NewReader(string(source)))
 	for sc.Scan() {
 		line := sc.Text()
+		var filePath string
 		if m := includeRe.FindStringSubmatch(line); m != nil {
-			path := filepath.Join(baseDir, m[1])
+			filePath = m[1]
+		} else if m := importRe.FindStringSubmatch(line); m != nil {
+			filePath = m[1]
+		}
+		if filePath != "" {
+			path := filepath.Join(baseDir, filePath)
 			abs, _ := filepath.Abs(path)
 			if seen[abs] {
 				continue
