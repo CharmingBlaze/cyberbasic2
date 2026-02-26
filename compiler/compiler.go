@@ -15,6 +15,7 @@ type Compiler struct {
 	vm            *vm.VM
 	constIndices  map[string]byte            // const name -> chunk constant index (set during generateCode)
 	typeDefs      map[string]*parser.TypeDecl // UDT name (lowercase) -> TYPE definition (filled in first pass)
+	entityNames   map[string]bool             // entity name (lowercase) from each ENTITY decl (first pass)
 	loopExitStack     [][]int // for EXIT FOR / EXIT WHILE: positions of jump offsets to patch
 	loopContinueStack [][]int // for CONTINUE FOR / CONTINUE WHILE: positions of jump offsets to patch (target = loop head)
 	userFuncs        map[string]bool            // user Sub/Function names (lowercase) for call resolution during codegen
@@ -70,14 +71,18 @@ func (c *Compiler) Compile(source string) (*vm.Chunk, error) {
 func (c *Compiler) generateCode(program *parser.Program, chunk *vm.Chunk) error {
 	c.constIndices = make(map[string]byte)
 	c.typeDefs = make(map[string]*parser.TypeDecl)
+	c.entityNames = make(map[string]bool)
 	c.eventPatchList = nil
 	c.startCoroutinePatchList = nil
-	// First pass: collect TYPE definitions and user function/sub names
+	// First pass: collect TYPE definitions, entity names, and user function/sub names
 	userFuncs := make(map[string]bool)
 	var mainStmts, decls []parser.Node
 	for _, stmt := range program.Statements {
 		if td, ok := stmt.(*parser.TypeDecl); ok {
 			c.typeDefs[strings.ToLower(td.Name)] = td
+		}
+		if ed, ok := stmt.(*parser.EntityDecl); ok {
+			c.entityNames[strings.ToLower(ed.Name)] = true
 		}
 		switch s := stmt.(type) {
 		case *parser.ModuleStatement:
@@ -173,6 +178,17 @@ func getSourceLine(node parser.Node) int {
 	return 0
 }
 
+// errWithLine wraps err with "line N: " when node has a source line, for clearer compiler errors.
+func errWithLine(node parser.Node, err error) error {
+	if err == nil {
+		return nil
+	}
+	if line := getSourceLine(node); line > 0 {
+		return fmt.Errorf("line %d: %w", line, err)
+	}
+	return err
+}
+
 // compileStatement compiles a single statement
 func (c *Compiler) compileStatement(stmt parser.Node, chunk *vm.Chunk) error {
 	if line := getSourceLine(stmt); line > 0 {
@@ -206,6 +222,8 @@ func (c *Compiler) compileStatement(stmt parser.Node, chunk *vm.Chunk) error {
 	case *parser.TypeDecl:
 		// TYPE definitions already collected in first pass; no code to emit
 		return nil
+	case *parser.EntityDecl:
+		return c.compileEntityDecl(node, chunk)
 	case *parser.Identifier:
 		// Bare identifier - ignore (could be a variable reference without assignment)
 		return nil
@@ -235,7 +253,7 @@ func (c *Compiler) compileStatement(stmt parser.Node, chunk *vm.Chunk) error {
 		chunk.Write(byte(vm.OpWaitSeconds))
 		return nil
 	default:
-		return fmt.Errorf("unsupported statement type: %T", stmt)
+		return errWithLine(stmt, fmt.Errorf("unsupported statement type: %T", stmt))
 	}
 }
 
@@ -268,7 +286,7 @@ func (c *Compiler) compileExpression(expr parser.Node, chunk *vm.Chunk) error {
 	case *parser.DictLiteral:
 		return c.compileDictLiteral(node, chunk)
 	default:
-		return fmt.Errorf("unsupported expression type: %T", expr)
+		return errWithLine(expr, fmt.Errorf("unsupported expression type: %T", expr))
 	}
 }
 
@@ -328,11 +346,64 @@ func (c *Compiler) compileJSONIndexAccess(node *parser.JSONIndexAccess, chunk *v
 	return nil
 }
 
-// compileMemberAccess compiles expr.member: UDT constant group, namespace constant (RL.*), or getter (pos.x).
+// compileEntityDecl emits CreateDict, SetDictKey for each property, then StoreGlobal(entityName).
+func (c *Compiler) compileEntityDecl(ed *parser.EntityDecl, chunk *vm.Chunk) error {
+	ci := chunk.WriteConstant("createdict")
+	if ci > 255 {
+		return fmt.Errorf("too many constants")
+	}
+	chunk.Write(byte(vm.OpCallForeign))
+	chunk.Write(byte(ci))
+	chunk.Write(byte(0))
+	entityLower := strings.ToLower(ed.Name)
+	for i, p := range ed.Properties {
+		if i > 0 {
+			chunk.Write(byte(vm.OpDup))
+		}
+		keyIdx := chunk.WriteConstant(p.Name)
+		if keyIdx > 255 {
+			return fmt.Errorf("too many constants for entity property key")
+		}
+		chunk.Write(byte(vm.OpLoadConst))
+		chunk.Write(byte(keyIdx))
+		if err := c.compileExpression(p.Value, chunk); err != nil {
+			return err
+		}
+		setIdx := chunk.WriteConstant("setdictkey")
+		if setIdx > 255 {
+			return fmt.Errorf("too many constants")
+		}
+		chunk.Write(byte(vm.OpCallForeign))
+		chunk.Write(byte(setIdx))
+		chunk.Write(byte(3))
+		// SetDictKey returns the dict; keep it on stack for next property or StoreGlobal
+	}
+	globalIdx := chunk.WriteConstant(entityLower)
+	if globalIdx > 255 {
+		return fmt.Errorf("too many constants for entity global")
+	}
+	chunk.Write(byte(vm.OpStoreGlobal))
+	chunk.Write(byte(globalIdx))
+	return nil
+}
+
+// compileMemberAccess compiles expr.member: UDT constant group, entity property, namespace constant (RL.*), or getter (pos.x).
 func (c *Compiler) compileMemberAccess(m *parser.MemberAccess, chunk *vm.Chunk) error {
 	mb := strings.ToLower(m.Member)
 	if id, ok := m.Object.(*parser.Identifier); ok {
 		objLower := strings.ToLower(id.Name)
+		// Entity property: EntityName.prop -> OpLoadEntityProp (getter or globals[entity][prop])
+		if c.entityNames != nil && c.entityNames[objLower] {
+			entityIdx := chunk.WriteConstant(objLower)
+			propIdx := chunk.WriteConstant(mb)
+			if entityIdx > 255 || propIdx > 255 {
+				return fmt.Errorf("too many constants for entity prop")
+			}
+			chunk.Write(byte(vm.OpLoadEntityProp))
+			chunk.Write(byte(entityIdx))
+			chunk.Write(byte(propIdx))
+			return nil
+		}
 		// UDT constant group: TypeName.Member (e.g. Color.Red, Key.W)
 		if c.typeDefs != nil {
 			if td, ok := c.typeDefs[objLower]; ok {
@@ -501,8 +572,29 @@ func (c *Compiler) compileIdentifier(ident *parser.Identifier, chunk *vm.Chunk) 
 	return nil
 }
 
-// compileAssignment compiles an assignment statement (scalar or array element)
+// compileAssignment compiles an assignment statement (scalar, array element, or entity property).
 func (c *Compiler) compileAssignment(assign *parser.Assignment, chunk *vm.Chunk) error {
+	// Entity property write: "EntityName.prop = value" -> value, OpStoreEntityProp(entityIdx, propIdx)
+	if len(assign.Indices) == 0 && c.entityNames != nil && strings.Contains(assign.Variable, ".") {
+		parts := strings.SplitN(assign.Variable, ".", 2)
+		if len(parts) == 2 && c.entityNames[strings.ToLower(parts[0])] {
+			entityLower := strings.ToLower(parts[0])
+			propName := parts[1]
+			if err := c.compileExpression(assign.Value, chunk); err != nil {
+				return err
+			}
+			entityIdx := chunk.WriteConstant(entityLower)
+			propIdx := chunk.WriteConstant(propName)
+			if entityIdx > 255 || propIdx > 255 {
+				return fmt.Errorf("too many constants for entity prop")
+			}
+			chunk.Write(byte(vm.OpStoreEntityProp))
+			chunk.Write(byte(entityIdx))
+			chunk.Write(byte(propIdx))
+			return nil
+		}
+	}
+
 	err := c.compileExpression(assign.Value, chunk)
 	if err != nil {
 		return err
@@ -516,7 +608,7 @@ func (c *Compiler) compileAssignment(assign *parser.Assignment, chunk *vm.Chunk)
 		}
 		varIndex, exists := chunk.GetVariable(assign.Variable)
 		if !exists {
-			return fmt.Errorf("array variable not declared: %s", assign.Variable)
+			return errWithLine(assign, fmt.Errorf("array variable not declared: %s", assign.Variable))
 		}
 		chunk.Write(byte(vm.OpStoreArray))
 		chunk.Write(byte(varIndex))
@@ -573,7 +665,7 @@ emitCompound:
 	case "/=":
 		chunk.Write(byte(vm.OpDiv))
 	default:
-		return fmt.Errorf("unsupported compound assign op: %s", ca.Op)
+		return errWithLine(ca, fmt.Errorf("unsupported compound assign op: %s", ca.Op))
 	}
 	chunk.Write(byte(vm.OpStoreVar))
 	chunk.Write(byte(varIndex))
@@ -630,7 +722,7 @@ func (c *Compiler) compileBinaryOp(op *parser.BinaryOp, chunk *vm.Chunk) error {
 	case "xor":
 		chunk.Write(byte(vm.OpXor))
 	default:
-		return fmt.Errorf("unsupported binary operator: %s", op.Operator)
+		return errWithLine(op, fmt.Errorf("unsupported binary operator: %s", op.Operator))
 	}
 
 	return nil
@@ -651,7 +743,7 @@ func (c *Compiler) compileUnaryOp(op *parser.UnaryOp, chunk *vm.Chunk) error {
 	case strings.EqualFold(op.Operator, "NOT"):
 		chunk.Write(byte(vm.OpNot))
 	default:
-		return fmt.Errorf("unsupported unary operator: %s", op.Operator)
+		return errWithLine(op, fmt.Errorf("unsupported unary operator: %s", op.Operator))
 	}
 
 	return nil
@@ -1112,7 +1204,7 @@ func (c *Compiler) compileSelectCaseStatement(s *parser.SelectCaseStatement, chu
 // compileExitLoopStatement compiles EXIT FOR or EXIT WHILE (or BREAK) (jump to end of innermost loop).
 func (c *Compiler) compileExitLoopStatement(e *parser.ExitLoopStatement, chunk *vm.Chunk) error {
 	if len(c.loopExitStack) == 0 {
-		return fmt.Errorf("EXIT/BREAK %s outside loop", e.Kind)
+		return errWithLine(e, fmt.Errorf("EXIT/BREAK %s outside loop", e.Kind))
 	}
 	chunk.Write(byte(vm.OpJump))
 	chunk.Write(byte(0))
@@ -1124,7 +1216,7 @@ func (c *Compiler) compileExitLoopStatement(e *parser.ExitLoopStatement, chunk *
 // compileContinueLoopStatement compiles CONTINUE FOR or CONTINUE WHILE (jump to loop head of innermost matching loop).
 func (c *Compiler) compileContinueLoopStatement(cl *parser.ContinueLoopStatement, chunk *vm.Chunk) error {
 	if len(c.loopContinueStack) == 0 {
-		return fmt.Errorf("CONTINUE %s outside loop", cl.Kind)
+		return errWithLine(cl, fmt.Errorf("CONTINUE %s outside loop", cl.Kind))
 	}
 	chunk.Write(byte(vm.OpJump))
 	chunk.Write(byte(0))
@@ -1676,7 +1768,7 @@ func (c *Compiler) compileSubDecl(sub *parser.SubDecl, chunk *vm.Chunk) error {
 func (c *Compiler) compileStartCoroutineStatement(stmt *parser.StartCoroutineStatement, chunk *vm.Chunk) error {
 	name := strings.ToLower(stmt.SubName)
 	if !c.userFuncs[name] {
-		return fmt.Errorf("unknown sub for StartCoroutine: %s", stmt.SubName)
+		return errWithLine(stmt, fmt.Errorf("unknown sub for StartCoroutine: %s", stmt.SubName))
 	}
 	chunk.Write(byte(vm.OpStartCoroutine))
 	chunk.WriteJumpOffset(0)

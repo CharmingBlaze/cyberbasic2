@@ -59,7 +59,26 @@ func toFloat(v interface{}) float64 {
 const maxMessageSize = 256 * 1024 // 256KB max per message (security and resource limit)
 const maxSendNumbers = 16         // max numbers in SendNumbers / SendToRoomNumbers
 
+// netEvent is one item in the event queue for ProcessNetworkEvents (connect, disconnect, message).
+type netEvent struct {
+	typ   string // "connect", "disconnect", "message"
+	id    string
+	payload string
+}
+
 var (
+	netVM             *vm.VM
+	eventQueue        []netEvent
+	eventMu           sync.Mutex
+	rpcHandlers       = make(map[string]string) // RPC name (lowercase) -> Sub name for InvokeSub
+	rpcMu             sync.Mutex
+	pingSentAt        = make(map[string]time.Time)
+	lastRTTMs         = make(map[string]float64)
+	pingMu            sync.Mutex
+	remoteEntities    = make(map[string]map[string]interface{}) // entityId -> {x, y, z}
+	remoteEntitiesMu  sync.Mutex
+	connMessages      = make(map[string][]string) // per-connection message queue (filled by reader goroutine)
+	connMessagesMu    sync.Mutex
 	conns             = make(map[string]net.Conn)
 	readers           = make(map[string]*bufio.Reader)
 	servers           = make(map[string]net.Listener)
@@ -71,8 +90,82 @@ var (
 	receivedNumbersMu sync.Mutex
 )
 
+func pushEvent(typ, id, payload string) {
+	eventMu.Lock()
+	eventQueue = append(eventQueue, netEvent{typ: typ, id: id, payload: payload})
+	eventMu.Unlock()
+}
+
+func drainEvents() []netEvent {
+	eventMu.Lock()
+	out := eventQueue
+	eventQueue = nil
+	eventMu.Unlock()
+	return out
+}
+
+// startReader runs in a goroutine; reads lines from conn, appends to connMessages[id], pushes "message" events; on error pushes "disconnect" and removes conn.
+func startReader(cid string, conn net.Conn) {
+	rd := bufio.NewReader(conn)
+	netMu.Lock()
+	readers[cid] = rd
+	netMu.Unlock()
+	for {
+		_ = conn.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+		line, err := rd.ReadString('\n')
+		if err != nil {
+			eventMu.Lock()
+			eventQueue = append(eventQueue, netEvent{typ: "disconnect", id: cid, payload: ""})
+			eventMu.Unlock()
+			netMu.Lock()
+			delete(conns, cid)
+			delete(readers, cid)
+			netMu.Unlock()
+			connMessagesMu.Lock()
+			delete(connMessages, cid)
+			connMessagesMu.Unlock()
+			pingMu.Lock()
+			delete(pingSentAt, cid)
+			delete(lastRTTMs, cid)
+			pingMu.Unlock()
+			_ = conn.Close()
+			return
+		}
+		if len(line) > 0 && line[len(line)-1] == '\n' {
+			line = line[:len(line)-1]
+		}
+		if len(line) > 0 && line[len(line)-1] == '\r' {
+			line = line[:len(line)-1]
+		}
+		if len(line) > maxMessageSize {
+			continue
+		}
+		if line == "P" {
+			_, _ = fmt.Fprintln(conn, "O")
+			continue
+		}
+		if line == "O" {
+			pingMu.Lock()
+			if t, ok := pingSentAt[cid]; ok {
+				lastRTTMs[cid] = float64(time.Since(t).Milliseconds())
+			}
+			pingMu.Unlock()
+			continue
+		}
+		if strings.HasPrefix(line, "E\t") {
+			pushEvent("message", cid, line)
+			continue
+		}
+		connMessagesMu.Lock()
+		connMessages[cid] = append(connMessages[cid], line)
+		connMessagesMu.Unlock()
+		pushEvent("message", cid, line)
+	}
+}
+
 // RegisterNet registers TCP multiplayer functions with the VM.
 func RegisterNet(v *vm.VM) {
+	netVM = v
 	// --- Client ---
 	v.RegisterForeign("Connect", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
@@ -89,8 +182,8 @@ func RegisterNet(v *vm.VM) {
 		connCounter++
 		id := fmt.Sprintf("conn_%d", connCounter)
 		conns[id] = conn
-		readers[id] = bufio.NewReader(conn)
 		netMu.Unlock()
+		go startReader(id, conn)
 		return id, nil
 	})
 	v.RegisterForeign("ConnectTLS", func(args []interface{}) (interface{}, error) {
@@ -109,8 +202,8 @@ func RegisterNet(v *vm.VM) {
 		connCounter++
 		id := fmt.Sprintf("conn_%d", connCounter)
 		conns[id] = conn
-		readers[id] = bufio.NewReader(conn)
 		netMu.Unlock()
+		go startReader(id, conn)
 		return id, nil
 	})
 	v.RegisterForeign("ConnectToParent", func(args []interface{}) (interface{}, error) {
@@ -135,8 +228,8 @@ func RegisterNet(v *vm.VM) {
 		connCounter++
 		id := fmt.Sprintf("conn_%d", connCounter)
 		conns[id] = conn
-		readers[id] = bufio.NewReader(conn)
 		netMu.Unlock()
+		go startReader(id, conn)
 		return id, nil
 	})
 	// writeLine sends one line (no embedded newlines); enforces maxMessageSize
@@ -182,6 +275,33 @@ func RegisterNet(v *vm.VM) {
 		}
 		err := writeLine(conn, text)
 		if err != nil {
+			return 0, nil
+		}
+		return 1, nil
+	})
+	v.RegisterForeign("SendTable", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SendTable(connectionId, data) requires 2 arguments")
+		}
+		id := toString(args[0])
+		m, ok := args[1].(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("SendTable: data must be a dictionary (CreateDict / table)")
+		}
+		text, err := json.Marshal(m)
+		if err != nil {
+			return 0, nil
+		}
+		if len(text) > maxMessageSize {
+			return 0, nil
+		}
+		netMu.Lock()
+		conn, ok := conns[id]
+		netMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown connection: %s", id)
+		}
+		if writeLine(conn, string(text)) != nil {
 			return 0, nil
 		}
 		return 1, nil
@@ -266,104 +386,68 @@ func RegisterNet(v *vm.VM) {
 		ok2 := writeLine(conn, text) == nil
 		return ok2, nil
 	})
+	// popMessage removes and returns the first message in the connection's queue (used by reader goroutine).
+	popMessage := func(id string) (string, bool) {
+		connMessagesMu.Lock()
+		defer connMessagesMu.Unlock()
+		list := connMessages[id]
+		if len(list) == 0 {
+			return "", false
+		}
+		msg := list[0]
+		connMessages[id] = list[1:]
+		if len(connMessages[id]) == 0 {
+			delete(connMessages, id)
+		}
+		return msg, true
+	}
 	v.RegisterForeign("Receive", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("Receive(connectionId) requires 1 argument")
 		}
 		id := toString(args[0])
-		netMu.Lock()
-		rd, ok := readers[id]
-		netMu.Unlock()
-		if !ok {
-			return nil, nil
+		if msg, ok := popMessage(id); ok {
+			return msg, nil
 		}
-		// Non-blocking: short deadline
-		if conn, ok := conns[id]; ok {
-			_ = conn.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
-		}
-		line, err := rd.ReadString('\n')
-		if err != nil {
-			if conn, ok := conns[id]; ok {
-				_ = conn.SetReadDeadline(time.Time{})
-			}
-			return nil, nil // no data or closed
-		}
-		if conn, ok := conns[id]; ok {
-			_ = conn.SetReadDeadline(time.Time{})
-		}
-		// trim newline
-		if len(line) > 0 && line[len(line)-1] == '\n' {
-			line = line[:len(line)-1]
-		}
-		if len(line) > 0 && line[len(line)-1] == '\r' {
-			line = line[:len(line)-1]
-		}
-		return line, nil
+		return nil, nil
 	})
 	v.RegisterForeign("ReceiveJSON", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("ReceiveJSON(connectionId) requires 1 argument")
 		}
 		id := toString(args[0])
-		netMu.Lock()
-		rd, ok := readers[id]
-		netMu.Unlock()
+		msg, ok := popMessage(id)
 		if !ok {
 			return nil, nil
 		}
-		if conn, ok := conns[id]; ok {
-			_ = conn.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
-		}
-		line, err := rd.ReadString('\n')
-		if err != nil {
-			if conn, ok := conns[id]; ok {
-				_ = conn.SetReadDeadline(time.Time{})
-			}
+		if !json.Valid([]byte(msg)) {
 			return nil, nil
 		}
-		if conn, ok := conns[id]; ok {
-			_ = conn.SetReadDeadline(time.Time{})
+		return msg, nil
+	})
+	v.RegisterForeign("ReceiveTable", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("ReceiveTable(connectionId) requires 1 argument")
 		}
-		if len(line) > 0 && line[len(line)-1] == '\n' {
-			line = line[:len(line)-1]
+		id := toString(args[0])
+		msg, ok := popMessage(id)
+		if !ok {
+			return nil, nil
 		}
-		if len(line) > 0 && line[len(line)-1] == '\r' {
-			line = line[:len(line)-1]
+		var out map[string]interface{}
+		if err := json.Unmarshal([]byte(msg), &out); err != nil {
+			return nil, nil
 		}
-		if !json.Valid([]byte(line)) {
-			return nil, nil // not valid JSON, discard
-		}
-		return line, nil
+		return out, nil
 	})
 	v.RegisterForeign("ReceiveNumbers", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("ReceiveNumbers(connectionId) requires 1 argument")
 		}
 		id := toString(args[0])
-		netMu.Lock()
-		rd, ok := readers[id]
-		netMu.Unlock()
+		line, ok := popMessage(id)
 		if !ok {
 			return 0, nil
-		}
-		if conn, ok := conns[id]; ok {
-			_ = conn.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
-		}
-		line, err := rd.ReadString('\n')
-		if err != nil {
-			if conn, ok := conns[id]; ok {
-				_ = conn.SetReadDeadline(time.Time{})
-			}
-			return 0, nil
-		}
-		if conn, ok := conns[id]; ok {
-			_ = conn.SetReadDeadline(time.Time{})
-		}
-		if len(line) > 0 && line[len(line)-1] == '\n' {
-			line = line[:len(line)-1]
-		}
-		if len(line) > 0 && line[len(line)-1] == '\r' {
-			line = line[:len(line)-1]
 		}
 		parts := strings.Split(line, " ")
 		var nums []float64
@@ -406,9 +490,8 @@ func RegisterNet(v *vm.VM) {
 		}
 		id := toString(args[0])
 		netMu.Lock()
-		defer netMu.Unlock()
-		if conn, ok := conns[id]; ok {
-			_ = conn.Close()
+		conn, ok := conns[id]
+		if ok {
 			delete(conns, id)
 			delete(readers, id)
 		}
@@ -419,7 +502,47 @@ func RegisterNet(v *vm.VM) {
 				delete(rooms, roomId)
 			}
 		}
+		netMu.Unlock()
+		connMessagesMu.Lock()
+		delete(connMessages, id)
+		connMessagesMu.Unlock()
+		pingMu.Lock()
+		delete(pingSentAt, id)
+		delete(lastRTTMs, id)
+		pingMu.Unlock()
+		if conn != nil {
+			_ = conn.Close()
+		}
 		return nil, nil
+	})
+	v.RegisterForeign("SendPing", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SendPing(connectionId) requires 1 argument")
+		}
+		id := toString(args[0])
+		netMu.Lock()
+		conn, ok := conns[id]
+		netMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown connection: %s", id)
+		}
+		if _, err := fmt.Fprintln(conn, "P"); err != nil {
+			return false, nil
+		}
+		pingMu.Lock()
+		pingSentAt[id] = time.Now()
+		pingMu.Unlock()
+		return true, nil
+	})
+	v.RegisterForeign("GetPing", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("GetPing(connectionId) requires 1 argument")
+		}
+		id := toString(args[0])
+		pingMu.Lock()
+		ms := lastRTTMs[id]
+		pingMu.Unlock()
+		return ms, nil
 	})
 
 	// --- Server ---
@@ -481,8 +604,9 @@ func RegisterNet(v *vm.VM) {
 		connCounter++
 		cid := fmt.Sprintf("conn_%d", connCounter)
 		conns[cid] = conn
-		readers[cid] = bufio.NewReader(conn)
 		netMu.Unlock()
+		pushEvent("connect", cid, "")
+		go startReader(cid, conn)
 		return cid, nil
 	})
 	v.RegisterForeign("CloseServer", func(args []interface{}) (interface{}, error) {
@@ -806,8 +930,8 @@ func RegisterNet(v *vm.VM) {
 		connCounter++
 		cid := fmt.Sprintf("conn_%d", connCounter)
 		conns[cid] = conn
-		readers[cid] = bufio.NewReader(conn)
 		netMu.Unlock()
+		go startReader(cid, conn)
 		return cid, nil
 	})
 	v.RegisterForeign("NetSend", func(args []interface{}) (interface{}, error) {
@@ -830,32 +954,11 @@ func RegisterNet(v *vm.VM) {
 			return nil, fmt.Errorf("NetReceive(connectionId) requires 1 argument")
 		}
 		id := toString(args[0])
-		netMu.Lock()
-		rd, ok := readers[id]
-		netMu.Unlock()
+		msg, ok := popMessage(id)
 		if !ok {
 			return nil, nil
 		}
-		if conn, ok := conns[id]; ok {
-			_ = conn.SetReadDeadline(time.Now().Add(10 * time.Millisecond))
-		}
-		line, err := rd.ReadString('\n')
-		if err != nil {
-			if conn, ok := conns[id]; ok {
-				_ = conn.SetReadDeadline(time.Time{})
-			}
-			return nil, nil
-		}
-		if conn, ok := conns[id]; ok {
-			_ = conn.SetReadDeadline(time.Time{})
-		}
-		if len(line) > 0 && line[len(line)-1] == '\n' {
-			line = line[:len(line)-1]
-		}
-		if len(line) > 0 && line[len(line)-1] == '\r' {
-			line = line[:len(line)-1]
-		}
-		return line, nil
+		return msg, nil
 	})
 	v.RegisterForeign("NetIsConnected", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
@@ -927,8 +1030,239 @@ func RegisterNet(v *vm.VM) {
 		connCounter++
 		cid := fmt.Sprintf("conn_%d", connCounter)
 		conns[cid] = conn
-		readers[cid] = bufio.NewReader(conn)
 		netMu.Unlock()
+		pushEvent("connect", cid, "")
+		go startReader(cid, conn)
 		return cid, nil
+	})
+
+	// --- High-level event-based API ---
+	v.RegisterForeign("ProcessNetworkEvents", func(args []interface{}) (interface{}, error) {
+		events := drainEvents()
+		if netVM == nil || netVM.Chunk() == nil {
+			return nil, nil
+		}
+		for _, ev := range events {
+			switch ev.typ {
+			case "connect":
+				if _, ok := netVM.Chunk().GetFunction("onclientconnect"); ok {
+					_ = netVM.InvokeSub("onclientconnect", []interface{}{ev.id})
+				}
+			case "disconnect":
+				if _, ok := netVM.Chunk().GetFunction("onclientdisconnect"); ok {
+					_ = netVM.InvokeSub("onclientdisconnect", []interface{}{ev.id})
+				}
+			case "message":
+				handled := false
+				if strings.HasPrefix(ev.payload, "E\t") {
+					parts := strings.Split(ev.payload, "\t")
+					if len(parts) >= 4 {
+						entityId := parts[1]
+						x, _ := strconv.ParseFloat(parts[2], 64)
+						y, _ := strconv.ParseFloat(parts[3], 64)
+						z := 0.0
+						if len(parts) >= 5 {
+							z, _ = strconv.ParseFloat(parts[4], 64)
+						}
+						remoteEntitiesMu.Lock()
+						if remoteEntities[entityId] == nil {
+							remoteEntities[entityId] = make(map[string]interface{})
+						}
+						remoteEntities[entityId]["x"] = x
+						remoteEntities[entityId]["y"] = y
+						remoteEntities[entityId]["z"] = z
+						remoteEntitiesMu.Unlock()
+						if _, ok := netVM.Chunk().GetFunction("onentitysync"); ok {
+							_ = netVM.InvokeSub("onentitysync", []interface{}{entityId, x, y, z})
+						}
+						handled = true
+					}
+				}
+				if !handled && len(ev.payload) >= 3 && ev.payload[:2] == "R<" {
+					if idx := strings.Index(ev.payload, ">"); idx > 2 {
+						rpcName := strings.ToLower(ev.payload[2:idx])
+						rest := strings.TrimSpace(ev.payload[idx+1:])
+						var rpcArgs []interface{}
+						if len(rest) > 0 {
+							_ = json.Unmarshal([]byte(rest), &rpcArgs)
+						}
+						rpcMu.Lock()
+						subName, hasHandler := rpcHandlers[rpcName]
+						rpcMu.Unlock()
+						if hasHandler && subName != "" {
+							_ = netVM.InvokeSub(subName, rpcArgs)
+							handled = true
+						}
+					}
+				}
+				if !handled {
+					if _, ok := netVM.Chunk().GetFunction("onmessage"); ok {
+						_ = netVM.InvokeSub("onmessage", []interface{}{ev.id, ev.payload})
+					}
+				}
+			}
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("RegisterRPC", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("RegisterRPC(name, subName) requires 2 arguments")
+		}
+		name := strings.ToLower(toString(args[0]))
+		subName := toString(args[1])
+		rpcMu.Lock()
+		rpcHandlers[name] = subName
+		rpcMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SendRPC", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SendRPC(connectionId, name, args...) requires at least 2 arguments")
+		}
+		id := toString(args[0])
+		rpcName := toString(args[1])
+		rpcArgs := args[2:]
+		raw, err := json.Marshal(rpcArgs)
+		if err != nil {
+			return nil, err
+		}
+		payload := "R<" + rpcName + ">" + string(raw)
+		if len(payload) > maxMessageSize {
+			return nil, fmt.Errorf("SendRPC payload too long")
+		}
+		netMu.Lock()
+		conn, ok := conns[id]
+		netMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown connection: %s", id)
+		}
+		if writeLine(conn, payload) != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	v.RegisterForeign("StartServer", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("StartServer(port) requires 1 argument")
+		}
+		port := toInt(args[0])
+		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		if err != nil {
+			return nil, nil
+		}
+		netMu.Lock()
+		servCounter++
+		id := fmt.Sprintf("server_%d", servCounter)
+		servers[id] = listener
+		netMu.Unlock()
+		return id, nil
+	})
+	v.RegisterForeign("Broadcast", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("Broadcast(text) requires 1 argument")
+		}
+		text := toString(args[0])
+		if len(text) > maxMessageSize || strings.Contains(text, "\n") || strings.Contains(text, "\r") {
+			return nil, fmt.Errorf("message too long or contains newline")
+		}
+		netMu.Lock()
+		connList := make([]net.Conn, 0, len(conns))
+		for _, c := range conns {
+			connList = append(connList, c)
+		}
+		netMu.Unlock()
+		var errs []string
+		for _, conn := range connList {
+			if _, err := fmt.Fprintln(conn, text); err != nil {
+				errs = append(errs, err.Error())
+			}
+		}
+		if len(errs) > 0 {
+			return nil, fmt.Errorf("broadcast partial failure: %s", strings.Join(errs, "; "))
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("SyncEntity", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SyncEntity(connectionId, entityId, x, y) or SyncEntity(connectionId, entityId, x, y, z) requires 4 or 5 arguments")
+		}
+		id := toString(args[0])
+		entityId := toString(args[1])
+		x := toFloat(args[2])
+		y := toFloat(args[3])
+		z := 0.0
+		if len(args) >= 5 {
+			z = toFloat(args[4])
+		}
+		payload := fmt.Sprintf("E\t%s\t%g\t%g\t%g", entityId, x, y, z)
+		if len(payload) > maxMessageSize {
+			return false, nil
+		}
+		netMu.Lock()
+		conn, ok := conns[id]
+		netMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown connection: %s", id)
+		}
+		if writeLine(conn, payload) != nil {
+			return false, nil
+		}
+		return true, nil
+	})
+	v.RegisterForeign("SyncEntityToRoom", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SyncEntityToRoom(roomId, entityId, x, y) or SyncEntityToRoom(roomId, entityId, x, y, z) requires 4 or 5 arguments")
+		}
+		roomId := toString(args[0])
+		entityId := toString(args[1])
+		x := toFloat(args[2])
+		y := toFloat(args[3])
+		z := 0.0
+		if len(args) >= 5 {
+			z = toFloat(args[4])
+		}
+		payload := fmt.Sprintf("E\t%s\t%g\t%g\t%g", entityId, x, y, z)
+		if len(payload) > maxMessageSize {
+			return 0, nil
+		}
+		netMu.Lock()
+		set := rooms[roomId]
+		if set == nil {
+			netMu.Unlock()
+			return 0, nil
+		}
+		cids := make([]string, 0, len(set))
+		for cid := range set {
+			cids = append(cids, cid)
+		}
+		netMu.Unlock()
+		n := 0
+		for _, cid := range cids {
+			netMu.Lock()
+			conn, ok := conns[cid]
+			netMu.Unlock()
+			if ok && writeLine(conn, payload) == nil {
+				n++
+			}
+		}
+		return n, nil
+	})
+	v.RegisterForeign("GetRemoteEntity", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("GetRemoteEntity(entityId) requires 1 argument")
+		}
+		entityId := toString(args[0])
+		remoteEntitiesMu.Lock()
+		m := remoteEntities[entityId]
+		if m != nil {
+			out := make(map[string]interface{})
+			for k, v := range m {
+				out[k] = v
+			}
+			remoteEntitiesMu.Unlock()
+			return out, nil
+		}
+		remoteEntitiesMu.Unlock()
+		return nil, nil
 	})
 }

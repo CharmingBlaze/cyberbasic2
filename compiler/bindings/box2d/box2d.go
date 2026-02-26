@@ -488,6 +488,55 @@ func RegisterBox2D(v *vm.VM) {
 
 	// --- Flat 2D commands (no namespace, case-insensitive via VM) ---
 	registerFlat2D(v)
+
+	// Entity property getters: when an entity has "body" and "world" (2D), entity.x / entity.y / entity.angle come from physics.
+	registerEntityGetters2D(v)
+}
+
+// registerEntityGetters2D registers getters for entity.x, entity.y, entity.angle when the entity has "body" and "world" properties (2D physics).
+func registerEntityGetters2D(v *vm.VM) {
+	getWorldBody := func(entityName string) (worldId, bodyId string, ok bool) {
+		g := v.Globals()[entityName]
+		if g == nil {
+			return "", "", false
+		}
+		m, ok := g.(map[string]interface{})
+		if !ok {
+			return "", "", false
+		}
+		w, _ := m["world"]
+		b, _ := m["body"]
+		if w != nil && b != nil {
+			return toString(w), toString(b), true
+		}
+		if w, _ := m["worldid"]; w != nil {
+			if b, _ := m["bodyid"]; b != nil {
+				return toString(w), toString(b), true
+			}
+		}
+		return "", "", false
+	}
+	v.RegisterEntityGetter("x", func(entityName, prop string) (vm.Value, bool) {
+		worldId, bodyId, ok := getWorldBody(entityName)
+		if !ok {
+			return nil, false
+		}
+		return GetPositionX(worldId, bodyId), true
+	})
+	v.RegisterEntityGetter("y", func(entityName, prop string) (vm.Value, bool) {
+		worldId, bodyId, ok := getWorldBody(entityName)
+		if !ok {
+			return nil, false
+		}
+		return GetPositionY(worldId, bodyId), true
+	})
+	v.RegisterEntityGetter("angle", func(entityName, prop string) (vm.Value, bool) {
+		worldId, bodyId, ok := getWorldBody(entityName)
+		if !ok {
+			return nil, false
+		}
+		return GetAngle(worldId, bodyId), true
+	})
 }
 
 // registerFlat2D registers flat CreateWorld2D, Step2D, CreateBox2D, etc. (no BOX2D. prefix).

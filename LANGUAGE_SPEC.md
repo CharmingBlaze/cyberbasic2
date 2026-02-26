@@ -44,6 +44,26 @@ TYPE Player
 END TYPE
 ```
 
+**Entities (single instance):** `ENTITY` defines one named instance stored as a dictionary in globals. Use **END ENTITY** or **ENDENTITY**. Properties are `name = expression` (initial values). Read and write with `entityName.property`.
+
+```basic
+ENTITY Player
+  x = 100
+  y = 200
+  health = 3
+END ENTITY
+
+Player.x = 50
+VAR a = Player.x
+```
+
+- There is a single instance per entity name (e.g. one `Player` in globals).
+- `entityName.property` reads and writes that instance’s property (via the same dict/GetJSONKey/SetDictKey mechanism as other dictionaries).
+
+**Physics binding:** If an entity has properties `body` (string body id) and `world` (string world id), then reading `entity.x`, `entity.y` (2D) or `entity.x`, `entity.y`, `entity.z` (3D) and `entity.angle` (2D) or `entity.yaw`/`entity.pitch`/`entity.roll` (3D) returns values from the physics engine. Assign `entity.body = bodyId` and `entity.world = worldId` after creating a physics body to enable this.
+
+**Rendering:** **DrawEntity(entityName)** draws the entity’s `sprite` (or `texture`) at `entity.x`, `entity.y`; if the entity has `scale` and `angle`, uses scaled/rotated drawing. Use **DrawEntityEx(entityName, scale, angle)** for an extended form if added. The entity’s `sprite` should be a texture id from **LoadSprite** or **LoadTexture**.
+
 **Dot notation:** `p.x = 100`, `p.y = 200`, `p.health = 100`.
 
 **Enums:** Single-line (`ENUM Name : a, b = 2, c`) or multi-line with **END ENUM** / **ENDENUM**. Name is optional (unnamed enum). Use **Enum.getValue(enumName, valueName)**, **Enum.getName(enumName, value)**, **Enum.hasValue(enumName, valueName)** at runtime.

@@ -224,6 +224,10 @@ func (t TokenType) String() string {
 		return "TokenTypeKw"
 	case TokenEndType:
 		return "TokenEndType"
+	case TokenEntity:
+		return "TokenEntity"
+	case TokenEndEntity:
+		return "TokenEndEntity"
 	case TokenOn:
 		return "TokenOn"
 	case TokenEndOn:
@@ -435,6 +439,8 @@ const (
 	TokenEndEnum  // ENDENUM or END ENUM
 	TokenTypeKw   // TYPE keyword (UDT)
 	TokenEndType  // ENDTYPE
+	TokenEntity   // ENTITY (entity block)
+	TokenEndEntity // END ENTITY / ENDENTITY
 	TokenOn       // ON (event)
 	TokenEndOn    // ENDON
 	TokenKeyDown  // KeyDown
@@ -567,6 +573,8 @@ var KeywordMap = map[string]TokenType{
 	"ENDENUM":                 TokenEndEnum,
 	"TYPE":                    TokenTypeKw,
 	"ENDTYPE":                 TokenEndType,
+	"ENTITY":                  TokenEntity,
+	"ENDENTITY":               TokenEndEntity,
 	"ON":                      TokenOn,
 	"ENDON":                   TokenEndOn,
 	"KEYDOWN":                 TokenKeyDown,

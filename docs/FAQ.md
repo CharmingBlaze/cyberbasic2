@@ -28,6 +28,18 @@ The docs prefer **flat names** (InitWindow, ClearBackground) so examples work th
 
 Use **`#include "path/to/file.bas"`**. The compiler also accepts **IMPORT "path"** as an alias. Path is relative to the file that contains the directive. See [Libraries and includes](LIBRARIES.md).
 
+**How do I see all commands?**
+
+Run **`cyberbasic --list-commands`** for a short grouped list. For the full reference, see [Command Reference](COMMAND_REFERENCE.md) and [API Reference](../API_REFERENCE.md). In your program you can call **HELP()** or **?()** to print a reminder and paths.
+
+**Why does my draw() not show anything?**
+
+Make sure you are using the **game loop** (`WHILE NOT WindowShouldClose() WEND` or `REPEAT ... UNTIL WindowShouldClose()`) and that you have defined both **update(dt)** and **draw()** (Sub or Function). The hybrid pipeline only runs when the compiler detects this pattern. See [Program Structure – hybrid loop](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
+
+**When to use BOX2D.* vs flat CreateWorld2D?**
+
+Both work. **CreateWorld2D**, **CreateBox2D**, **Step2D**, **GetPositionX2D**, etc. are flat names. **BOX2D.CreateWorld**, **BOX2D.Step**, **BOX2D.GetPositionX** are the namespaced form. Prefer flat names for consistency with the rest of the docs. The hybrid loop calls **StepAllPhysics2D(dt)** automatically for all registered 2D worlds.
+
 ## See also
 
 - [Documentation Index](DOCUMENTATION_INDEX.md)

@@ -12,3 +12,5 @@ cyberbasic templates/3d_game.bas
 ```
 
 Copy a template to your project and extend (add sprites, physics bodies, UI, etc.).
+
+For the **hybrid loop** (automatic physics step and render queue), define `update(dt)` and `draw()` and use a game loop with an empty body; see [Program Structure – hybrid loop](../docs/PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop) and examples that use the hybrid style.

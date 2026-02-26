@@ -100,6 +100,8 @@ func (p *Parser) statement() (Node, error) {
 		return p.enumStatement()
 	case lexer.TokenTypeKw:
 		return p.typeDeclStatement()
+	case lexer.TokenEntity:
+		return p.entityDeclStatement()
 	case lexer.TokenPrint:
 		return p.printStatement()
 	case lexer.TokenStr:
@@ -684,6 +686,57 @@ func (p *Parser) typeDeclStatement() (Node, error) {
 		fields = append(fields, TypeField{Name: fieldName, FieldType: fieldType, ConstValue: constVal})
 	}
 	return &TypeDecl{Name: typeName, Fields: fields}, nil
+}
+
+// checkEndEntity returns true if current position is ENDENTITY or END ENTITY.
+func (p *Parser) checkEndEntity() bool {
+	if p.isAtEnd() {
+		return false
+	}
+	if p.check(lexer.TokenEndEntity) {
+		return true
+	}
+	return p.check(lexer.TokenEnd) && p.current+1 < len(p.tokens) && p.tokens[p.current+1].Type == lexer.TokenEntity
+}
+
+// entityDeclStatement parses ENTITY Name ... END ENTITY (or ENDENTITY).
+func (p *Parser) entityDeclStatement() (Node, error) {
+	p.advance() // Skip ENTITY
+	if !p.match(lexer.TokenIdentifier) {
+		return nil, &Error{Message: "expected entity name after ENTITY", Line: p.line(), Col: p.col()}
+	}
+	entityName := p.previous().Value
+	var props []EntityProperty
+	for {
+		for p.match(lexer.TokenNewLine) {
+		}
+		if p.match(lexer.TokenEndEntity) {
+			break
+		}
+		if p.check(lexer.TokenEnd) {
+			p.advance()
+			if p.match(lexer.TokenEntity) {
+				break
+			}
+			return nil, &Error{Message: "expected ENTITY after END", Line: p.line(), Col: p.col()}
+		}
+		if p.isAtEnd() {
+			return nil, &Error{Message: "expected END ENTITY or ENDENTITY", Line: p.line(), Col: p.col()}
+		}
+		if !p.match(lexer.TokenIdentifier) {
+			return nil, &Error{Message: "expected property name or END ENTITY", Line: p.line(), Col: p.col()}
+		}
+		propName := p.previous().Value
+		if !p.match(lexer.TokenAssign) {
+			return nil, &Error{Message: "expected '=' after property name", Line: p.line(), Col: p.col()}
+		}
+		val, err := p.expression()
+		if err != nil {
+			return nil, err
+		}
+		props = append(props, EntityProperty{Name: propName, Value: val})
+	}
+	return &EntityDecl{Name: entityName, Properties: props}, nil
 }
 
 // dimStatement parses DIM statement (scalar or array: DIM x AS Integer, DIM a(10,20) AS Integer)

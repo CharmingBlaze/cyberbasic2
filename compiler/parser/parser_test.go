@@ -172,6 +172,31 @@ End Type
 	}
 }
 
+func TestParseEntityDecl(t *testing.T) {
+	src := `ENTITY Player
+  x = 100
+  y = 200
+END ENTITY
+`
+	prog := mustParse(t, src)
+	if len(prog.Statements) != 1 {
+		t.Fatalf("expected 1 statement, got %d", len(prog.Statements))
+	}
+	ed, ok := prog.Statements[0].(*EntityDecl)
+	if !ok {
+		t.Fatalf("expected EntityDecl, got %T", prog.Statements[0])
+	}
+	if strings.ToLower(ed.Name) != "player" {
+		t.Errorf("entity name: got %q", ed.Name)
+	}
+	if len(ed.Properties) != 2 {
+		t.Fatalf("expected 2 properties, got %d", len(ed.Properties))
+	}
+	if ed.Properties[0].Name != "x" || ed.Properties[1].Name != "y" {
+		t.Errorf("property names: got %q, %q", ed.Properties[0].Name, ed.Properties[1].Name)
+	}
+}
+
 func TestParseEnum(t *testing.T) {
 	src := `Enum Color: Red, Green, Blue
 `

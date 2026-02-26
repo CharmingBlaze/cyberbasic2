@@ -33,6 +33,7 @@ const (
 	NodeConstStatement
 	NodeEnumStatement
 	NodeTypeDecl
+	NodeEntityDecl
 	NodeCompoundAssign
 	NodeExitLoop
 	NodeContinueLoop
@@ -532,6 +533,27 @@ type TypeField struct {
 }
 
 func (t *TypeDecl) Type() NodeType { return NodeTypeDecl }
+
+// EntityDecl represents ENTITY Name ... END ENTITY (single instance with properties).
+type EntityDecl struct {
+	Name       string
+	Properties []EntityProperty
+}
+
+// EntityProperty is one property in an ENTITY: Name = initial Value.
+type EntityProperty struct {
+	Name  string
+	Value Node
+}
+
+func (e *EntityDecl) Type() NodeType { return NodeEntityDecl }
+func (e *EntityDecl) String() string {
+	s := "ENTITY " + e.Name + "\n"
+	for _, p := range e.Properties {
+		s += "  " + p.Name + " = " + p.Value.String() + "\n"
+	}
+	return s + "END ENTITY"
+}
 func (t *TypeDecl) String() string {
 	s := "TYPE " + t.Name + "\n"
 	for _, f := range t.Fields {

@@ -37,54 +37,70 @@ func main() {
 			fmt.Println("  --compile-only    Compile but don't run")
 			fmt.Println("  --gen-go [file]   Generate Go source that calls raylib directly (default: <basename>_gen.go)")
 			fmt.Println("  --debug           Enable debug output")
+			fmt.Println("  --list-commands   Print built-in command names (2D, 3D, GUI, Physics, Std)")
+			fmt.Println("  --lint            Check program (compile only, no run); same as --compile-only")
 			fmt.Println("  --help            Show this help")
 			fmt.Println("  (Multi-window: --window --parent=host:port --title=... --width=... --height=...)")
-			return
+			fmt.Println("Exit codes: 0 = success, 1 = compile/file error, 2 = runtime error")
+			os.Exit(0)
+		}
+		if arg == "--list-commands" {
+			printCommandList()
+			os.Exit(0)
 		}
 	}
 
+	// Filename is the first argument that does not start with -
 	var filename string
-	if len(os.Args) < 2 {
-		// No args: default to 3D physics demo so double-clicking the exe runs something
+	for i := 1; i < len(os.Args); i++ {
+		if !strings.HasPrefix(os.Args[i], "-") {
+			filename = os.Args[i]
+			break
+		}
+		if os.Args[i] == "--gen-go" && i+1 < len(os.Args) {
+			i++ // skip gen-go output path
+		}
+	}
+	if filename == "" {
+		// No file: default to 3D physics demo or show usage
 		exeDir := filepath.Dir(os.Args[0])
 		defaultBas := filepath.Join(exeDir, "examples", "run_3d_physics_demo.bas")
 		if _, err := os.Stat(defaultBas); err == nil {
 			filename = defaultBas
 			fmt.Println("No file specified, running default: examples/run_3d_physics_demo.bas")
 		} else {
-			// exe might be in project root
 			defaultBas = filepath.Join("examples", "run_3d_physics_demo.bas")
 			if _, err := os.Stat(defaultBas); err == nil {
 				filename = defaultBas
 				fmt.Println("No file specified, running default: examples/run_3d_physics_demo.bas")
 			} else {
 				fmt.Println("CyberBasic - A BASIC-like language with Raylib + Bullet physics")
-				fmt.Println("Usage: cyberbasic <filename.bas> [options]")
+				fmt.Println("Usage: cyberbasic <filename.bas> [options]  (or: cyberbasic [options] <filename.bas>)")
 				fmt.Println("Options:")
 				fmt.Println("  --compile-only    Compile but don't run")
 				fmt.Println("  --gen-go [file]   Generate Go source that calls raylib directly")
 				fmt.Println("  --debug           Enable debug output")
-				return
+				os.Exit(1)
 			}
 		}
-	} else {
-		filename = os.Args[1]
 	}
 	compileOnly := false
 	debug := false
 	genGo := false
 	genGoOut := ""
 
-	// Parse command line arguments
-	for i := 2; i < len(os.Args); i++ {
+	// Parse command line arguments (all args except exe name)
+	for i := 1; i < len(os.Args); i++ {
 		switch os.Args[i] {
 		case "--compile-only":
 			compileOnly = true
+		case "--lint":
+			compileOnly = true // lint = compile without running
 		case "--debug":
 			debug = true
 		case "--gen-go":
 			genGo = true
-			if i+1 < len(os.Args) && len(os.Args[i+1]) > 0 && os.Args[i+1][0] != '-' {
+			if i+1 < len(os.Args) && len(os.Args[i+1]) > 0 && !strings.HasPrefix(os.Args[i+1], "-") {
 				i++
 				genGoOut = os.Args[i]
 			}
@@ -98,7 +114,7 @@ func main() {
 	// Check if file exists
 	if _, err := os.Stat(filename); os.IsNotExist(err) {
 		fmt.Printf("Error: File '%s' not found\n", filename)
-		return
+		os.Exit(1)
 	}
 
 	// Set script path for SpawnWindow (child processes re-run same .bas)
@@ -124,7 +140,7 @@ func main() {
 	source, err := os.ReadFile(filename)
 	if err != nil {
 		fmt.Printf("Error reading file: %v\n", err)
-		return
+		os.Exit(1)
 	}
 
 	// Preprocess: expand #include "file.bas"
@@ -137,28 +153,28 @@ func main() {
 		tokens, err := l.Tokenize()
 		if err != nil {
 			fmt.Printf("Lex error: %v\n", err)
-			return
+			os.Exit(1)
 		}
 		p := parser.New(tokens)
 		program, err := p.Parse()
 		if err != nil {
 			fmt.Printf("Parse error: %v\n", err)
-			return
+			os.Exit(1)
 		}
 		goCode, err := gogen.Generate(program)
 		if err != nil {
 			fmt.Printf("Go gen error: %v\n", err)
-			return
+			os.Exit(1)
 		}
 		if dir := filepath.Dir(genGoOut); dir != "." {
 			_ = os.MkdirAll(dir, 0755)
 		}
 		if err := os.WriteFile(genGoOut, []byte(goCode), 0644); err != nil {
 			fmt.Printf("Write error: %v\n", err)
-			return
+			os.Exit(1)
 		}
 		fmt.Printf("Generated %s\n", genGoOut)
-		return
+		os.Exit(0)
 	}
 
 	fmt.Printf("Compiling %s...\n", filename)
@@ -170,7 +186,7 @@ func main() {
 	chunk, err := comp.Compile(string(source))
 	if err != nil {
 		fmt.Printf("Compilation error: %v\n", err)
-		return
+		os.Exit(1)
 	}
 
 	if debug {
@@ -179,7 +195,7 @@ func main() {
 
 	if compileOnly {
 		fmt.Println("Compilation successful!")
-		return
+		os.Exit(0)
 	}
 
 	// Create runtime
@@ -206,12 +222,34 @@ func main() {
 	err = rt.GetVM().Run()
 	if err != nil {
 		fmt.Printf("Runtime error: %v\n", err)
+		if debug {
+			for i, f := range rt.GetVM().StackTrace() {
+				fmt.Printf("  #%d line %d (ip %d)\n", i, f.Line, f.IP)
+			}
+		}
 		rt.CloseWindow()
-		return
+		os.Exit(2)
 	}
 
 	rt.CloseWindow()
 	fmt.Println("Program completed successfully!")
+	os.Exit(0)
+}
+
+// printCommandList prints built-in command names grouped by category (for --list-commands).
+func printCommandList() {
+	fmt.Println("Built-in commands (see docs/COMMAND_REFERENCE.md and API_REFERENCE.md for full reference)")
+	fmt.Println()
+	fmt.Println("Window & system: InitWindow, CloseWindow, SetTargetFPS, GetFrameTime, WindowShouldClose, DisableCursor, EnableCursor")
+	fmt.Println("Game loop (hybrid): ClearRenderQueues, FlushRenderQueues, StepAllPhysics2D, StepAllPhysics3D")
+	fmt.Println("2D (shapes/textures): DrawRectangle, rect, DrawCircle, circle, DrawLine, DrawText, DrawTexture, sprite, ClearBackground, Background")
+	fmt.Println("3D: DrawCube, cube, DrawSphere, DrawModel, DrawModelSimple, DrawGrid, BeginMode3D, EndMode3D")
+	fmt.Println("GUI: GuiButton, button, GuiLabel, GuiSlider, GuiCheckbox, GuiTextbox, GuiProgressBar")
+	fmt.Println("Physics 2D: CreateWorld2D, CreateBox2D, CreateCircle2D, Step2D, StepAllPhysics2D, GetPositionX2D, GetPositionY2D, ApplyForce2D")
+	fmt.Println("Physics 3D: CreateWorld3D, CreateBox3D, CreateSphere3D, Step3D, StepAllPhysics3D, GetPositionX3D, GetPositionY3D, GetPositionZ3D, ApplyForce3D")
+	fmt.Println("Input: KeyDown, KeyPressed, GetMouseX, GetMouseY, GetMouseDeltaX, GetMouseDeltaY")
+	fmt.Println("Math: Clamp, Lerp, Vec2, Vec3, Color")
+	fmt.Println("Std: Print, Str, Int, Rnd, OpenFile, ReadLine, WriteLine, CloseFile, Left, Right, Mid, Len")
 }
 
 // Additional utility functions for debugging and development

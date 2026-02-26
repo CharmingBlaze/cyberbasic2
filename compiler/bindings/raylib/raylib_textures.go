@@ -4,6 +4,7 @@ package raylib
 import (
 	"cyberbasic/compiler/vm"
 	"fmt"
+	"strings"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -188,6 +189,44 @@ func registerTextures(v *vm.VM) {
 			c = argsToColor(args, 12)
 		}
 		rl.DrawTexturePro(tex, sourceRec, destRec, origin, rotation, c)
+		return nil, nil
+	})
+	v.RegisterForeign("DrawEntity", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DrawEntity requires (entityName$)")
+		}
+		entityName := toString(args[0])
+		g := v.Globals()[strings.ToLower(entityName)]
+		if g == nil {
+			return nil, fmt.Errorf("entity not found: %s", entityName)
+		}
+		m, ok := g.(map[string]interface{})
+		if !ok {
+			return nil, fmt.Errorf("entity %s is not a map", entityName)
+		}
+		spriteVal, _ := m["sprite"]
+		if spriteVal == nil {
+			spriteVal, _ = m["texture"]
+		}
+		spriteId := toString(spriteVal)
+		if spriteId == "" {
+			return nil, fmt.Errorf("entity %s has no sprite or texture", entityName)
+		}
+		texMu.Lock()
+		tex, ok := textures[spriteId]
+		texMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("entity %s sprite/texture id not loaded: %s", entityName, spriteId)
+		}
+		x := toFloat32(m["x"])
+		y := toFloat32(m["y"])
+		if scaleVal, has := m["scale"]; has && scaleVal != nil {
+			scale := toFloat32(scaleVal)
+			angle := toFloat32(m["angle"])
+			rl.DrawTextureEx(tex, rl.Vector2{X: x, Y: y}, angle, scale, rl.White)
+		} else {
+			rl.DrawTexture(tex, int32(x), int32(y), rl.White)
+		}
 		return nil, nil
 	})
 

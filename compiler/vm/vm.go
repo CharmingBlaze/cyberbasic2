@@ -25,6 +25,9 @@ type VM struct {
 	running        bool
 	runtime        GameRuntime // optional: when set, game opcodes call runtime instead of no-op
 	foreign        map[string]ForeignFunc
+	// Entity getter/setter: when set, entityName.prop read/write can be intercepted (e.g. for physics).
+	entityGetters  map[string]func(entityName, prop string) (Value, bool) // key: prop name (lowercase) or "entity.prop"
+	entitySetters  map[string]func(entityName, prop string, v Value)
 	timerZero      time.Time
 	fileHandles    map[int]*os.File
 	fileReaders    map[int]*bufio.Reader // for ReadLine
@@ -92,6 +95,28 @@ func NewVM() *VM {
 // Chunk returns the currently loaded chunk (nil if none). Used by runtime.StepFrame to detect update/draw.
 func (vm *VM) Chunk() *Chunk {
 	return vm.chunk
+}
+
+// Globals returns the global variables map (for tests and inspection).
+func (vm *VM) Globals() map[string]Value {
+	return vm.globals
+}
+
+// RegisterEntityGetter registers a getter for entity property reads. Key is prop name (lowercase) or "entityname.prop".
+// When entityName.prop is loaded, if a getter is registered for that prop (or entity.prop), it is called; otherwise globals[entity] map is used.
+func (vm *VM) RegisterEntityGetter(key string, fn func(entityName, prop string) (Value, bool)) {
+	if vm.entityGetters == nil {
+		vm.entityGetters = make(map[string]func(entityName, prop string) (Value, bool))
+	}
+	vm.entityGetters[strings.ToLower(key)] = fn
+}
+
+// RegisterEntitySetter registers a setter for entity property writes. Key is prop name (lowercase) or "entityname.prop".
+func (vm *VM) RegisterEntitySetter(key string, fn func(entityName, prop string, v Value)) {
+	if vm.entitySetters == nil {
+		vm.entitySetters = make(map[string]func(entityName, prop string, v Value))
+	}
+	vm.entitySetters[strings.ToLower(key)] = fn
 }
 
 // LoadChunk loads a bytecode chunk into the VM
@@ -298,11 +323,32 @@ func (vm *VM) Run() error {
 			break
 		}
 		if err := vm.Step(); err != nil {
-			return err
+			return vm.errWithStack(err)
 		}
 	}
 
 	return nil
+}
+
+// errWithStack appends a short stack trace (line numbers) to the error for debugging.
+func (vm *VM) errWithStack(err error) error {
+	if err == nil {
+		return nil
+	}
+	trace := vm.StackTrace()
+	if len(trace) == 0 {
+		return err
+	}
+	var parts []string
+	for _, f := range trace {
+		if f.Line > 0 {
+			parts = append(parts, fmt.Sprintf("line %d", f.Line))
+		}
+	}
+	if len(parts) > 0 {
+		return fmt.Errorf("%w\nstack: %s", err, strings.Join(parts, "; "))
+	}
+	return err
 }
 
 // wakeSleeping moves any sleeping fibers whose resumeAt <= now back onto the run queue.
@@ -533,6 +579,92 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		}
 
 		vm.globals[key] = vm.pop()
+
+	case OpLoadEntityProp:
+		if vm.ip+2 > len(vm.chunk.Code) {
+			return fmt.Errorf("unexpected end of code for OpLoadEntityProp")
+		}
+		entityIdx := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		propIdx := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		if entityIdx >= len(vm.chunk.Constants) || propIdx >= len(vm.chunk.Constants) {
+			return fmt.Errorf("constant index out of bounds for entity prop")
+		}
+		entityName, _ := vm.chunk.Constants[entityIdx].(string)
+		propName, _ := vm.chunk.Constants[propIdx].(string)
+		entityLower := strings.ToLower(entityName)
+		propLower := strings.ToLower(propName)
+		if vm.entityGetters != nil {
+			if fn := vm.entityGetters[propLower]; fn != nil {
+				if v, ok := fn(entityLower, propLower); ok {
+					vm.push(v)
+					break
+				}
+			}
+			if fn := vm.entityGetters[entityLower+"."+propLower]; fn != nil {
+				if v, ok := fn(entityLower, propLower); ok {
+					vm.push(v)
+					break
+				}
+			}
+		}
+		// Fallback: load from globals[entityName] map
+		g, exists := vm.globals[entityLower]
+		if !exists {
+			return fmt.Errorf("entity not found: %s", entityName)
+		}
+		m, ok := g.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("entity %s is not a map", entityName)
+		}
+		if val, has := m[propName]; has {
+			vm.push(val)
+		} else if val, has := m[propLower]; has {
+			vm.push(val)
+		} else {
+			vm.push(nil)
+		}
+
+	case OpStoreEntityProp:
+		if vm.ip+2 > len(vm.chunk.Code) {
+			return fmt.Errorf("unexpected end of code for OpStoreEntityProp")
+		}
+		if len(vm.stack) == 0 {
+			return fmt.Errorf("stack underflow for OpStoreEntityProp")
+		}
+		value := vm.pop()
+		entityIdx := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		propIdx := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		if entityIdx >= len(vm.chunk.Constants) || propIdx >= len(vm.chunk.Constants) {
+			return fmt.Errorf("constant index out of bounds for entity prop")
+		}
+		entityName, _ := vm.chunk.Constants[entityIdx].(string)
+		propName, _ := vm.chunk.Constants[propIdx].(string)
+		entityLower := strings.ToLower(entityName)
+		propLower := strings.ToLower(propName)
+		if vm.entitySetters != nil {
+			if fn := vm.entitySetters[propLower]; fn != nil {
+				fn(entityLower, propLower, value)
+				break
+			}
+			if fn := vm.entitySetters[entityLower+"."+propLower]; fn != nil {
+				fn(entityLower, propLower, value)
+				break
+			}
+		}
+		// Fallback: set on globals[entityName] map
+		g, exists := vm.globals[entityLower]
+		if !exists {
+			return fmt.Errorf("entity not found: %s", entityName)
+		}
+		m, ok := g.(map[string]interface{})
+		if !ok {
+			return fmt.Errorf("entity %s is not a map", entityName)
+		}
+		m[propName] = value
 
 	case OpAdd:
 		b := vm.pop()

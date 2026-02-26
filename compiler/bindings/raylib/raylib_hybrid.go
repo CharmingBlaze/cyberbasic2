@@ -93,6 +93,7 @@ func registerRenderTypes(v *vm.VM) {
 	reg("DrawTextCodepoint", vm.Render2D)
 	reg("DrawTextCodepoints", vm.Render2D)
 	reg("DrawSpriteAnimation", vm.Render2D)
+	reg("DrawEntity", vm.Render2D)
 	reg("DrawView", vm.Render2D)
 	reg("ClearBackground", vm.Render2D)
 	reg("Background", vm.Render2D)

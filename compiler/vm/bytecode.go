@@ -17,6 +17,8 @@ const (
 	OpStoreVar
 	OpLoadGlobal
 	OpStoreGlobal
+	OpLoadEntityProp  // (entityNameConstIdx, propNameConstIdx) -> push entity.prop via getter or map
+	OpStoreEntityProp // (entityNameConstIdx, propNameConstIdx); pop value, set entity.prop via setter or map
 
 	// Literals
 	OpLoadConst

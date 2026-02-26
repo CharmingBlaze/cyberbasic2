@@ -492,6 +492,86 @@ func RegisterBullet(v *vm.VM) {
 	registerFlat3D(v)
 }
 
+// registerEntityGetters3D registers getters for entity.x, entity.y, entity.z, and rotation when the entity has "body" and "world" (3D physics).
+func registerEntityGetters3D(v *vm.VM) {
+	getWorldBody := func(entityName string) (worldId, bodyId string, ok bool) {
+		g := v.Globals()[entityName]
+		if g == nil {
+			return "", "", false
+		}
+		m, ok := g.(map[string]interface{})
+		if !ok {
+			return "", "", false
+		}
+		w, _ := m["world"]
+		b, _ := m["body"]
+		if w == nil || b == nil {
+			if w, _ := m["worldid"]; w != nil {
+				if b, _ := m["bodyid"]; b != nil {
+					return toString(w), toString(b), true
+				}
+			}
+			return "", "", false
+		}
+		return toString(w), toString(b), true
+	}
+	v.RegisterEntityGetter("x", func(entityName, prop string) (vm.Value, bool) {
+		worldId, bodyId, ok := getWorldBody(entityName)
+		if !ok {
+			return nil, false
+		}
+		return GetPositionX(worldId, bodyId), true
+	})
+	v.RegisterEntityGetter("y", func(entityName, prop string) (vm.Value, bool) {
+		worldId, bodyId, ok := getWorldBody(entityName)
+		if !ok {
+			return nil, false
+		}
+		return GetPositionY(worldId, bodyId), true
+	})
+	v.RegisterEntityGetter("z", func(entityName, prop string) (vm.Value, bool) {
+		worldId, bodyId, ok := getWorldBody(entityName)
+		if !ok {
+			return nil, false
+		}
+		return GetPositionZ(worldId, bodyId), true
+	})
+	// Rotation: expose as yaw, pitch, roll (common names) or rotation.x/y/z
+	v.RegisterEntityGetter("yaw", func(entityName, prop string) (vm.Value, bool) {
+		worldId, bodyId, ok := getWorldBody(entityName)
+		if !ok {
+			return nil, false
+		}
+		b := getBody(getWorld(worldId), bodyId)
+		if b == nil {
+			return nil, false
+		}
+		return b.rotation.y, true
+	})
+	v.RegisterEntityGetter("pitch", func(entityName, prop string) (vm.Value, bool) {
+		worldId, bodyId, ok := getWorldBody(entityName)
+		if !ok {
+			return nil, false
+		}
+		b := getBody(getWorld(worldId), bodyId)
+		if b == nil {
+			return nil, false
+		}
+		return b.rotation.x, true
+	})
+	v.RegisterEntityGetter("roll", func(entityName, prop string) (vm.Value, bool) {
+		worldId, bodyId, ok := getWorldBody(entityName)
+		if !ok {
+			return nil, false
+		}
+		b := getBody(getWorld(worldId), bodyId)
+		if b == nil {
+			return nil, false
+		}
+		return b.rotation.z, true
+	})
+}
+
 // registerFlat3D registers flat CreateWorld3D, Step3D, CreateBox3D, etc. (no BULLET. prefix).
 func registerFlat3D(v *vm.VM) {
 	// World
@@ -1083,6 +1163,9 @@ func registerFlat3D(v *vm.VM) {
 		}
 		return b.collisions[idx].normal.z, nil
 	})
+
+	// Entity property getters: when an entity has "body" and "world" (3D), entity.x/y/z and rotation come from physics.
+	registerEntityGetters3D(v)
 
 	// --- High-level physics (default world "default") ---
 	v.RegisterForeign("PhysicsEnable", func(args []interface{}) (interface{}, error) {

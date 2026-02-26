@@ -44,12 +44,23 @@ On Windows you get `cyberbasic.exe`; on Unix you get `cyberbasic`. The executabl
 
 This opens a window, and you move a circle with WASD. See [Cheatsheet](../CHEATSHEET.md) for the “first 10 lines” of a 2D and 3D game.
 
+## Exit codes
+
+When running a script, the compiler exits with:
+
+- **0** – Success (compilation and, if not `--compile-only`, program run completed).
+- **1** – Compile or file error (file not found, lex/parse error, compilation error).
+- **2** – Runtime error (program ran but hit an error during execution).
+
+Use these in scripts or CI to detect failure (e.g. `./cyberbasic game.bas || echo "Build or run failed"`).
+
 ## Where is the compiler?
 
 After building, the compiler is the binary you produced:
 
 - **Default:** `./cyberbasic` (or `cyberbasic.exe` on Windows) in the current directory.
 - To use from anywhere, add the project root (or a directory containing `cyberbasic`) to your `PATH`.
+- Run `./cyberbasic --help` for options; use `./cyberbasic --list-commands` to print built-in command names. Use `./cyberbasic --lint your.bas` (or `--compile-only`) to check your program without running it. Full reference: [Command Reference](COMMAND_REFERENCE.md) and [API Reference](../API_REFERENCE.md).
 
 ## Next steps
 
@@ -62,6 +73,8 @@ After building, the compiler is the binary you produced:
 | **First 3D game** | [Cheatsheet](../CHEATSHEET.md) → [3D Graphics Guide](3D_GRAPHICS_GUIDE.md) |
 | **Hybrid loop** (auto physics + render) | Define `update(dt)` and `draw()`; see [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop) |
 | **Game loop + input + physics** | [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) |
+| **Minimal game templates** | [templates/2d_game.bas](../templates/2d_game.bas), [templates/3d_game.bas](../templates/3d_game.bas) – see [templates/README](../templates/README.md) |
+| **See all commands** | Run `cyberbasic --list-commands` or open [Command Reference](COMMAND_REFERENCE.md) |
 
 Start with [Quick Reference](QUICK_REFERENCE.md) and [examples/first_game.bas](../examples/first_game.bas), then explore the [Documentation Index](DOCUMENTATION_INDEX.md).
 

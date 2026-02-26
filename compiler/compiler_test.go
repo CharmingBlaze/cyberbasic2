@@ -1,6 +1,7 @@
 package compiler
 
 import (
+	"cyberbasic/compiler/bindings/std"
 	"cyberbasic/compiler/vm"
 	"testing"
 )
@@ -112,6 +113,93 @@ VAR x = F()
 	err = v.Run()
 	if err != nil {
 		t.Fatalf("run: %v", err)
+	}
+}
+
+// TestCompileAndRunEntityCreateOnly verifies ENTITY creates a dict in globals (no assignment).
+func TestCompileAndRunEntityCreateOnly(t *testing.T) {
+	src := `ENTITY Player
+  x = 100
+  y = 200
+END ENTITY
+VAR a = Player.x
+VAR b = Player.y
+`
+	c := New()
+	chunk, err := c.Compile(src)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	v := vm.NewVM()
+	std.RegisterStd(v)
+	v.LoadChunk(chunk)
+	err = v.Run()
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	g, ok := v.Globals()["player"]
+	if !ok {
+		t.Fatal("expected global 'player'")
+	}
+	m, _ := g.(map[string]interface{})
+	if m["x"] != float64(100) && m["x"] != 100 {
+		t.Errorf("player.x: got %v", m["x"])
+	}
+	if m["y"] != float64(200) && m["y"] != 200 {
+		t.Errorf("player.y: got %v", m["y"])
+	}
+}
+
+// TestCompileAndRunEntity verifies ENTITY creates a dict in globals and property read/write works.
+func TestCompileAndRunEntity(t *testing.T) {
+	src := `ENTITY Player
+  x = 100
+  y = 200
+END ENTITY
+Player.x = 50
+VAR a = Player.x
+VAR b = Player.y
+`
+	c := New()
+	chunk, err := c.Compile(src)
+	if err != nil {
+		t.Fatalf("compile: %v", err)
+	}
+	if !chunkContainsOp(chunk, vm.OpStoreGlobal) {
+		t.Error("expected OpStoreGlobal for entity")
+	}
+	if !chunkContainsOp(chunk, vm.OpLoadEntityProp) {
+		t.Error("expected OpLoadEntityProp for entity property read")
+	}
+	v := vm.NewVM()
+	std.RegisterStd(v)
+	v.LoadChunk(chunk)
+	err = v.Run()
+	if err != nil {
+		t.Fatalf("run: %v", err)
+	}
+	// Check globals: player entity with x=50 (updated by assignment), y=200
+	g, ok := v.Globals()["player"]
+	if !ok {
+		t.Fatal("expected global 'player' after run")
+	}
+	m, ok := g.(map[string]interface{})
+	if !ok {
+		t.Fatalf("expected player to be map, got %T", g)
+	}
+	if x, ok := m["x"]; !ok {
+		t.Error("expected player.x")
+	} else if xi, ok := x.(float64); ok && int(xi) != 50 {
+		t.Errorf("player.x: expected 50, got %v", x)
+	} else if xi, ok := x.(int); ok && xi != 50 {
+		t.Errorf("player.x: expected 50, got %v", x)
+	}
+	if y, ok := m["y"]; !ok {
+		t.Error("expected player.y")
+	} else if yi, ok := y.(float64); ok && int(yi) != 200 {
+		t.Errorf("player.y: expected 200, got %v", y)
+	} else if yi, ok := y.(int); ok && yi != 200 {
+		t.Errorf("player.y: expected 200, got %v", y)
 	}
 }
 

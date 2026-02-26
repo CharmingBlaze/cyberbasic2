@@ -1,19 +1,32 @@
-// Multiplayer server: Host, AcceptTimeout, JoinRoom, SendToRoom
+// Multiplayer server: StartServer, ProcessNetworkEvents, OnClientConnect, OnMessage, SendToRoom
 // Run first: cyberbasic examples/multiplayer_server.bas
 // Then run client: cyberbasic examples/multiplayer_client.bas
 
-VAR sid = Host(9999)
+VAR sid = StartServer(9999)
 IF IsNull(sid) THEN
   PRINT "Failed to host on port 9999"
   QUIT
 ENDIF
 CreateRoom("lobby")
 
+SUB OnClientConnect(id)
+  JoinRoom("lobby", id)
+END SUB
+
+SUB OnMessage(id, msg)
+  Broadcast(msg)
+END SUB
+
+SUB OnClientDisconnect(id)
+  REM client left
+END SUB
+
 InitWindow(500, 300, "Multiplayer Server")
 SetTargetFPS(60)
 VAR lastMsg = "Waiting for clients..."
 
 WHILE NOT WindowShouldClose()
+  ProcessNetworkEvents()
   VAR cid = AcceptTimeout(sid, 50)
   IF NOT IsNull(cid) THEN
     JoinRoom("lobby", cid)
