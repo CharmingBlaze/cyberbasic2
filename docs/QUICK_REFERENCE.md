@@ -110,8 +110,9 @@ b /= 4
 ```basic
 // full-line comment
 PRINT "hi"   // inline comment
-/* block comment */
 ```
+
+Block comment `/* ... */` is supported where available.
 
 ## Includes
 
@@ -136,6 +137,10 @@ WEND
 
 CloseWindow()
 ```
+
+## Hybrid loop (optional)
+
+Define **`update(dt)`** and/or **`draw()`** (Sub or Function) and use a game loop with an **empty body**; the compiler injects GetFrameTime, physics step, update(dt), ClearRenderQueues, draw(), and FlushRenderQueues. You do not call BeginDrawing/EndDrawing yourself. See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
 
 ## Input (common)
 

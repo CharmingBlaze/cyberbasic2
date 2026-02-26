@@ -18,6 +18,40 @@ Structured command set for window, input, math, camera, 3D, 2D, audio, file, gam
 
 ---
 
+## Game loop (hybrid)
+
+When you define **update(dt)** and **draw()** (Sub or Function) and use a game loop (`WHILE NOT WindowShouldClose()` or `REPEAT ... UNTIL WindowShouldClose()`), the compiler injects an automatic pipeline. You do not call BeginDrawing/EndDrawing yourself.
+
+| Command | Description |
+|--------|-------------|
+| **ClearRenderQueues**() | Clear 2D, 3D, and GUI render queues (called automatically before draw()) |
+| **FlushRenderQueues**() | Execute queued draw commands and present frame (called automatically after draw()) |
+| **StepAllPhysics2D**(dt) | Step all registered Box2D worlds (called automatically with frame delta) |
+| **StepAllPhysics3D**(dt) | Step all registered Bullet worlds (called automatically with frame delta) |
+
+See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
+
+---
+
+## Multi-window (in-process)
+
+Logical windows (viewports) in one process. Window ID **0** = main screen. See [In-process multi-window](MULTI_WINDOW_INPROCESS.md) for the full guide.
+
+| Command | Description |
+|--------|-------------|
+| **WindowCreate**(width, height, title) | Create window → id |
+| **WindowClose**(id) | Close window |
+| **WindowIsOpen**(id) | True if window exists |
+| **WindowSetTitle**(id, title) | **WindowSetSize**(id, w, h) | **WindowSetPosition**(id, x, y) |
+| **WindowGetWidth**(id) **WindowGetHeight**(id) | **WindowGetPositionX**(id) **WindowGetPositionY**(id) |
+| **WindowBeginDrawing**(id) **WindowEndDrawing**(id) | Draw into window (0 = main) |
+| **WindowClearBackground**(id, r, g, b, a) | **WindowDrawAllToScreen**() |
+| **WindowSendMessage**(targetID, message, data) | **WindowReceiveMessage**(id) | **WindowHasMessage**(id) |
+| **ChannelCreate**(name) **ChannelSend**(name, data) **ChannelReceive**(name) **ChannelHasData**(name) |
+| **StateSet**(key, value) **StateGet**(key) **StateHas**(key) **StateRemove**(key) |
+
+---
+
 ## Input
 
 | Command | Description |

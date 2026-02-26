@@ -13,7 +13,7 @@ From the project root:
 
 1. **Run Go unit tests:** `go test ./compiler/...` — parser, compiler, and VM tests should pass.
 2. **Build the CLI:** `go build -o cb.exe .` then `.\cb.exe --help` to confirm the binary runs.
-3. **Compile sweep:** Run `.\cb.exe --compile-only <path>` on each working example and template. Working set: `first_game.bas`, `2d_shapes_demo.bas`, `dot_and_colors_demo.bas`, `window_demo.bas`, `minimal_window_test.bas`, `box2d_demo.bas`, `simple_box2d_demo.bas`, `simplest_box2d_demo.bas`, `ecs_demo.bas`, `sql_demo.bas`, `gui_demo.bas`, `multi_window_demo.bas`, `multiplayer_server.bas`, `multiplayer_client.bas`, `examples/include_demo/main.bas`, `templates/2d_game.bas`, `templates/3d_game.bas` (and optionally `run_3d_physics_demo.bas`, `minimal_3d_demo.bas`). All should compile without errors.
+3. **Compile sweep:** Run `.\cb.exe --compile-only <path>` on each working example and template. Working set: `first_game.bas`, `2d_shapes_demo.bas`, `dot_and_colors_demo.bas`, `window_demo.bas`, `minimal_window_test.bas`, `box2d_demo.bas`, `simple_box2d_demo.bas`, `simplest_box2d_demo.bas`, `ecs_demo.bas`, `sql_demo.bas`, `gui_demo.bas`, `gui_raygui_demo.bas`, `hybrid_update_draw_demo.bas`, `multi_window_gui_demo.bas`, `multi_window_demo.bas`, `multiplayer_server.bas`, `multiplayer_client.bas`, `examples/include_demo/main.bas`, `templates/2d_game.bas`, `templates/3d_game.bas` (and optionally `run_3d_physics_demo.bas`, `minimal_3d_demo.bas`). All should compile without errors.
 4. **Runtime check (optional):** Run `.\cb.exe examples\simple_box2d_demo.bas` — it should print and exit. Run windowed examples (e.g. `first_game.bas`, `gui_demo.bas`) manually; they should open a window and draw. **sql_demo.bas** may fail to open the database if run with redirected output or from a restricted working directory; run it normally from the project root. **multiplayer_server.bas** and **multiplayer_client.bas** require two terminals (server first, then client).
 
 ## API: current vs legacy
@@ -31,8 +31,11 @@ From the project root:
 | **ECS** | ecs_demo.bas | `cyberbasic examples/ecs_demo.bas` |
 | **SQL (SQLite)** | sql_demo.bas | `cyberbasic examples/sql_demo.bas` (single process; creates sql_demo.db) |
 | **Multiplayer** | multiplayer_server.bas, multiplayer_client.bas | Run server first: `cyberbasic examples/multiplayer_server.bas`; then in another terminal: `cyberbasic examples/multiplayer_client.bas` |
-| **Multi-window (same .bas)** | multi_window_demo.bas | `cyberbasic examples/multi_window_demo.bas` — main + child window, talking via NET |
+| **Hybrid loop** (update/draw) | hybrid_update_draw_demo.bas | `cyberbasic examples/hybrid_update_draw_demo.bas` — update(dt), draw(), empty loop |
+| **Multi-window (in-process)** | multi_window_gui_demo.bas | `cyberbasic examples/multi_window_gui_demo.bas` — WindowCreate, StateSet/Get, OnWindowDraw |
+| **Multi-window (same .bas, processes)** | multi_window_demo.bas | `cyberbasic examples/multi_window_demo.bas` — main + child window, talking via NET |
 | **GUI** | gui_demo.bas | `cyberbasic examples/gui_demo.bas` (BeginUI / EndUI widgets) |
+| **GUI (raygui)** | gui_raygui_demo.bas | `cyberbasic examples/gui_raygui_demo.bas` (Gui* functions; requires CGO) |
 | **Includes (#include)** | include_demo/main.bas | From project root: `cyberbasic examples/include_demo/main.bas` |
 
 ## Quick start
@@ -70,13 +73,19 @@ From the project root:
 - **bullet_demo.bas** – Bullet 3D physics
 - **run_3d_physics_demo.bas** – 3D physics demo
 
-## SQL, Multiplayer, Multi-window, GUI, Includes
+## Hybrid loop, multi-window, GUI, includes
+
+- **hybrid_update_draw_demo.bas** – update(dt) and draw(); empty game loop; automatic physics step and render queues. See [docs/PROGRAM_STRUCTURE.md](../docs/PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
+- **multi_window_gui_demo.bas** – In-process multi-window: WindowCreate, StateSet/StateGet, OnWindowDraw, WindowProcessEvents, WindowDrawAllToScreen. See [docs/MULTI_WINDOW_INPROCESS.md](../docs/MULTI_WINDOW_INPROCESS.md).
+- **multi_window_demo.bas** – Multi-process: main spawns child with SpawnWindow; they talk via Send/Receive (ConnectToParent, AcceptTimeout). See [docs/MULTI_WINDOW.md](../docs/MULTI_WINDOW.md).
+- **gui_demo.bas** – BeginUI, Label, Button, Slider, Checkbox.
+- **gui_raygui_demo.bas** – Full raygui (GuiWindowBox, GuiButton, GuiSlider, etc.); requires CGO.
+- **include_demo/main.bas** – Uses `#include "lib/helper.bas"` and calls a Sub from the included file.
+
+## SQL, Multiplayer
 
 - **sql_demo.bas** – OpenDatabase, Exec, Query, GetCell; shows results in a window.
 - **multiplayer_server.bas** / **multiplayer_client.bas** – Host, Connect, Send, Receive, rooms.
-- **multi_window_demo.bas** – One .bas, two windows: main spawns child with SpawnWindow; they talk via Send/Receive (ConnectToParent, AcceptTimeout). See [docs/MULTI_WINDOW.md](../docs/MULTI_WINDOW.md).
-- **gui_demo.bas** – BeginUI, Label, Button, Slider, Checkbox.
-- **include_demo/main.bas** – Uses `#include "lib/helper.bas"` and calls a Sub from the included file.
 
 ## Input
 

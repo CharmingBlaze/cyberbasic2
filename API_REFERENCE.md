@@ -12,7 +12,9 @@ InitWindow, SetTargetFPS, WindowShouldClose, CloseWindow, SetWindowPosition, Cle
 
 **Config/blend flags (0-arg, use with SetConfigFlags or BeginBlendMode):** FLAG_VSYNC_HINT, FLAG_FULLSCREEN_MODE, FLAG_WINDOW_RESIZABLE, FLAG_WINDOW_UNDECORATED, FLAG_WINDOW_HIDDEN, FLAG_WINDOW_MINIMIZED, FLAG_WINDOW_MAXIMIZED, FLAG_WINDOW_UNFOCUSED, FLAG_WINDOW_TOPMOST, FLAG_WINDOW_ALWAYS_RUN, FLAG_MSAA_4X_HINT, FLAG_INTERLACED_HINT, FLAG_WINDOW_HIGHDPI, FLAG_BORDERLESS_WINDOWED_MODE; BLEND_ALPHA, BLEND_ADDITIVE, BLEND_MULTIPLIED, BLEND_ADD_COLORS, BLEND_SUBTRACT_COLORS, BLEND_CUSTOM. See [Windows, scaling, and splitscreen](docs/WINDOWS_AND_VIEWS.md).
 
-**Note:** The compiler does not inject any frame or mode calls; your code compiles exactly as written (DBPro-style).
+**Note:** The compiler does not inject any frame or mode calls; your code compiles exactly as written (DBPro-style). Exception: when you define **update(dt)** and **draw()** (Sub or Function) and use a game loop, the compiler injects the **hybrid loop** (see below).
+
+**Hybrid loop (raylib_hybrid.go):** **ClearRenderQueues**(), **FlushRenderQueues**() – clear and then execute the 2D/3D/GUI render queues. **StepAllPhysics2D**(dt), **StepAllPhysics3D**(dt) – step all registered Box2D/Bullet worlds. When **update(dt)** and/or **draw()** are defined and the main loop is a game loop, the compiler invokes them automatically (GetFrameTime → physics step → update(dt) → ClearRenderQueues → draw() → FlushRenderQueues). Draw*/Gui* calls inside draw() are queued and flushed in order. See [Program Structure](docs/PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
 
 ---
 
@@ -214,6 +216,28 @@ See [docs/SQL.md](docs/SQL.md).
 **Events:** On KeyDown("KEY") … End On, On KeyPressed("KEY") … End On. Register a handler for that key; handlers run when PollInputEvents() is called (e.g. in the game loop). Key names: "ESCAPE", "W", "SPACE", etc., or KEY_* constant values.
 
 **Coroutines:** StartCoroutine SubName() – start a fiber at that sub; Yield – switch to next fiber; WaitSeconds(seconds) – block current fiber for N seconds (blocks entire VM). Fibers share the same chunk; each has its own IP, stack, and call stack.
+
+---
+
+## 22. Multi-window (in-process) – `raylib_multiwindow.go`
+
+Logical windows (viewports) in one process; ID 0 = main screen. See [docs/MULTI_WINDOW_INPROCESS.md](docs/MULTI_WINDOW_INPROCESS.md).
+
+**Creation/lifecycle:** WindowCreate(width, height, title) → id; WindowCreatePopup, WindowCreateModal, WindowCreateToolWindow(width, height, title); WindowCreateChild(parentID, width, height, title); WindowClose(id); WindowIsOpen(id); WindowSetTitle(id, title); WindowSetSize(id, width, height); WindowSetPosition(id, x, y); WindowGetWidth(id), WindowGetHeight(id); WindowGetPositionX(id), WindowGetPositionY(id), WindowGetPosition(id); WindowFocus(id); WindowIsFocused(id); WindowIsVisible(id); WindowShow(id), WindowHide(id).
+
+**Rendering:** WindowBeginDrawing(id), WindowEndDrawing(id), WindowClearBackground(id, r, g, b, a), WindowDrawAllToScreen().
+
+**Messages:** WindowSendMessage(targetID, message, data), WindowBroadcast(message, data), WindowReceiveMessage(id) → "message|data" or null, WindowHasMessage(id).
+
+**Channels:** ChannelCreate(name), ChannelSend(name, data), ChannelReceive(name) → value or null, ChannelHasData(name).
+
+**State:** StateSet(key, value), StateGet(key), StateHas(key), StateRemove(key).
+
+**Events:** OnWindowUpdate(id, subName), OnWindowDraw(id, subName), OnWindowResize(id, subName), OnWindowClose(id, subName), OnWindowMessage(id, subName); WindowProcessEvents(), WindowDraw().
+
+**3D/RPC:** WindowSetCamera(id, cameraId), WindowDrawModel(id, modelId, x, y, z, scale [, r,g,b,a]), WindowDrawScene(id, sceneId); WindowRegisterFunction(windowId, name, subName), WindowCall(targetWindowId, name, arg1, arg2, …).
+
+**Docking:** DockCreateArea(id, x, y, width, height), DockSplit(areaId, direction, size), DockAttachWindow(areaId, windowId), DockSetSize(nodeId, size).
 
 ---
 

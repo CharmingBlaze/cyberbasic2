@@ -5,6 +5,16 @@ CyberBasic provides two UI options:
 1. **Full raygui** (recommended when using CGO): the real [raygui](https://github.com/raysan5/raygui) library via **Gui*** functions. You place controls by (x, y, w, h). Requires CGO (gen2brain/raylib-go/raygui).
 2. **Pure-Go layout UI**: **BeginUI()** / **EndUI()** with a vertical cursor; widgets (Label, Button, Slider, etc.) advance the layout. No CGO; use when building with CGO_ENABLED=0.
 
+## Table of Contents
+
+1. [Full raygui (Gui* functions)](#full-raygui-gui-functions)
+2. [Pure-Go layout UI (BeginUI / EndUI)](#pure-go-layout-ui-beginui--endui)
+3. [Widgets](#widgets)
+4. [Example: options menu](#example-options-menu)
+5. [Notes](#notes)
+
+---
+
 ## Full raygui (Gui* functions)
 
 Use **Gui*** when building with CGO. Place controls by rectangle (x, y, width, height) in pixels:
@@ -94,4 +104,8 @@ WEND
 - **Dropdown / GuiDropdownBox:** itemsText uses semicolons: "Item1;Item2;Item3". activeIndex is 0-based.
 - **Slider / ProgressBar:** value, min, max are numbers; Slider returns the new value after dragging.
 
-See [API_REFERENCE.md](../API_REFERENCE.md) for the full list.
+## See also
+
+- [API Reference](../API_REFERENCE.md) – full list of GUI and raygui functions
+- [Documentation Index](DOCUMENTATION_INDEX.md)
+- [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)

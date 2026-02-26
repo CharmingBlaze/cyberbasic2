@@ -2,6 +2,14 @@
 
 This document summarizes program structure, comments, and the main language features.
 
+## Table of Contents
+
+1. [Comments](#comments)
+2. [Feature list (implemented)](#feature-list-implemented)
+3. [Block structure (quick reference)](#block-structure-quick-reference)
+4. [Example skeleton](#example-skeleton)
+5. [Hybrid update/draw loop](#hybrid-updatedraw-loop)
+
 ---
 
 ## Comments
@@ -33,7 +41,7 @@ PRINT x
 - **Null:** `Nil`, `Null`, `None`; `IsNull(value)`
 - **JSON/dict:** `LoadJSON`, `ParseJSON`, `GetJSONKey`, dict literal `{"key": value}` or `{key = value}`, `CreateDict`, `SetDictKey`, `Dictionary.has/keys/values/size/remove/clear/merge/get`
 - **File I/O:** `ReadFile`, `WriteFile`, `DeleteFile`, `CopyFile`, `ListDir`
-- **Includes:** `INCLUDE "file.bas"`
+- **Includes:** `#include "file.bas"` (or `IMPORT "file.bas"`); path relative to current file
 - **Events/coroutines:** `ON ... GOSUB`, `StartCoroutine`, `Yield`, `WaitSeconds`
 - **Graphics:** raylib (2D/3D), Box2D, Bullet; automatic frame/mode wrapping in game loops
 - **Multi-window:** `SpawnWindow`, `ConnectToParent`, `NET.*`
@@ -62,7 +70,7 @@ PRINT x
 
 ```basic
 // My game
-INCLUDE "constants.bas"
+#include "constants.bas"
 
 ENUM GameState
     Menu, Playing, Paused
@@ -72,15 +80,15 @@ VAR state = 0
 VAR config = {"width": 1024, "height": 768}
 
 FUNCTION main()
-    INITWINDOW(config["width"], config["height"], "Game")
-    SETTARGETFPS(60)
+    InitWindow(config["width"], config["height"], "Game")
+    SetTargetFPS(60)
     WHILE NOT WindowShouldClose()
         // Update and draw
         IF state = 0 THEN
             // menu
         ENDIF
     WEND
-    CLOSEWINDOW()
+    CloseWindow()
 ENDFUNCTION
 
 main()
@@ -89,6 +97,8 @@ main()
 ---
 
 ## Hybrid update/draw loop
+
+**When to use:** Prefer the hybrid loop for new games when you want automatic physics stepping and a clear split between update and draw. Use the manual loop when you need full control over the order of operations or legacy code.
 
 If you define **`update(dt)`** and/or **`draw()`** (as Sub or Function) and use a game loop (`WHILE NOT WindowShouldClose()` or `REPEAT ... UNTIL WindowShouldClose()`), the compiler replaces the loop body with an automatic pipeline:
 
@@ -115,3 +125,12 @@ WEND
 ```
 
 See **examples/hybrid_update_draw_demo.bas**. Scripts that do not define `update`/`draw` keep the previous behaviour (manual or compiler-wrapped Begin/End).
+
+---
+
+## See also
+
+- [Documentation Index](DOCUMENTATION_INDEX.md)
+- [Getting Started](GETTING_STARTED.md)
+- [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)
+- [Libraries and includes](LIBRARIES.md)

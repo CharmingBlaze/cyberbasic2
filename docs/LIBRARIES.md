@@ -2,6 +2,15 @@
 
 How to structure multi-file CyberBasic projects and reuse `.bas` code as libraries.
 
+## Table of Contents
+
+1. [Include syntax](#include-syntax)
+2. [Example layout](#example-layout)
+3. [Rules](#rules)
+4. [See also](#see-also)
+
+---
+
 ## Include syntax
 
 At the top of a `.bas` file (optionally after whitespace), use:

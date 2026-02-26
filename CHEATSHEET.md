@@ -24,27 +24,29 @@ CloseWindow()
 ## 3D game (Bullet + orbit camera)
 
 ```basic
-RL.InitWindow(1024, 600, "3D")
-RL.SetTargetFPS(60)
-RL.DisableCursor()
+InitWindow(1024, 600, "3D")
+SetTargetFPS(60)
+DisableCursor()
 BULLET.CreateWorld("w", 0, -18, 0)
 BULLET.CreateSphere("w", "player", 0, 0.5, 0, 0.5, 1)
 BULLET.CreateBox("w", "ground", 0, -0.5, 0, 12.5, 0.5, 12.5, 0)
 VAR camAngle = 0
 REPEAT
-  LET dt = RL.GetFrameTime()
+  VAR dt = GetFrameTime()
   BULLET.Step("w", dt)
   GAME.MoveWASD("w", "player", camAngle, 120, 9, dt)
-  LET px = BULLET.GetPositionX("w", "player")
-  LET py = BULLET.GetPositionY("w", "player")
-  LET pz = BULLET.GetPositionZ("w", "player")
+  VAR px = BULLET.GetPositionX("w", "player")
+  VAR py = BULLET.GetPositionY("w", "player")
+  VAR pz = BULLET.GetPositionZ("w", "player")
   GAME.CameraOrbit(px, py+1.5, pz, camAngle, 0.2, 10)
-  RL.ClearBackground(RL.SkyBlue)
-  RL.DrawCube(0, -0.5, 0, 25, 1, 25, RL.DarkGreen)
-  RL.DrawSphere(px, py, pz, 0.5, RL.Red)
-UNTIL RL.WindowShouldClose()
-RL.CloseWindow()
+  ClearBackground(SkyBlue)
+  DrawCube(0, -0.5, 0, 25, 1, 25, DarkGreen)
+  DrawSphere(px, py, pz, 0.5, Red)
+UNTIL WindowShouldClose()
+CloseWindow()
 ```
+
+**Hybrid loop:** Define **`update(dt)`** and **`draw()`** (Sub or Function) and use an empty game loop body; the compiler injects physics step, update, clear, draw, and flush automatically. See [docs/PROGRAM_STRUCTURE.md](docs/PROGRAM_STRUCTURE.md).
 
 **Movement:** Use **GetAxisX()** / **GetAxisY()** for -1/0/1, or **GAME.MoveWASD** / **MoveHorizontal2D** for full 2D/3D. **Delta time:** **DeltaTime()** or **GetFrameTime()**; clamp with `IF dt > 0.05 THEN LET dt = 0.016` for physics.  
 **Center screen:** **GetScreenCenterX()**, **GetScreenCenterY()** – center UI or spawn. **Distance:** **Distance2D(x1, y1, x2, y2)** and **Distance3D(x1, y1, z1, x2, y2, z2)** for simple distance.  

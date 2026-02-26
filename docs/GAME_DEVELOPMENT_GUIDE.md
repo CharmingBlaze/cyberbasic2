@@ -5,17 +5,18 @@ Complete guide to making games with CyberBasic: game loop, input, GAME.* helpers
 ## Table of Contents
 
 1. [Game loop pattern](#game-loop-pattern)
-2. [Input](#input)
-3. [GAME.* helpers](#game-helpers)
-4. [2D physics (Box2D)](#2d-physics-box2d)
-5. [3D physics (Bullet)](#3d-physics-bullet)
-6. [Collision callbacks (2D)](#collision-callbacks-2d)
-7. [ECS (Entity-Component System)](#ecs-entity-component-system)
-8. [Quality of life](#quality-of-life)
-9. [State machines](#state-machines)
-10. [Best practices](#best-practices)
-11. [Physics stubs](#physics-stubs)
-12. [2D and 3D quick reference](#2d-and-3d-quick-reference)
+2. [Hybrid update/draw loop](#hybrid-updatedraw-loop)
+3. [Input](#input)
+4. [GAME.* helpers](#game-helpers)
+5. [2D physics (Box2D)](#2d-physics-box2d)
+6. [3D physics (Bullet)](#3d-physics-bullet)
+7. [Collision callbacks (2D)](#collision-callbacks-2d)
+8. [ECS (Entity-Component System)](#ecs-entity-component-system)
+9. [Quality of life](#quality-of-life)
+10. [State machines](#state-machines)
+11. [Best practices](#best-practices)
+12. [Physics stubs](#physics-stubs)
+13. [2D and 3D quick reference](#2d-and-3d-quick-reference)
 
 ---
 
@@ -46,9 +47,13 @@ WEND
 CloseWindow()
 ```
 
-The compiler does not inject any frame or mode calls; your loop compiles as written (DBPro-style).
+The compiler does not inject any frame or mode calls; your loop compiles as written (DBPro-style). Exception: the **hybrid loop** (see below).
 
 See [2D Graphics Guide](2D_GRAPHICS_GUIDE.md) and [3D Graphics Guide](3D_GRAPHICS_GUIDE.md) for the 2D and 3D game checklists and full examples.
+
+### Hybrid update/draw loop
+
+If you define **update(dt)** and **draw()** (as Sub or Function) and use a game loop (`WHILE NOT WindowShouldClose()` or `REPEAT ... UNTIL WindowShouldClose()`), the compiler **replaces the loop body** with an automatic pipeline: GetFrameTime → StepAllPhysics2D(dt), StepAllPhysics3D(dt) → update(dt) → ClearRenderQueues → draw() (Draw*/Gui* calls are queued) → FlushRenderQueues. You do not call BeginDrawing/EndDrawing or BeginMode2D/EndMode3D yourself. Prefer this for new games when you want a clear update/draw split and automatic physics stepping. See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop) and **examples/hybrid_update_draw_demo.bas**.
 
 ---
 

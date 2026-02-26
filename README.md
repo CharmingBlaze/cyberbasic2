@@ -39,6 +39,8 @@ CyberBasic/
 - **Event handlers:** On KeyDown("KEY") … End On, On KeyPressed("KEY") … End On; run when PollInputEvents() is called.
 - **Coroutines:** StartCoroutine SubName(), Yield, WaitSeconds(seconds); fibers share the same chunk (WaitSeconds currently blocks the whole VM).
 - Raylib-style API (unprefixed or `RL.`): InitWindow, ClearBackground, DrawCircle, LoadImage, LoadSound, PlayMusic, etc.
+- **Hybrid loop:** Define **update(dt)** and **draw()** for automatic physics step and render queue; empty game loop body. See [Program Structure](docs/PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
+- **In-process multi-window:** WindowCreate, WindowClose, Channel/State, OnWindowUpdate/Draw, WindowDrawAllToScreen. See [In-process multi-window](docs/MULTI_WINDOW_INPROCESS.md).
 - Export to C code: **ExportImageAsCode**, **ExportFontAsCode**, **ExportWaveAsCode** (write .h with pixel/sample data)
 - Physics: BOX2D.* (2D), BULLET.* (3D)
 
@@ -62,6 +64,7 @@ CyberBasic/
 - **[Game Development Guide](docs/GAME_DEVELOPMENT_GUIDE.md)** – Game loop, input, physics, ECS
 - **[GUI Guide](docs/GUI_GUIDE.md)** – Immediate-mode UI (Button, Slider, Checkbox, TextBox, etc.)
 - **[Multiplayer](docs/MULTIPLAYER.md)** – TCP client/server (Connect, Send, Receive, Host, Accept)
+- **[In-process multi-window](docs/MULTI_WINDOW_INPROCESS.md)** – Multiple viewports in one process
 - **[API Reference](API_REFERENCE.md)** – All bindings
 
 ## Building
