@@ -154,6 +154,14 @@ func (l *Lexer) NextToken() Token {
 		tok.Value = l.readString()
 		tok.Line = l.line
 		tok.Col = l.col - len(tok.Value) - 2
+		return tok
+	case '&':
+		colStart := l.col - 1
+		if num, ok := l.readAmpersandNumber(); ok {
+			tok = Token{Type: TokenNumber, Value: num, Line: l.line, Col: colStart}
+			return tok
+		}
+		tok = Token{Type: TokenUnknown, Value: "&", Line: l.line, Col: colStart}
 	default:
 		if unicode.IsDigit(l.current) {
 			num := l.readNumber()
@@ -192,33 +200,140 @@ func (l *Lexer) readIdentifier() string {
 	return l.input[position : l.pos-1]
 }
 
-// readNumber reads a number (integer or float)
+// readNumber reads a number: decimal, hex (0x/0X or &H/&h), or binary (0b/0B or &B/&b).
+// Returns the value as a decimal string for the rest of the pipeline.
 func (l *Lexer) readNumber() string {
+	// Hex: 0x / 0X
+	if l.current == '0' && (l.peekChar() == 'x' || l.peekChar() == 'X') {
+		l.readChar()
+		l.readChar()
+		hex := l.readHexDigits()
+		return l.parseIntToDecimal(hex, 16)
+	}
+	if l.current == '0' && (l.peekChar() == 'b' || l.peekChar() == 'B') {
+		l.readChar()
+		l.readChar()
+		bin := l.readBinaryDigits()
+		return l.parseIntToDecimal(bin, 2)
+	}
+	// Decimal
 	position := l.pos - 1
 	for unicode.IsDigit(l.current) {
 		l.readChar()
 	}
-
 	if l.current == '.' {
 		l.readChar()
 		for unicode.IsDigit(l.current) {
 			l.readChar()
 		}
 	}
-
 	return l.input[position : l.pos-1]
 }
 
-// readString reads a string literal
-func (l *Lexer) readString() string {
-	position := l.pos
-	for {
+func (l *Lexer) readHexDigits() string {
+	var b strings.Builder
+	for l.current != 0 && (unicode.IsDigit(l.current) || (l.current >= 'a' && l.current <= 'f') || (l.current >= 'A' && l.current <= 'F')) {
+		b.WriteRune(l.current)
 		l.readChar()
-		if l.current == '"' || l.current == 0 {
-			break
+	}
+	return b.String()
+}
+
+func (l *Lexer) readBinaryDigits() string {
+	var b strings.Builder
+	for l.current == '0' || l.current == '1' {
+		b.WriteRune(l.current)
+		l.readChar()
+	}
+	return b.String()
+}
+
+// readAmpersandNumber reads &H... (hex) or &B... (binary). Caller has seen '&'.
+// Returns (decimal string, true) or ("", false) if not a number. Does not consume & on false.
+func (l *Lexer) readAmpersandNumber() (string, bool) {
+	next := l.peekChar()
+	if next == 'H' || next == 'h' {
+		l.readChar() // &
+		l.readChar() // H/h
+		hex := l.readHexDigits()
+		return l.parseIntToDecimal(hex, 16), true
+	}
+	if next == 'B' || next == 'b' {
+		l.readChar() // &
+		l.readChar() // B/b
+		bin := l.readBinaryDigits()
+		return l.parseIntToDecimal(bin, 2), true
+	}
+	return "", false
+}
+
+// parseIntToDecimal parses s as base (16 or 2) and returns decimal string.
+func (l *Lexer) parseIntToDecimal(s string, base int) string {
+	if s == "" {
+		return "0"
+	}
+	var n int64
+	for _, r := range s {
+		n *= int64(base)
+		if base == 2 {
+			n += int64(r - '0')
+		} else {
+			switch {
+			case r >= '0' && r <= '9':
+				n += int64(r - '0')
+			case r >= 'a' && r <= 'f':
+				n += int64(r-'a') + 10
+			case r >= 'A' && r <= 'F':
+				n += int64(r-'A') + 10
+			}
 		}
 	}
-	return l.input[position-1 : l.pos-1]
+	return fmt.Sprintf("%d", n)
+}
+
+// readString reads a string literal and resolves escape sequences.
+// Supports: \", \\, \n, \t, \r, and \xHH (two hex digits).
+func (l *Lexer) readString() string {
+	var b strings.Builder
+	l.readChar() // consume opening "
+	for l.current != '"' && l.current != 0 {
+		if l.current == '\\' {
+			l.readChar()
+			switch l.current {
+			case '"':
+				b.WriteRune('"')
+			case '\\':
+				b.WriteRune('\\')
+			case 'n':
+				b.WriteRune('\n')
+			case 't':
+				b.WriteRune('\t')
+			case 'r':
+				b.WriteRune('\r')
+			case 'x', 'X':
+				l.readChar()
+				hex := ""
+				for l.current != 0 && (unicode.IsDigit(l.current) || (l.current >= 'a' && l.current <= 'f') || (l.current >= 'A' && l.current <= 'F')) && len(hex) < 2 {
+					hex += string(l.current)
+					l.readChar()
+				}
+				if len(hex) > 0 {
+					var code int
+					fmt.Sscanf(hex, "%x", &code)
+					b.WriteRune(rune(code & 0xFF))
+				}
+				continue
+			default:
+				b.WriteRune(l.current)
+			}
+			l.readChar()
+			continue
+		}
+		b.WriteRune(l.current)
+		l.readChar()
+	}
+	l.readChar() // consume closing "
+	return b.String()
 }
 
 // skipWhitespace skips whitespace characters (except newlines)

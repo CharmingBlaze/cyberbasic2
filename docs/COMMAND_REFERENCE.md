@@ -104,6 +104,8 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **DrawModel**(id, x, y, z, scale [, tint]) | Draw model at position with scale |
 | **DrawModelSimple**(id, x, y, z [, angle]) | Draw at (x,y,z), scale 1; uses SetModelColor / RotateModel state |
 | **DrawModelEx**(id, posX, posY, posZ, rotAxisX,Y,Z, rotAngle, scaleX,Y,Z [, tint]) | Full transform and tint |
+| **DrawCube**(posX, posY, posZ, width, height, length, color) | Filled 3D cube (primitive) |
+| **cube**(…) | Alias of DrawCube |
 | **SetModelColor**(modelId, r, g, b, a) | Stored tint for DrawModelSimple |
 | **RotateModel**(modelId, speedDegPerSec) | Auto-rotate model each frame |
 | **UnloadModel**(id) | Free model |
@@ -119,7 +121,9 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **DrawText**(text, x, y, size, r, g, b, a) | Text at (x,y) with font size and color |
 | **DrawTextSimple**(text, x, y) | Text at (x,y), size 20, white *(use for on-screen; PRINT = console)* |
 | **DrawRectangle**(x, y, w, h, r, g, b, a) | Filled rectangle |
+| **rect**(…) | Alias of DrawRectangle |
 | **DrawCircle**(x, y, radius, r, g, b, a) | Filled circle |
+| **circle**(…) | Alias of DrawCircle |
 
 ---
 
@@ -187,7 +191,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **LoadModelAnimated**(path) | **PlayModelAnimation**(model, anim) | **SetModelTexture**(model, texture) | **LoadTexture**(path) **UnloadTexture**(id) | **SetObjectPosition**(obj, x,y,z) **SetObjectRotation**(obj, pitch,yaw,roll) **SetObjectScale**(obj, sx,sy,sz) | **ObjectLookAt**(obj, x,y,z) |
 
 ### 2D drawing (extended)
-| **DrawSprite**(spriteId, x, y) | **LoadSprite**(path) (alias LoadTexture) | **DrawLine**(x1,y1,x2,y2, r,g,b,a) | **DrawTriangle**(…) | **DrawTexture**(id, x, y) | **MeasureText**(text, size) |
+| **DrawSprite**(spriteId, x, y) | **LoadSprite**(path) (alias LoadTexture) | **DrawLine**(x1,y1,x2,y2, r,g,b,a) | **DrawTriangle**(…) | **DrawTexture**(id, x, y) **sprite**(…) (alias) | **MeasureText**(text, size) |
 
 ### Audio (extended)
 | **LoadMusic**(path) | **PlayMusic**(id) **PauseMusic**(id) **ResumeMusic**(id) | **SetMusicVolume**(id, vol) | **IsMusicPlaying**(id) |
@@ -229,6 +233,7 @@ Use `PhysicsEnable()` then `BULLET.Step("default", GetFrameTime())` each frame. 
 | Command | Description |
 |--------|-------------|
 | **GuiButton**(text, x, y, w, h) | Button; returns 1 if clicked else 0 |
+| **button**(…) | Alias of GuiButton |
 | **GuiLabel**(x, y, w, h, text) | Label (or GuiLabel text, x, y for simple) |
 | **GuiSlider**(x, y, w, min, max, value) | Slider; returns current value (6-arg). Also (x,y,w,h, textL, textR, value, min, max) |
 | **GuiCheckbox**(text, x, y, checked) | Checkbox; returns 1 if checked else 0 |

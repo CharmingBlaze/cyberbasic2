@@ -52,6 +52,12 @@ type Node interface {
 	String() string
 }
 
+// HasSourceLoc is implemented by nodes that carry source location for error reporting.
+type HasSourceLoc interface {
+	GetLine() int
+	GetCol() int
+}
+
 // Program represents the entire program
 type Program struct {
 	Statements []Node
@@ -234,9 +240,13 @@ type Assignment struct {
 	Variable string
 	Indices  []Node // nil = scalar assignment; non-nil = array element
 	Value    Node
+	Line     int
+	Col      int
 }
 
-func (a *Assignment) Type() NodeType { return NodeAssignment }
+func (a *Assignment) Type() NodeType   { return NodeAssignment }
+func (a *Assignment) GetLine() int    { return a.Line }
+func (a *Assignment) GetCol() int     { return a.Col }
 func (a *Assignment) String() string {
 	if len(a.Indices) > 0 {
 		s := a.Variable + "("
@@ -257,9 +267,13 @@ type CompoundAssign struct {
 	Variable string
 	Op       string // "+=", "-=", "*=", "/="
 	Value    Node
+	Line     int
+	Col      int
 }
 
 func (a *CompoundAssign) Type() NodeType { return NodeCompoundAssign }
+func (a *CompoundAssign) GetLine() int   { return a.Line }
+func (a *CompoundAssign) GetCol() int   { return a.Col }
 func (a *CompoundAssign) String() string { return a.Variable + " " + a.Op + " " + a.Value.String() }
 
 // ExitLoopStatement represents EXIT FOR or EXIT WHILE (or BREAK FOR / BREAK WHILE).
@@ -338,9 +352,13 @@ type BinaryOp struct {
 	Operator string
 	Left     Node
 	Right    Node
+	Line     int
+	Col      int
 }
 
 func (b *BinaryOp) Type() NodeType { return NodeBinaryOp }
+func (b *BinaryOp) GetLine() int   { return b.Line }
+func (b *BinaryOp) GetCol() int    { return b.Col }
 func (b *BinaryOp) String() string {
 	return "(" + b.Left.String() + " " + b.Operator + " " + b.Right.String() + ")"
 }
@@ -349,18 +367,26 @@ func (b *BinaryOp) String() string {
 type UnaryOp struct {
 	Operator string
 	Operand  Node
+	Line     int
+	Col      int
 }
 
 func (u *UnaryOp) Type() NodeType { return NodeUnaryOp }
+func (u *UnaryOp) GetLine() int   { return u.Line }
+func (u *UnaryOp) GetCol() int    { return u.Col }
 func (u *UnaryOp) String() string { return u.Operator + u.Operand.String() }
 
 // Call represents a function or procedure call
 type Call struct {
 	Name      string
 	Arguments []Node
+	Line      int
+	Col       int
 }
 
 func (c *Call) Type() NodeType { return NodeCall }
+func (c *Call) GetLine() int   { return c.Line }
+func (c *Call) GetCol() int    { return c.Col }
 func (c *Call) String() string {
 	result := c.Name + "("
 	for i, arg := range c.Arguments {
@@ -406,9 +432,13 @@ func (n *NilLiteral) String() string { return "nil" }
 // Identifier represents a variable or function name
 type Identifier struct {
 	Name string
+	Line int
+	Col  int
 }
 
 func (i *Identifier) Type() NodeType { return NodeIdentifier }
+func (i *Identifier) GetLine() int   { return i.Line }
+func (i *Identifier) GetCol() int    { return i.Col }
 func (i *Identifier) String() string { return i.Name }
 
 // Block represents a block of statements

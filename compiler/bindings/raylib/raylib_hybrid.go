@@ -49,7 +49,9 @@ func registerRenderTypes(v *vm.VM) {
 	}
 	// 2D: shapes, text, textures, clear, mode
 	reg("DrawRectangle", vm.Render2D)
+	reg("rect", vm.Render2D)
 	reg("DrawCircle", vm.Render2D)
+	reg("circle", vm.Render2D)
 	reg("DrawLine", vm.Render2D)
 	reg("DrawLineV", vm.Render2D)
 	reg("DrawCircleLines", vm.Render2D)
@@ -81,6 +83,7 @@ func registerRenderTypes(v *vm.VM) {
 	reg("DrawTextPro", vm.Render2D)
 	reg("DrawSprite", vm.Render2D)
 	reg("DrawTexture", vm.Render2D)
+	reg("sprite", vm.Render2D)
 	reg("DrawTextureEx", vm.Render2D)
 	reg("DrawTextureRec", vm.Render2D)
 	reg("DrawTexturePro", vm.Render2D)
@@ -102,6 +105,7 @@ func registerRenderTypes(v *vm.VM) {
 	reg("DrawModel", vm.Render3D)
 	reg("DrawModelSimple", vm.Render3D)
 	reg("DrawCube", vm.Render3D)
+	reg("cube", vm.Render3D)
 	reg("DrawCubeWires", vm.Render3D)
 	reg("DrawSphere", vm.Render3D)
 	reg("DrawSphereWires", vm.Render3D)
@@ -137,6 +141,7 @@ func registerRenderTypes(v *vm.VM) {
 	// GUI (raygui)
 	reg("GuiLabel", vm.RenderGUI)
 	reg("GuiButton", vm.RenderGUI)
+	reg("button", vm.RenderGUI)
 	reg("GuiCheckBox", vm.RenderGUI)
 	reg("GuiCheckbox", vm.RenderGUI)
 	reg("GuiSlider", vm.RenderGUI)

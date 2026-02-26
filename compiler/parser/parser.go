@@ -756,6 +756,8 @@ func (p *Parser) printStatement() (Node, error) {
 	return &Call{
 		Name:      "print",
 		Arguments: arguments,
+		Line:      p.line(),
+		Col:       p.col(),
 	}, nil
 }
 
@@ -782,6 +784,8 @@ func (p *Parser) strStatement() (Node, error) {
 	return &Call{
 		Name:      "str",
 		Arguments: arguments,
+		Line:      p.line(),
+		Col:       p.col(),
 	}, nil
 }
 
@@ -792,7 +796,7 @@ func (p *Parser) sleepStatement() (Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Call{Name: "sleep", Arguments: []Node{arg}}, nil
+	return &Call{Name: "sleep", Arguments: []Node{arg}, Line: p.line(), Col: p.col()}, nil
 }
 
 // waitStatement parses WAIT ms or WAIT(ms)
@@ -802,7 +806,7 @@ func (p *Parser) waitStatement() (Node, error) {
 	if err != nil {
 		return nil, err
 	}
-	return &Call{Name: "wait", Arguments: []Node{arg}}, nil
+	return &Call{Name: "wait", Arguments: []Node{arg}, Line: p.line(), Col: p.col()}, nil
 }
 
 // returnStatement parses RETURN statement
@@ -909,35 +913,35 @@ func (p *Parser) assignmentOrCall() (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &CompoundAssign{Variable: name, Op: "+=", Value: value}, nil
+		return &CompoundAssign{Variable: name, Op: "+=", Value: value, Line: p.line(), Col: p.col()}, nil
 	}
 	if p.match(lexer.TokenMinusAssign) {
 		value, err := p.expression()
 		if err != nil {
 			return nil, err
 		}
-		return &CompoundAssign{Variable: name, Op: "-=", Value: value}, nil
+		return &CompoundAssign{Variable: name, Op: "-=", Value: value, Line: p.line(), Col: p.col()}, nil
 	}
 	if p.match(lexer.TokenStarAssign) {
 		value, err := p.expression()
 		if err != nil {
 			return nil, err
 		}
-		return &CompoundAssign{Variable: name, Op: "*=", Value: value}, nil
+		return &CompoundAssign{Variable: name, Op: "*=", Value: value, Line: p.line(), Col: p.col()}, nil
 	}
 	if p.match(lexer.TokenSlashAssign) {
 		value, err := p.expression()
 		if err != nil {
 			return nil, err
 		}
-		return &CompoundAssign{Variable: name, Op: "/=", Value: value}, nil
+		return &CompoundAssign{Variable: name, Op: "/=", Value: value, Line: p.line(), Col: p.col()}, nil
 	}
 	if p.match(lexer.TokenAssign) {
 		value, err := p.expression()
 		if err != nil {
 			return nil, err
 		}
-		return &Assignment{Variable: name, Value: value}, nil
+		return &Assignment{Variable: name, Value: value, Line: p.line(), Col: p.col()}, nil
 	}
 	if p.match(lexer.TokenLeftParen) {
 		var arguments []Node
@@ -961,11 +965,11 @@ func (p *Parser) assignmentOrCall() (Node, error) {
 			if err != nil {
 				return nil, err
 			}
-			return &Assignment{Variable: name, Indices: arguments, Value: value}, nil
+			return &Assignment{Variable: name, Indices: arguments, Value: value, Line: p.line(), Col: p.col()}, nil
 		}
-		return &Call{Name: name, Arguments: arguments}, nil
+		return &Call{Name: name, Arguments: arguments, Line: p.line(), Col: p.col()}, nil
 	} else {
-		return &Identifier{Name: name}, nil
+		return &Identifier{Name: name, Line: p.line(), Col: p.col()}, nil
 	}
 }
 
@@ -1072,7 +1076,7 @@ func (p *Parser) selectCaseStatement() (Node, error) {
 // quitStatement parses QUIT or END (exit program)
 func (p *Parser) quitStatement() (Node, error) {
 	p.advance() // QUIT
-	return &Call{Name: "quit", Arguments: nil}, nil
+	return &Call{Name: "quit", Arguments: nil, Line: p.line(), Col: p.col()}, nil
 }
 
 // blockUntilUntil parses statements until UNTIL (does not consume UNTIL)
@@ -1169,7 +1173,7 @@ func (p *Parser) logicalOr() (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryOp{Operator: op, Left: left, Right: right}
+		left = &BinaryOp{Operator: op, Left: left, Right: right, Line: p.line(), Col: p.col()}
 	}
 
 	return left, nil
@@ -1186,7 +1190,7 @@ func (p *Parser) logicalXor() (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryOp{Operator: "XOR", Left: left, Right: right}
+		left = &BinaryOp{Operator: "XOR", Left: left, Right: right, Line: p.line(), Col: p.col()}
 	}
 	return left, nil
 }
@@ -1204,7 +1208,7 @@ func (p *Parser) logicalAnd() (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryOp{Operator: op, Left: left, Right: right}
+		left = &BinaryOp{Operator: op, Left: left, Right: right, Line: p.line(), Col: p.col()}
 	}
 
 	return left, nil
@@ -1223,7 +1227,7 @@ func (p *Parser) equality() (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryOp{Operator: op, Left: left, Right: right}
+		left = &BinaryOp{Operator: op, Left: left, Right: right, Line: p.line(), Col: p.col()}
 	}
 
 	return left, nil
@@ -1242,7 +1246,7 @@ func (p *Parser) comparison() (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryOp{Operator: op, Left: left, Right: right}
+		left = &BinaryOp{Operator: op, Left: left, Right: right, Line: p.line(), Col: p.col()}
 	}
 
 	return left, nil
@@ -1261,7 +1265,7 @@ func (p *Parser) term() (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryOp{Operator: op, Left: left, Right: right}
+		left = &BinaryOp{Operator: op, Left: left, Right: right, Line: p.line(), Col: p.col()}
 	}
 
 	return left, nil
@@ -1280,7 +1284,7 @@ func (p *Parser) factor() (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryOp{Operator: op, Left: left, Right: right}
+		left = &BinaryOp{Operator: op, Left: left, Right: right, Line: p.line(), Col: p.col()}
 	}
 
 	return left, nil
@@ -1297,7 +1301,7 @@ func (p *Parser) power() (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		left = &BinaryOp{Operator: "^", Left: left, Right: right}
+		left = &BinaryOp{Operator: "^", Left: left, Right: right, Line: p.line(), Col: p.col()}
 	}
 	return left, nil
 }
@@ -1310,7 +1314,7 @@ func (p *Parser) unary() (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &UnaryOp{Operator: op, Operand: right}, nil
+		return &UnaryOp{Operator: op, Operand: right, Line: p.line(), Col: p.col()}, nil
 	}
 	// Treat identifier "NOT" as unary operator when lexer returns TokenIdentifier
 	if !p.isAtEnd() && p.peek().Type == lexer.TokenIdentifier && strings.EqualFold(p.peek().Value, "NOT") {
@@ -1319,7 +1323,7 @@ func (p *Parser) unary() (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		return &UnaryOp{Operator: "NOT", Operand: right}, nil
+		return &UnaryOp{Operator: "NOT", Operand: right, Line: p.line(), Col: p.col()}, nil
 	}
 
 	return p.primary()
@@ -1395,7 +1399,7 @@ func (p *Parser) primary() (Node, error) {
 				return nil, &Error{Message: "expected ')'", Line: p.line(), Col: p.col()}
 			}
 		}
-		return &Call{Name: "shouldclose", Arguments: nil}, nil
+		return &Call{Name: "shouldclose", Arguments: nil, Line: p.line(), Col: p.col()}, nil
 	case lexer.TokenStr:
 		p.advance()
 		if !p.match(lexer.TokenLeftParen) {
@@ -1415,12 +1419,12 @@ func (p *Parser) primary() (Node, error) {
 		if !p.match(lexer.TokenRightParen) {
 			return nil, &Error{Message: "expected ')'", Line: p.line(), Col: p.col()}
 		}
-		return &Call{Name: "str", Arguments: arguments}, nil
+		return &Call{Name: "str", Arguments: arguments, Line: p.line(), Col: p.col()}, nil
 	}
 
 	if p.match(lexer.TokenIdentifier) {
-		firstId := p.previous().Value
-		left, err := p.parseMemberAccessChain(&Identifier{Name: firstId})
+		prev := p.previous()
+		left, err := p.parseMemberAccessChain(&Identifier{Name: prev.Value, Line: prev.Line, Col: prev.Col})
 		if err != nil {
 			return nil, err
 		}

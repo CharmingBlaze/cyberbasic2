@@ -165,8 +165,19 @@ func (c *Compiler) compileDecl(stmt parser.Node, chunk *vm.Chunk) error {
 	}
 }
 
+// getSourceLine returns the source line for error reporting (0 if node has no location).
+func getSourceLine(node parser.Node) int {
+	if loc, ok := node.(parser.HasSourceLoc); ok {
+		return loc.GetLine()
+	}
+	return 0
+}
+
 // compileStatement compiles a single statement
 func (c *Compiler) compileStatement(stmt parser.Node, chunk *vm.Chunk) error {
+	if line := getSourceLine(stmt); line > 0 {
+		chunk.SetLine(line)
+	}
 	switch node := stmt.(type) {
 	case *parser.Assignment:
 		return c.compileAssignment(node, chunk)
@@ -230,6 +241,9 @@ func (c *Compiler) compileStatement(stmt parser.Node, chunk *vm.Chunk) error {
 
 // compileExpression compiles an expression
 func (c *Compiler) compileExpression(expr parser.Node, chunk *vm.Chunk) error {
+	if line := getSourceLine(expr); line > 0 {
+		chunk.SetLine(line)
+	}
 	switch node := expr.(type) {
 	case *parser.Number:
 		return c.compileNumber(node, chunk)

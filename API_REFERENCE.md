@@ -14,7 +14,9 @@ InitWindow, SetTargetFPS, WindowShouldClose, CloseWindow, SetWindowPosition, Cle
 
 **Note:** The compiler does not inject any frame or mode calls; your code compiles exactly as written (DBPro-style). Exception: when you define **update(dt)** and **draw()** (Sub or Function) and use a game loop, the compiler injects the **hybrid loop** (see below).
 
-**Hybrid loop (raylib_hybrid.go):** **ClearRenderQueues**(), **FlushRenderQueues**() – clear and then execute the 2D/3D/GUI render queues. **StepAllPhysics2D**(dt), **StepAllPhysics3D**(dt) – step all registered Box2D/Bullet worlds. When **update(dt)** and/or **draw()** are defined and the main loop is a game loop, the compiler invokes them automatically (GetFrameTime → physics step → update(dt) → ClearRenderQueues → draw() → FlushRenderQueues). Draw*/Gui* calls inside draw() are queued and flushed in order. See [Program Structure](docs/PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
+**Hybrid loop (raylib_hybrid.go):** **ClearRenderQueues**(), **FlushRenderQueues**() – clear and then execute the 2D/3D/GUI render queues.
+
+**Short aliases (same args as canonical):** **rect** → DrawRectangle, **circle** → DrawCircle, **cube** → DrawCube, **button** → GuiButton, **sprite** → DrawTexture. **StepAllPhysics2D**(dt), **StepAllPhysics3D**(dt) – step all registered Box2D/Bullet worlds. When **update(dt)** and/or **draw()** are defined and the main loop is a game loop, the compiler invokes them automatically (GetFrameTime → physics step → update(dt) → ClearRenderQueues → draw() → FlushRenderQueues). Draw*/Gui* calls inside draw() are queued and flushed in order. See [Program Structure](docs/PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
 
 ---
 

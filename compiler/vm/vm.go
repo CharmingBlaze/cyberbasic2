@@ -89,6 +89,11 @@ func NewVM() *VM {
 	}
 }
 
+// Chunk returns the currently loaded chunk (nil if none). Used by runtime.StepFrame to detect update/draw.
+func (vm *VM) Chunk() *Chunk {
+	return vm.chunk
+}
+
 // LoadChunk loads a bytecode chunk into the VM
 func (vm *VM) LoadChunk(chunk *Chunk) {
 	vm.chunk = chunk
@@ -321,7 +326,36 @@ func (vm *VM) Step() error {
 	}
 	instruction := vm.chunk.Code[vm.ip]
 	vm.ip++
-	return vm.executeInstruction(instruction)
+	err := vm.executeInstruction(instruction)
+	if err != nil && vm.chunk != nil {
+		line := vm.chunk.LineAt(vm.ip - 1)
+		if line > 0 {
+			err = fmt.Errorf("line %d: %w", line, err)
+		}
+	}
+	return err
+}
+
+// StackFrame is one frame in a stack trace (IP and source line).
+type StackFrame struct {
+	IP   int
+	Line int
+}
+
+// StackTrace returns the current call stack for debugging (current IP first, then return addresses).
+func (vm *VM) StackTrace() []StackFrame {
+	if vm.chunk == nil {
+		return nil
+	}
+	var frames []StackFrame
+	if vm.ip >= 0 && vm.ip <= len(vm.chunk.Code) {
+		frames = append(frames, StackFrame{IP: vm.ip, Line: vm.chunk.LineAt(vm.ip)})
+	}
+	for i := len(vm.callStack) - 1; i >= 0; i-- {
+		ip := vm.callStack[i]
+		frames = append(frames, StackFrame{IP: ip, Line: vm.chunk.LineAt(ip)})
+	}
+	return frames
 }
 
 // ProcessEvents invokes registered On KeyDown/KeyPressed handlers when the runtime reports matching key state.

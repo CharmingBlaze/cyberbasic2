@@ -314,4 +314,19 @@ func RegisterRaylib(v *vm.VM) {
 	registerAdvanced(v)
 	registerMultiWindow(v)
 	registerHybrid(v)
+	registerAliases(v)
+}
+
+// registerAliases registers short names that delegate to the canonical Draw*/Gui* functions.
+func registerAliases(v *vm.VM) {
+	alias := func(aliasName, canonical string) {
+		v.RegisterForeign(aliasName, func(args []interface{}) (interface{}, error) {
+			return v.CallForeign(canonical, args)
+		})
+	}
+	alias("rect", "DrawRectangle")
+	alias("circle", "DrawCircle")
+	alias("cube", "DrawCube")
+	alias("button", "GuiButton")
+	alias("sprite", "DrawTexture")
 }

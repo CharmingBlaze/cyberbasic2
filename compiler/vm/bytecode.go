@@ -209,18 +209,21 @@ type EnumMembers map[string]int64
 // Chunk represents a compiled bytecode chunk
 type Chunk struct {
 	Code      []byte
+	Lines     []int // source line per byte in Code (same length as Code; 0 = unknown)
 	Constants []Value
 	Variables map[string]int
 	VarDims   map[string][]int // array dimensions per variable (nil = scalar)
 	Functions map[string]int   // user Sub/Function name (lowercase) -> code offset
 	// Enums: enum name (lowercase) -> member name (lowercase) -> value; used by Enum.getValue/getName/hasValue at runtime
 	Enums map[string]EnumMembers
+	currentLine int // used by compiler when emitting; Write records this into Lines
 }
 
 // NewChunk creates a new bytecode chunk
 func NewChunk() *Chunk {
 	return &Chunk{
 		Code:      make([]byte, 0),
+		Lines:     make([]int, 0),
 		Constants: make([]Value, 0),
 		Variables: make(map[string]int),
 		VarDims:   make(map[string][]int),
@@ -229,15 +232,30 @@ func NewChunk() *Chunk {
 	}
 }
 
-// Write adds a byte to the chunk
+// SetLine sets the source line for subsequently emitted bytes (used by compiler).
+func (c *Chunk) SetLine(line int) {
+	c.currentLine = line
+}
+
+// LineAt returns the source line for the given instruction pointer (0 if unknown or out of range).
+func (c *Chunk) LineAt(ip int) int {
+	if ip < 0 || ip >= len(c.Lines) {
+		return 0
+	}
+	return c.Lines[ip]
+}
+
+// Write adds a byte to the chunk and records the current source line for this instruction.
 func (c *Chunk) Write(b byte) {
 	c.Code = append(c.Code, b)
+	c.Lines = append(c.Lines, c.currentLine)
 }
 
 // WriteJumpOffset writes a 2-byte signed offset (int16 little-endian) for backward-compatible long jumps.
 func (c *Chunk) WriteJumpOffset(offset int) {
 	off := int16(offset)
 	c.Code = append(c.Code, byte(off), byte(off>>8))
+	c.Lines = append(c.Lines, c.currentLine, c.currentLine)
 }
 
 // PatchJumpOffset patches the last 2 bytes at the given position with the given offset (int16).
