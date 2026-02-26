@@ -1144,27 +1144,37 @@ func (c *Compiler) compileAssertStatement(a *parser.AssertStatement, chunk *vm.C
 func (c *Compiler) compileRepeatStatement(r *parser.RepeatStatement, chunk *vm.Chunk) error {
 	loopStart := len(chunk.Code)
 	wrapFrame := isGameLoopCondition(r.Condition, true)
+	hybridMode := wrapFrame && (c.userFuncs["update"] || c.userFuncs["draw"])
+	if hybridMode {
+		wrapFrame = false
+	} else if wrapFrame && r.Body != nil && c.bodyCallsUserSub(r.Body.Statements) {
+		wrapFrame = false
+	}
 	use3D := wrapFrame && r.Body != nil && bodyContains3DDraw(r.Body.Statements)
-	if wrapFrame {
-		c.emitFrameWrap(chunk, "BeginDrawing")
-		if use3D {
-			c.emitFrameWrap(chunk, "BeginMode3D")
-		} else {
-			c.emitFrameWrap(chunk, "BeginMode2D")
+	if hybridMode {
+		c.emitHybridLoopBody(chunk)
+	} else {
+		if wrapFrame {
+			c.emitFrameWrap(chunk, "BeginDrawing")
+			if use3D {
+				c.emitFrameWrap(chunk, "BeginMode3D")
+			} else {
+				c.emitFrameWrap(chunk, "BeginMode2D")
+			}
 		}
-	}
-	for _, stmt := range r.Body.Statements {
-		if err := c.compileStatement(stmt, chunk); err != nil {
-			return err
+		for _, stmt := range r.Body.Statements {
+			if err := c.compileStatement(stmt, chunk); err != nil {
+				return err
+			}
 		}
-	}
-	if wrapFrame {
-		if use3D {
-			c.emitFrameWrap(chunk, "EndMode3D")
-		} else {
-			c.emitFrameWrap(chunk, "EndMode2D")
+		if wrapFrame {
+			if use3D {
+				c.emitFrameWrap(chunk, "EndMode3D")
+			} else {
+				c.emitFrameWrap(chunk, "EndMode2D")
+			}
+			c.emitFrameWrap(chunk, "EndDrawing")
 		}
-		c.emitFrameWrap(chunk, "EndDrawing")
 	}
 	if err := c.compileExpression(r.Condition, chunk); err != nil {
 		return err
@@ -1363,6 +1373,68 @@ func isGameLoopCondition(condition parser.Node, forRepeat bool) bool {
 	return ok && normWindowShouldCloseName(call.Name) == "windowshouldclose" && len(call.Arguments) == 0
 }
 
+// bodyCallsUserSub returns true if the given statements (or any nested block) contain a call to a user-defined SUB or FUNCTION.
+// When true, we skip automatic BeginDrawing/EndDrawing so the user's own Draw() (or similar) is not double-wrapped and flicker is avoided.
+func (c *Compiler) bodyCallsUserSub(statements []parser.Node) bool {
+	for _, n := range statements {
+		if c.nodeCallsUserSub(n) {
+			return true
+		}
+	}
+	return false
+}
+
+func (c *Compiler) nodeCallsUserSub(node parser.Node) bool {
+	if c.userFuncs == nil {
+		return false
+	}
+	switch n := node.(type) {
+	case *parser.Call:
+		name := strings.ToLower(n.Name)
+		return c.userFuncs[name]
+	case *parser.IfStatement:
+		if n.ThenBlock != nil && c.bodyCallsUserSub(n.ThenBlock.Statements) {
+			return true
+		}
+		for _, b := range n.ElseIfs {
+			if b.Block != nil && c.bodyCallsUserSub(b.Block.Statements) {
+				return true
+			}
+		}
+		if n.ElseBlock != nil && c.bodyCallsUserSub(n.ElseBlock.Statements) {
+			return true
+		}
+		return false
+	case *parser.ForStatement:
+		if n.Body != nil {
+			return c.bodyCallsUserSub(n.Body.Statements)
+		}
+		return false
+	case *parser.WhileStatement:
+		if n.Body != nil {
+			return c.bodyCallsUserSub(n.Body.Statements)
+		}
+		return false
+	case *parser.RepeatStatement:
+		if n.Body != nil {
+			return c.bodyCallsUserSub(n.Body.Statements)
+		}
+		return false
+	case *parser.SelectCaseStatement:
+		for _, k := range n.Cases {
+			if k.Block != nil && c.bodyCallsUserSub(k.Block.Statements) {
+				return true
+			}
+		}
+		if n.ElseBlock != nil && c.bodyCallsUserSub(n.ElseBlock.Statements) {
+			return true
+		}
+		return false
+	default:
+		return false
+	}
+}
+
 // bodyContains3DDraw returns true if the given statements (or any nested block) contain a 3D draw call (DrawCube, DrawSphere, DrawModel, etc.).
 func bodyContains3DDraw(nodes []parser.Node) bool {
 	for _, n := range nodes {
@@ -1437,6 +1509,43 @@ func (c *Compiler) emitFrameWrap(chunk *vm.Chunk, name string) {
 	chunk.Write(byte(0))
 }
 
+// emitHybridLoopBody emits the hybrid update/draw loop body: GetFrameTime, StepAllPhysics2D/3D, update(dt), ClearRenderQueues, draw(), FlushRenderQueues.
+func (c *Compiler) emitHybridLoopBody(chunk *vm.Chunk) {
+	emitForeign := func(name string, argCount int) {
+		idx := chunk.WriteConstant(strings.ToLower(name))
+		if idx > 255 {
+			return
+		}
+		chunk.Write(byte(vm.OpCallForeign))
+		chunk.Write(byte(idx))
+		chunk.Write(byte(argCount))
+	}
+	emitCallUser := func(name string, argCount int) {
+		idx := chunk.WriteConstant(strings.ToLower(name))
+		if idx > 255 {
+			return
+		}
+		chunk.Write(byte(vm.OpCallUser))
+		chunk.Write(byte(idx))
+		chunk.Write(byte(argCount))
+	}
+	// dt = GetFrameTime()
+	emitForeign("getframetime", 0)
+	// StepAllPhysics2D(dt): need dt on stack, then dup for StepAllPhysics3D
+	chunk.Write(byte(vm.OpDup))
+	emitForeign("stepallphysics2d", 1)
+	chunk.Write(byte(vm.OpDup))
+	emitForeign("stepallphysics3d", 1)
+	if c.userFuncs["update"] {
+		emitCallUser("update", 1)
+	}
+	emitForeign("clearrenderqueues", 0)
+	if c.userFuncs["draw"] {
+		emitCallUser("draw", 0)
+	}
+	emitForeign("flushrenderqueues", 0)
+}
+
 // compileWhileStatement compiles a WHILE loop
 func (c *Compiler) compileWhileStatement(whileStmt *parser.WhileStatement, chunk *vm.Chunk) error {
 	c.loopExitStack = append(c.loopExitStack, nil)
@@ -1444,6 +1553,12 @@ func (c *Compiler) compileWhileStatement(whileStmt *parser.WhileStatement, chunk
 	// Loop start (CONTINUE WHILE jumps here)
 	loopStart := len(chunk.Code)
 	wrapFrame := isGameLoopCondition(whileStmt.Condition, false)
+	hybridMode := wrapFrame && (c.userFuncs["update"] || c.userFuncs["draw"])
+	if hybridMode {
+		wrapFrame = false
+	} else if wrapFrame && whileStmt.Body != nil && c.bodyCallsUserSub(whileStmt.Body.Statements) {
+		wrapFrame = false // user does their own BeginDrawing/EndDrawing (e.g. in Draw()), avoid double wrap and flicker
+	}
 	use3D := wrapFrame && whileStmt.Body != nil && bodyContains3DDraw(whileStmt.Body.Statements)
 
 	// Compile condition
@@ -1458,30 +1573,31 @@ func (c *Compiler) compileWhileStatement(whileStmt *parser.WhileStatement, chunk
 	chunk.Write(byte(0))
 	exitJumpPos := len(chunk.Code) - 2
 
-	if wrapFrame {
-		c.emitFrameWrap(chunk, "BeginDrawing")
-		if use3D {
-			c.emitFrameWrap(chunk, "BeginMode3D")
-		} else {
-			c.emitFrameWrap(chunk, "BeginMode2D")
+	if hybridMode {
+		c.emitHybridLoopBody(chunk)
+	} else {
+		if wrapFrame {
+			c.emitFrameWrap(chunk, "BeginDrawing")
+			if use3D {
+				c.emitFrameWrap(chunk, "BeginMode3D")
+			} else {
+				c.emitFrameWrap(chunk, "BeginMode2D")
+			}
 		}
-	}
-
-	// Compile loop body
-	for _, stmt := range whileStmt.Body.Statements {
-		err = c.compileStatement(stmt, chunk)
-		if err != nil {
-			return err
+		for _, stmt := range whileStmt.Body.Statements {
+			err = c.compileStatement(stmt, chunk)
+			if err != nil {
+				return err
+			}
 		}
-	}
-
-	if wrapFrame {
-		if use3D {
-			c.emitFrameWrap(chunk, "EndMode3D")
-		} else {
-			c.emitFrameWrap(chunk, "EndMode2D")
+		if wrapFrame {
+			if use3D {
+				c.emitFrameWrap(chunk, "EndMode3D")
+			} else {
+				c.emitFrameWrap(chunk, "EndMode2D")
+			}
+			c.emitFrameWrap(chunk, "EndDrawing")
 		}
-		c.emitFrameWrap(chunk, "EndDrawing")
 	}
 
 	// Jump back to loop start (2-byte offset)

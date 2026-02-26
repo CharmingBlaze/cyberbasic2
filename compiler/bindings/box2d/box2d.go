@@ -554,6 +554,27 @@ func registerFlat2D(v *vm.VM) {
 		w.Step(dt, 8, 3)
 		return nil, nil
 	})
+	v.RegisterForeign("StepAllPhysics2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("StepAllPhysics2D requires (dt)")
+		}
+		dt := toFloat64(args[0])
+		worldMu.RLock()
+		ids := make([]string, 0, len(worlds))
+		for id := range worlds {
+			ids = append(ids, id)
+		}
+		worldMu.RUnlock()
+		for _, worldId := range ids {
+			worldMu.RLock()
+			w := worlds[worldId]
+			worldMu.RUnlock()
+			if w != nil {
+				w.Step(dt, 8, 3)
+			}
+		}
+		return nil, nil
+	})
 
 	// Bodies
 	v.RegisterForeign("CreateBox2D", func(args []interface{}) (interface{}, error) {

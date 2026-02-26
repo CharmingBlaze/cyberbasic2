@@ -274,7 +274,19 @@ func emitCall(c *parser.Call) (string, error) {
 		}
 		return "fmt.Println(" + strings.Join(args, ", ") + ")", nil
 	}
+	// Multi-window API: not supported in --gen-go (VM-only binding)
+	if isMultiWindowCall(c.Name) {
+		return "", fmt.Errorf("multi-window API %s is not supported in --gen-go; run without --gen-go", c.Name)
+	}
 	return "", fmt.Errorf("unsupported call: %s", c.Name)
+}
+
+// isMultiWindowCall returns true for Window*, Channel*, State*, Dock*, OnWindow* APIs.
+func isMultiWindowCall(name string) bool {
+	n := strings.ToLower(name)
+	return strings.HasPrefix(n, "window") || strings.HasPrefix(n, "channel") ||
+		strings.HasPrefix(n, "state") || strings.HasPrefix(n, "dock") ||
+		strings.HasPrefix(n, "onwindow")
 }
 
 func emitGameCommand(g *parser.GameCommand, spritePos *map[string]string) (string, error) {

@@ -140,10 +140,10 @@ func registerRaygui(v *vm.VM) {
 		rayguiMu.Unlock()
 		return s, nil
 	})
-	// GuiTextBox(id, x, y, w, h, text) -> currentText (id used as cache key)
-	v.RegisterForeign("GuiTextBox", func(args []interface{}) (interface{}, error) {
+	// GuiTextBoxId(id, x, y, w, h, text) -> currentText (id used as cache key; name avoids collision with GuiTextbox)
+	v.RegisterForeign("GuiTextBoxId", func(args []interface{}) (interface{}, error) {
 		if len(args) < 6 {
-			return nil, fmt.Errorf("GuiTextBox(id, x, y, w, h, text) requires 6 arguments")
+			return nil, fmt.Errorf("GuiTextBoxId(id, x, y, w, h, text) requires 6 arguments")
 		}
 		id := toString(args[0])
 		b := rect(toFloat32(args[1]), toFloat32(args[2]), toFloat32(args[3]), toFloat32(args[4]))

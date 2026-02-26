@@ -536,6 +536,39 @@ func registerFlat3D(v *vm.VM) {
 		w.mu.Unlock()
 		return nil, nil
 	})
+	v.RegisterForeign("StepAllPhysics3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("StepAllPhysics3D requires (dt)")
+		}
+		dt := toFloat64(args[0])
+		worldMu.RLock()
+		ids := make([]string, 0, len(worlds))
+		for id := range worlds {
+			ids = append(ids, id)
+		}
+		worldMu.RUnlock()
+		for _, id := range ids {
+			w := getWorld(id)
+			if w == nil {
+				continue
+			}
+			w.mu.Lock()
+			for _, b := range w.bodies {
+				if !b.active || b.mass <= 0 {
+					continue
+				}
+				b.velocity.x += w.gravity.x * dt
+				b.velocity.y += w.gravity.y * dt
+				b.velocity.z += w.gravity.z * dt
+				b.position.x += b.velocity.x * dt
+				b.position.y += b.velocity.y * dt
+				b.position.z += b.velocity.z * dt
+			}
+			resolveCollisions(w)
+			w.mu.Unlock()
+		}
+		return nil, nil
+	})
 
 	// Bodies
 	v.RegisterForeign("CreateSphere3D", func(args []interface{}) (interface{}, error) {

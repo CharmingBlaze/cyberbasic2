@@ -85,3 +85,33 @@ ENDFUNCTION
 
 main()
 ```
+
+---
+
+## Hybrid update/draw loop
+
+If you define **`update(dt)`** and/or **`draw()`** (as Sub or Function) and use a game loop (`WHILE NOT WindowShouldClose()` or `REPEAT ... UNTIL WindowShouldClose()`), the compiler replaces the loop body with an automatic pipeline:
+
+1. **GetFrameTime** → `dt`
+2. **StepAllPhysics2D(dt)** and **StepAllPhysics3D(dt)** (all registered worlds)
+3. **update(dt)** (if defined)
+4. **ClearRenderQueues**
+5. **draw()** (if defined) — all Draw*/Gui* calls inside `draw()` are **queued** (2D, 3D, GUI)
+6. **FlushRenderQueues** — BeginDrawing, ClearBackground, then render queue2D, queue3D, queueGUI in order, EndDrawing
+
+You do not call `BeginDrawing`/`EndDrawing` or `BeginMode2D`/`BeginMode3D` yourself; the engine does it. Example:
+
+```basic
+SUB update(dt)
+  REM move player with dt
+END SUB
+SUB draw()
+  ClearBackground(30, 30, 45, 255)
+  DrawRectangle(x, y, 40, 40, 255, 100, 100, 255)
+  DrawText("Hello", 20, 20, 20, 255, 255, 255, 255)
+END SUB
+WHILE NOT WindowShouldClose()
+WEND
+```
+
+See **examples/hybrid_update_draw_demo.bas**. Scripts that do not define `update`/`draw` keep the previous behaviour (manual or compiler-wrapped Begin/End).

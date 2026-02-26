@@ -312,4 +312,6 @@ func RegisterRaylib(v *vm.VM) {
 	registerViews(v)
 	registerEditor(v)
 	registerAdvanced(v)
+	registerMultiWindow(v)
+	registerHybrid(v)
 }

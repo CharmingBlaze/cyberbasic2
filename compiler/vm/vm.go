@@ -35,6 +35,30 @@ type VM struct {
 	fiberQueue          []int
 	currentFiber        int
 	sleeping            []sleepEntry // fibers waiting for resume time (non-blocking WaitSeconds)
+
+	// Hybrid update/draw: when inside draw(), render commands are queued instead of executed.
+	insideDraw         bool
+	drawFrameStack     []bool // parallel to callStack: true if that frame is draw()
+	renderCommandType  map[string]RenderType
+	renderQueue2D    []RenderQueueItem
+	renderQueue3D    []RenderQueueItem
+	renderQueueGUI   []RenderQueueItem
+}
+
+// RenderType classifies a foreign command for the hybrid render queue (2D, 3D, or GUI).
+type RenderType int
+
+const (
+	RenderNone RenderType = iota
+	Render2D
+	Render3D
+	RenderGUI
+)
+
+// RenderQueueItem is one entry in a render queue (name + args for deferred foreign call).
+type RenderQueueItem struct {
+	Name string
+	Args []interface{}
 }
 
 type sleepEntry struct {
@@ -49,9 +73,10 @@ type eventHandler struct {
 }
 
 type fiberState struct {
-	ip        int
-	stack     []Value
-	callStack []int
+	ip            int
+	stack         []Value
+	callStack     []int
+	drawFrameStack []bool
 }
 
 // NewVM creates a new virtual machine instance
@@ -80,6 +105,14 @@ func (vm *VM) LoadChunk(chunk *Chunk) {
 	vm.fileHandles = make(map[int]*os.File)
 	vm.fileReaders = make(map[int]*bufio.Reader)
 	vm.nextFileHandle = 1
+	vm.insideDraw = false
+	vm.drawFrameStack = vm.drawFrameStack[:0]
+	vm.renderQueue2D = nil
+	vm.renderQueue3D = nil
+	vm.renderQueueGUI = nil
+	if vm.renderCommandType == nil {
+		vm.renderCommandType = make(map[string]RenderType)
+	}
 }
 
 // SetRuntime sets the game runtime used by game opcodes. If nil, game opcodes no-op (or debug print).
@@ -109,6 +142,55 @@ func (vm *VM) GetCollisionHandlers() map[string]string {
 	return out
 }
 
+// RegisterRenderType registers a command name for the hybrid render queue (2D, 3D, or GUI).
+func (vm *VM) RegisterRenderType(name string, typ RenderType) {
+	if vm.renderCommandType == nil {
+		vm.renderCommandType = make(map[string]RenderType)
+	}
+	vm.renderCommandType[strings.ToLower(name)] = typ
+}
+
+// PushRenderCommand appends a command to the appropriate render queue (used when insideDraw and OpCallForeign).
+func (vm *VM) PushRenderCommand(name string, args []interface{}, typ RenderType) {
+	argsCopy := make([]interface{}, len(args))
+	copy(argsCopy, args)
+	item := RenderQueueItem{Name: name, Args: argsCopy}
+	switch typ {
+	case Render2D:
+		vm.renderQueue2D = append(vm.renderQueue2D, item)
+	case Render3D:
+		vm.renderQueue3D = append(vm.renderQueue3D, item)
+	case RenderGUI:
+		vm.renderQueueGUI = append(vm.renderQueueGUI, item)
+	}
+}
+
+// ClearRenderQueues clears all render queues (called at start of each frame in hybrid loop).
+func (vm *VM) ClearRenderQueues() {
+	vm.renderQueue2D = vm.renderQueue2D[:0]
+	vm.renderQueue3D = vm.renderQueue3D[:0]
+	vm.renderQueueGUI = vm.renderQueueGUI[:0]
+}
+
+// GetRenderQueues returns the three queues for FlushRenderQueues (2D, 3D, GUI).
+func (vm *VM) GetRenderQueues() (q2D, q3D, qGUI []RenderQueueItem) {
+	return vm.renderQueue2D, vm.renderQueue3D, vm.renderQueueGUI
+}
+
+// CallForeign invokes a foreign function by name with the given args (used when flushing render queues).
+func (vm *VM) CallForeign(name string, args []interface{}) (interface{}, error) {
+	fn := vm.foreign[strings.ToLower(name)]
+	if fn == nil {
+		return nil, fmt.Errorf("unknown foreign function: %s", name)
+	}
+	return fn(args)
+}
+
+// SetInsideDraw sets whether we are inside the user's draw() call (so render commands are queued).
+func (vm *VM) SetInsideDraw(b bool) {
+	vm.insideDraw = b
+}
+
 // InvokeSub calls a BASIC Sub by name with the given arguments. Sub sees them as first, second, ... param (stack[0]=first). Returns when the Sub returns.
 func (vm *VM) InvokeSub(name string, args []interface{}) error {
 	if vm.chunk == nil {
@@ -127,13 +209,38 @@ func (vm *VM) InvokeSub(name string, args []interface{}) error {
 	vm.stack = append(vm.stack[:0], argVals...)
 	returnAddr := len(vm.chunk.Code)
 	vm.callStack = append(vm.callStack, vm.ip)
+	isDraw := strings.ToLower(name) == "draw"
+	if isDraw {
+		vm.drawFrameStack = append(vm.drawFrameStack, true)
+		vm.insideDraw = true
+	}
 	vm.ip = subIP
 	for vm.ip < len(vm.chunk.Code) {
 		if err := vm.Step(); err != nil {
+			if isDraw {
+				vm.drawFrameStack = vm.drawFrameStack[:len(vm.drawFrameStack)-1]
+				vm.insideDraw = false
+				for _, b := range vm.drawFrameStack {
+					if b {
+						vm.insideDraw = true
+						break
+					}
+				}
+			}
 			return err
 		}
 		if vm.ip == returnAddr {
 			break
+		}
+	}
+	if isDraw {
+		vm.drawFrameStack = vm.drawFrameStack[:len(vm.drawFrameStack)-1]
+		vm.insideDraw = false
+		for _, b := range vm.drawFrameStack {
+			if b {
+				vm.insideDraw = true
+				break
+			}
 		}
 	}
 	vm.ip = savedIP
@@ -621,6 +728,11 @@ func (vm *VM) executeInstruction(instruction byte) error {
 			args[i] = vm.pop()
 		}
 		vm.callStack = append(vm.callStack, vm.ip)
+		isDraw := (name == "draw")
+		vm.drawFrameStack = append(vm.drawFrameStack, isDraw)
+		if isDraw {
+			vm.insideDraw = true
+		}
 		vm.stack = append(vm.stack[:0], args...)
 		vm.ip = targetIP
 
@@ -645,6 +757,14 @@ func (vm *VM) executeInstruction(instruction byte) error {
 				vm.ip = next.ip
 				vm.stack = append(vm.stack[:0], next.stack...)
 				vm.callStack = append(vm.callStack[:0], next.callStack...)
+				vm.drawFrameStack = append(vm.drawFrameStack[:0], next.drawFrameStack...)
+				vm.insideDraw = false
+				for _, b := range vm.drawFrameStack {
+					if b {
+						vm.insideDraw = true
+						break
+					}
+				}
 			} else {
 				vm.running = false
 			}
@@ -652,6 +772,19 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		}
 		vm.ip = vm.callStack[len(vm.callStack)-1]
 		vm.callStack = vm.callStack[:len(vm.callStack)-1]
+		if len(vm.drawFrameStack) > 0 {
+			wasDraw := vm.drawFrameStack[len(vm.drawFrameStack)-1]
+			vm.drawFrameStack = vm.drawFrameStack[:len(vm.drawFrameStack)-1]
+			if wasDraw {
+				vm.insideDraw = false
+				for _, b := range vm.drawFrameStack {
+					if b {
+						vm.insideDraw = true
+						break
+					}
+				}
+			}
+		}
 
 	case OpReturnVal:
 		if len(vm.stack) == 0 {
@@ -678,6 +811,14 @@ func (vm *VM) executeInstruction(instruction byte) error {
 				vm.ip = next.ip
 				vm.stack = append(vm.stack[:0], next.stack...)
 				vm.callStack = append(vm.callStack[:0], next.callStack...)
+				vm.drawFrameStack = append(vm.drawFrameStack[:0], next.drawFrameStack...)
+				vm.insideDraw = false
+				for _, b := range vm.drawFrameStack {
+					if b {
+						vm.insideDraw = true
+						break
+					}
+				}
 				vm.push(val)
 			} else {
 				vm.running = false
@@ -688,6 +829,19 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		}
 		vm.ip = vm.callStack[len(vm.callStack)-1]
 		vm.callStack = vm.callStack[:len(vm.callStack)-1]
+		if len(vm.drawFrameStack) > 0 {
+			wasDraw := vm.drawFrameStack[len(vm.drawFrameStack)-1]
+			vm.drawFrameStack = vm.drawFrameStack[:len(vm.drawFrameStack)-1]
+			if wasDraw {
+				vm.insideDraw = false
+				for _, b := range vm.drawFrameStack {
+					if b {
+						vm.insideDraw = true
+						break
+					}
+				}
+			}
+		}
 		vm.stack = vm.stack[:0]
 		vm.push(val)
 
@@ -719,15 +873,16 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		high := uint16(vm.chunk.Code[vm.ip+1])
 		vm.ip += 2
 		targetIP := int(low | (high << 8))
-		vm.fibers = append(vm.fibers, fiberState{ip: targetIP, stack: []Value{}, callStack: []int{}})
+		vm.fibers = append(vm.fibers, fiberState{ip: targetIP, stack: []Value{}, callStack: []int{}, drawFrameStack: nil})
 		vm.fiberQueue = append(vm.fiberQueue, len(vm.fibers)-1)
 
 	case OpYield:
 		// Save current state, rotate queue, load next fiber
 		vm.fibers[vm.currentFiber] = fiberState{
-			ip:        vm.ip,
-			stack:     append([]Value(nil), vm.stack...),
-			callStack: append([]int(nil), vm.callStack...),
+			ip:            vm.ip,
+			stack:         append([]Value(nil), vm.stack...),
+			callStack:     append([]int(nil), vm.callStack...),
+			drawFrameStack: append([]bool(nil), vm.drawFrameStack...),
 		}
 		if len(vm.fiberQueue) < 2 {
 			break
@@ -738,6 +893,14 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		vm.ip = next.ip
 		vm.stack = append(vm.stack[:0], next.stack...)
 		vm.callStack = append(vm.callStack[:0], next.callStack...)
+		vm.drawFrameStack = append(vm.drawFrameStack[:0], next.drawFrameStack...)
+		vm.insideDraw = false
+		for _, b := range vm.drawFrameStack {
+			if b {
+				vm.insideDraw = true
+				break
+			}
+		}
 
 	case OpWaitSeconds:
 		if len(vm.stack) == 0 {
@@ -758,9 +921,10 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		}
 		// Non-blocking: save fiber state, remove from queue, add to sleeping, switch to next fiber
 		vm.fibers[vm.currentFiber] = fiberState{
-			ip:        vm.ip,
-			stack:     append([]Value(nil), vm.stack...),
-			callStack: append([]int(nil), vm.callStack...),
+			ip:            vm.ip,
+			stack:         append([]Value(nil), vm.stack...),
+			callStack:     append([]int(nil), vm.callStack...),
+			drawFrameStack: append([]bool(nil), vm.drawFrameStack...),
 		}
 		resumeAt := time.Now().Add(time.Duration(sec * float64(time.Second)))
 		vm.sleeping = append(vm.sleeping, sleepEntry{fiberIndex: vm.currentFiber, resumeAt: resumeAt})
@@ -779,6 +943,14 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		vm.ip = next.ip
 		vm.stack = append(vm.stack[:0], next.stack...)
 		vm.callStack = append(vm.callStack[:0], next.callStack...)
+		vm.drawFrameStack = append(vm.drawFrameStack[:0], next.drawFrameStack...)
+		vm.insideDraw = false
+		for _, b := range vm.drawFrameStack {
+			if b {
+				vm.insideDraw = true
+				break
+			}
+		}
 
 	case OpCallForeign:
 		if vm.ip+2 > len(vm.chunk.Code) {
@@ -802,6 +974,13 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		args := make([]interface{}, argCount)
 		for i := argCount - 1; i >= 0; i-- {
 			args[i] = vm.pop()
+		}
+		// Hybrid draw: when inside draw(), queue render commands instead of executing.
+		if vm.insideDraw && vm.renderCommandType != nil {
+			if typ := vm.renderCommandType[strings.ToLower(name)]; typ != RenderNone {
+				vm.PushRenderCommand(name, args, typ)
+				break
+			}
 		}
 		fn := vm.foreign[strings.ToLower(name)]
 		if fn == nil {
