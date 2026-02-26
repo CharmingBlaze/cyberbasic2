@@ -1,6 +1,6 @@
 # CyberBasic – Complete Command Reference
 
-Structured command set for window, input, math, camera, 3D, 2D, audio, file, game loop, and utilities. All names are **case-insensitive**.
+Structured command set for window, input, math, camera, 3D, 2D, audio, file, game loop, and utilities. All names are **case-insensitive**. For the complete list of all bindings and source files, see [API Reference](../API_REFERENCE.md).
 
 ---
 

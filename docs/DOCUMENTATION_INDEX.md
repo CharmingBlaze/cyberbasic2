@@ -36,17 +36,21 @@ Complete guide to all CyberBasic documentation.
   - ECS (entity-component system)
   - Best practices
 
-- **[2D Graphics Guide](2D_GRAPHICS_GUIDE.md)** – 2D rendering reference
+- **[2D Graphics Guide](2D_GRAPHICS_GUIDE.md)** – Full 2D rendering reference
   - Window and frame (InitWindow, ClearBackground; no auto-wrap, compiles as written)
   - Primitives, textures, text, colors
   - 2D camera (SetCamera2D)
   - 2D game checklist
 
-- **[3D Graphics Guide](3D_GRAPHICS_GUIDE.md)** – 3D rendering reference
+- **[2D Physics Guide](2D_PHYSICS_GUIDE.md)** – Box2D: worlds, bodies, shapes, joints, raycast, collision, StepAllPhysics2D, GAME.* helpers
+
+- **[3D Graphics Guide](3D_GRAPHICS_GUIDE.md)** – Full 3D rendering reference
   - 3D camera (SetCamera3D, GAME.CameraOrbit)
   - Primitives, models, meshes
   - 3D game checklist
   - **3D editor and level builder** (GetMouseRay, PickGroundPlane, level objects, SaveLevel/LoadLevel)
+
+- **[3D Physics Guide](3D_PHYSICS_GUIDE.md)** – Bullet: worlds, bodies, position/rotation, forces, raycast, StepAllPhysics3D, GAME.* helpers
 
 - **[Windows, scaling, and splitscreen](WINDOWS_AND_VIEWS.md)** – Window commands, DPI/scaling, views and split-screen
   - Window and config flags (FLAG_*), blend modes (BLEND_*)
@@ -70,14 +74,16 @@ Complete guide to all CyberBasic documentation.
   - Queries and iteration
   - Example (ecs_demo.bas)
 
-- **[Multiplayer (TCP)](MULTIPLAYER.md)** – Simple TCP client/server
+- **[Multiplayer (TCP)](MULTIPLAYER.md)** – Full multiplayer guide: TCP client/server
   - Connect, Send, Receive, Disconnect (client)
   - Host, Accept, CloseServer (server)
-  - Line-based messages, game-loop usage
+  - Event callbacks (OnClientConnect, OnMessage), SendTable/ReceiveTable, RPC, entity sync
 
-- **[GUI Guide](GUI_GUIDE.md)** – Immediate-mode UI
+- **[GUI Guide](GUI_GUIDE.md)** – Full GUI guide: immediate-mode UI
   - BeginUI, EndUI, Label, Button, Slider, Checkbox, TextBox, Dropdown, ProgressBar
   - WindowBox, GroupBox, layout and examples
+
+- **[SQL (SQLite)](SQL.md)** – Full SQL guide: OpenDatabase, Exec, Query, parameterized statements, transactions, common patterns
 
 ## API and Reference
 
@@ -104,6 +110,11 @@ Complete guide to all CyberBasic documentation.
 | **Learn the language** | [Getting Started](GETTING_STARTED.md) → [Quick Reference](QUICK_REFERENCE.md) → [Language Spec](../LANGUAGE_SPEC.md) |
 | **Make a 2D game** | [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) → [2D Graphics Guide](2D_GRAPHICS_GUIDE.md) → [Cheatsheet](../CHEATSHEET.md) |
 | **Make a 3D game** | [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) → [3D Graphics Guide](3D_GRAPHICS_GUIDE.md) → [Cheatsheet](../CHEATSHEET.md) |
+| **Use 2D physics (Box2D)** | [2D Physics Guide](2D_PHYSICS_GUIDE.md) |
+| **Use 3D physics (Bullet)** | [3D Physics Guide](3D_PHYSICS_GUIDE.md) |
+| **Use GUI** | [GUI Guide](GUI_GUIDE.md) |
+| **Use multiplayer (TCP)** | [Multiplayer (TCP)](MULTIPLAYER.md) |
+| **Use SQL (SQLite)** | [SQL (SQLite)](SQL.md) |
 | **Use the hybrid loop** | [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop) (define update(dt) and draw()) |
 | **Use in-process multi-window** | [In-process multi-window](MULTI_WINDOW_INPROCESS.md) |
 | **Use ECS** | [ECS Guide](ECS_GUIDE.md) → [API Reference](../API_REFERENCE.md) |

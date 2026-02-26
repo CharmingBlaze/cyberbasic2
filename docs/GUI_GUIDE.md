@@ -9,9 +9,11 @@ CyberBasic provides two UI options:
 
 1. [Full raygui (Gui* functions)](#full-raygui-gui-functions)
 2. [Pure-Go layout UI (BeginUI / EndUI)](#pure-go-layout-ui-beginui--endui)
-3. [Widgets](#widgets)
-4. [Example: options menu](#example-options-menu)
-5. [Notes](#notes)
+3. [Using GUI in the hybrid loop](#using-gui-in-the-hybrid-loop)
+4. [Full widget reference](#full-widget-reference)
+5. [Example: options menu](#example-options-menu)
+6. [Notes](#notes)
+7. [See also](#see-also)
 
 ---
 
@@ -59,19 +61,49 @@ WHILE NOT WindowShouldClose()
 WEND
 ```
 
-## Widgets
+### Using GUI in the hybrid loop
 
-| Widget | Call | Returns |
-|--------|------|---------|
-| **Label** | Label(text) | — |
-| **Button** | Button(text) | true when clicked |
-| **Slider** | Slider(text, value, min, max) | current value |
-| **Checkbox** | Checkbox(text, checked) | 1 or 0 |
-| **TextBox** | TextBox(id, text) | current text (edit with same id each frame) |
-| **Dropdown** | Dropdown(id, itemsText, activeIndex) | new activeIndex (itemsText = "A;B;C") |
-| **ProgressBar** | ProgressBar(text, value, min, max) | value (display only) |
-| **WindowBox** | WindowBox(title) … EndWindowBox() | — |
-| **GroupBox** | GroupBox(text) … EndGroupBox() | — |
+When you define **update(dt)** and **draw()**, call **BeginUI**/ **EndUI** or **Gui*** inside your **draw()** so GUI commands are queued with other draw calls and rendered in order (2D, then 3D, then GUI). See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
+
+---
+
+## Full widget reference
+
+### Pure-Go layout (BeginUI / EndUI)
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **BeginUI** | () | — | Start UI layout; resets cursor |
+| **EndUI** | () | — | End UI layout |
+| **Label** | (text) | — | Label widget |
+| **Button** | (text) | 1 or 0 | 1 if clicked |
+| **Slider** | (text, value, min, max) | float | Slider; returns current value |
+| **Checkbox** | (text, checked) | 1 or 0 | Checkbox state |
+| **TextBox** | (id, text) | string | Editable; use same id each frame |
+| **Dropdown** | (id, itemsText, activeIndex) | int | itemsText = "A;B;C"; returns new index |
+| **ProgressBar** | (text, value, min, max) | float | Progress bar (display) |
+| **WindowBox** | (title) | — | Start window box |
+| **EndWindowBox** | () | — | End window box |
+| **GroupBox** | (text) | — | Start group box |
+| **EndGroupBox** | () | — | End group box |
+
+### Full raygui (Gui*; requires CGO)
+
+All coordinates and sizes in pixels (x, y, width, height).
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **GuiLabel** | (x, y, w, h, text) | — | Label |
+| **GuiButton** | (x, y, w, h, text) | 1 or 0 | 1 if clicked |
+| **GuiCheckBox** | (x, y, w, h, text, checked) | 1 or 0 | Checkbox |
+| **GuiSlider** | (x, y, w, h, textLeft, textRight, value, min, max) | float | Slider |
+| **GuiProgressBar** | (x, y, w, h, textLeft, textRight, value, min, max) | float | Progress bar |
+| **GuiTextBox** | (id, x, y, w, h, text) | string | Editable (id = cache key) |
+| **GuiDropdownBox** | (id, x, y, w, h, itemsText, active) | int | itemsText e.g. "One;Two;Three" |
+| **GuiWindowBox** | (x, y, w, h, title) | 1 or 0 | 1 if close clicked |
+| **GuiGroupBox** | (x, y, w, h, text) | — | Group box |
+| **GuiLine** | (x, y, w, h, text) | — | Line |
+| **GuiPanel** | (x, y, w, h, text) | — | Panel |
 
 ## Example: options menu
 
@@ -106,6 +138,8 @@ WEND
 
 ## See also
 
-- [API Reference](../API_REFERENCE.md) – full list of GUI and raygui functions
-- [Documentation Index](DOCUMENTATION_INDEX.md)
+- [API Reference](../API_REFERENCE.md) (section 20) — full list of GUI and raygui functions
+- [Command Reference](COMMAND_REFERENCE.md) — commands by feature
+- [Program Structure](PROGRAM_STRUCTURE.md) — hybrid update/draw loop
 - [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)
+- [Documentation Index](DOCUMENTATION_INDEX.md)

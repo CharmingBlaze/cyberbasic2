@@ -12,6 +12,7 @@ Complete guide to 3D graphics in CyberBasic using the raylib API.
 6. [Complete 3D game example](#complete-3d-game-example)
 7. [3D editor and level builder](#3d-editor-and-level-builder)
 8. [Full 3D command reference](#full-3d-command-reference)
+9. [See also](#see-also)
 
 ---
 
@@ -19,7 +20,7 @@ Complete guide to 3D graphics in CyberBasic using the raylib API.
 
 ### Basic 3D setup
 
-Every 3D program needs a window, a 3D camera, and a loop with your draw calls. The compiler does not inject any frame or mode calls (DBPro-style).
+Every 3D program needs a window, a 3D camera, and a loop with your draw calls. The compiler does not inject any frame or mode calls (DBPro-style). When you use the **hybrid loop** (define **update(dt)** and **draw()**), 3D draw calls in **draw()** are queued and flushed in order (2D then 3D then GUI). See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
 
 ```basic
 InitWindow(800, 600, "My 3D Game")
@@ -323,7 +324,15 @@ All 3D-relevant commands in one place. See [API_REFERENCE.md](../API_REFERENCE.m
 - **Game loop / movement:** `DeltaTime`, `GetFrameTime`, `WHILE NOT WindowShouldClose() … WEND`; `GAME.MoveWASD`, `GAME.SnapToGround3D`
 - **2D overlay:** `DrawText`, `DrawTexture`, etc. (same as 2D)
 - **Editor / level builder:** `GetMouseRay`, GetMouseRayOriginX/Y/Z, GetMouseRayDirectionX/Y/Z, `GetRayCollisionPlane`, `PickGroundPlane`, `SnapToGridX/Y/Z`, CreateLevelObject, SetLevelObjectTransform, GetLevelObject*, DeleteLevelObject, GetLevelObjectCount, GetLevelObjectId, DrawLevelObject, SaveLevel, LoadLevel, DuplicateLevelObject, GetCameraPositionX/Y/Z, GetCameraTargetX/Y/Z
+- **Scene:** `CreateScene`, `LoadScene`, `SetCurrentScene` — manage scenes; see [API Reference](../API_REFERENCE.md).
+- **Billboards:** `DrawBillboard`, `DrawBillboardRec`, `DrawBillboardPro` — texture-always-facing-camera; see [API Reference](../API_REFERENCE.md).
 
 ---
 
-For more 3D examples see [examples/README.md](../examples/README.md) (e.g. run_3d_physics_demo.bas, mario64.bas). For the full list of 3D and camera functions see [API_REFERENCE.md](../API_REFERENCE.md).
+## See also
+
+- [API Reference](../API_REFERENCE.md) — full list of 3D and camera functions
+- [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) — 3D physics, GAME.CameraOrbit, GAME.MoveWASD
+- [3D Physics Guide](3D_PHYSICS_GUIDE.md) — Bullet worlds, bodies, forces
+- [Command Reference](COMMAND_REFERENCE.md) — commands by feature
+- [examples/README.md](../examples/README.md) — 3D examples (e.g. run_3d_physics_demo.bas)

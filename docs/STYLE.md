@@ -33,6 +33,10 @@ Conventions for CyberBasic documentation so all docs feel consistent.
 - **Delta time:** Use "delta time" for frame elapsed time; refer to **DeltaTime()** or **GetFrameTime()**.
 - **Flat API:** Prefer flat names in examples: **InitWindow**, **ClearBackground**, **DrawCircle** (not `RL.InitWindow`). Use namespaced forms only when documenting that API (e.g. **BOX2D.***, **GAME.***).
 
+## API reference
+
+- **API_REFERENCE.md:** One table per section; one row per command; columns: Command, Arguments, Returns, Description. When adding a binding, add a row to the matching section.
+
 ## Include syntax
 
 - Document the directive as **`#include "path"`**. Optionally mention **IMPORT "path"** as an alias if supported.

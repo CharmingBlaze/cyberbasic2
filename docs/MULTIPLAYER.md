@@ -358,4 +358,12 @@ You can sync entity position (and optionally other state) so the engine tracks a
 | **SyncEntityToRoom**(roomId, entityId, x, y) / (…, z) | Send entity position to every connection in the room. Returns count sent. |
 | **GetRemoteEntity**(entityId) | Last synced state (dict with x, y, z). Returns null if none. |
 
-See [API_REFERENCE.md](../API_REFERENCE.md) for full details.
+For the complete list of all network commands and signatures see [API Reference](../API_REFERENCE.md) section 18.
+
+---
+
+## See also
+
+- [API Reference](../API_REFERENCE.md) (section 18) — full network command list
+- [Command Reference](COMMAND_REFERENCE.md) — commands by feature
+- [Getting Started](GETTING_STARTED.md) — setup and first run

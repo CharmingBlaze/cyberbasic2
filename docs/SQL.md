@@ -91,4 +91,34 @@ VAR affected = Exec(db, "UPDATE players SET score = 0 WHERE id = 99")
 IF affected < 0 THEN PRINT "Exec failed: " + LastError()
 ```
 
-See [API_REFERENCE.md](../API_REFERENCE.md) for the full API list.
+## Common patterns
+
+### Leaderboard (SELECT with ORDER BY and LIMIT)
+
+```basic
+Query(db, "SELECT name, score FROM players ORDER BY score DESC LIMIT 10")
+VAR n = GetRowCount()
+FOR r = 0 TO n - 1
+  PRINT GetCell(r, 0) + ": " + STR(GetCell(r, 1))
+NEXT r
+```
+
+### Save/load game state (single row or JSON in a column)
+
+Store a single row (e.g. one "save" slot) or a JSON string in a TEXT column:
+
+```basic
+ExecParams(db, "INSERT OR REPLACE INTO save (id, data) VALUES (1, ?)", jsonString)
+QueryParams(db, "SELECT data FROM save WHERE id = ?", 1)
+IF GetRowCount() > 0 THEN VAR loaded = GetCell(0, 0)
+```
+
+Use **GetJSONKey** or your JSON helpers to read fields from `loaded` if you store a JSON object.
+
+---
+
+## See also
+
+- [API Reference](../API_REFERENCE.md) (section 19) — full SQL command list
+- [Command Reference](COMMAND_REFERENCE.md) — commands by feature
+- [Getting Started](GETTING_STARTED.md) — setup and first run
