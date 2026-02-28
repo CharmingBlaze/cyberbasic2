@@ -12,6 +12,8 @@ Structured command set for window, input, math, camera, 3D, 2D, audio, file, gam
 | **CloseWindow**() | Close window and exit |
 | **SetTargetFPS**(fps) | Target frames per second |
 | **GetFrameTime**() | Delta time since last frame (seconds) |
+| **GetTime**() | Seconds since window init (float) |
+| **WaitSeconds**(seconds) | Yield current fiber for N seconds (non-blocking; other fibers run) |
 | **WindowShouldClose**() | True when user requested close |
 | **DisableCursor**() | Hide and confine mouse |
 | **EnableCursor**() | Show mouse cursor |
@@ -56,13 +58,19 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 
 | Command | Description |
 |--------|-------------|
-| **KeyDown**(key) | True while key held (use KEY_W, KEY_ESCAPE, etc.) |
-| **KeyPressed**(key) | True once when key pressed |
-| **GetMouseX**() | Mouse X position |
-| **GetMouseY**() | Mouse Y position |
-| **GetMouseDeltaX**() | Mouse movement X this frame |
-| **GetMouseDeltaY**() | Mouse movement Y this frame |
+| **KeyDown**(key) / **IsKeyDown**(key) | True while key held (use KEY_W, KEY_ESCAPE, etc.) |
+| **KeyPressed**(key) / **IsKeyPressed**(key) | True once when key pressed |
+| **IsKeyReleased**(key) | True once when key released |
+| **GetKeyPressed**() | Last key pressed (code) |
+| **GetMouseX**() **GetMouseY**() | Mouse position |
+| **GetMousePosition**() | Mouse position as [x, y] |
+| **IsMouseButtonDown**(button) | True while button held |
+| **IsMouseButtonPressed**(button) | True once when button pressed |
+| **GetMouseDeltaX**() **GetMouseDeltaY**() | Mouse movement this frame |
 | **GetMouseWheelMove**() | Scroll wheel delta |
+| **IsGamepadAvailable**(id) | True if gamepad connected |
+| **IsGamepadButtonPressed**(id, button) | True once when gamepad button pressed |
+| **GetGamepadAxisMovement**(id, axis) | Gamepad axis value |
 | **MouseOrbitCamera**() | One call: orbit + zoom from mouse, then update camera |
 
 ---
@@ -90,6 +98,218 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **SetCameraPosition**(x, y, z) | Set global camera position (3 args) |
 | **SetCameraTarget**(x, y, z) | Set orbit/look-at target (3 args) |
 | **UpdateCamera**() | Apply orbit state to camera |
+| **Camera3DSetPosition**(x, y, z) | Alias; or (cameraId, x, y, z) for named camera |
+| **Camera3DSetTarget**(x, y, z) | Alias; or (cameraId, x, y, z) |
+| **Camera3DSetUp**(cameraId, x, y, z) | Camera up vector |
+| **Camera3DSetFOV**(fov) | Global FOV (degrees) |
+| **Camera3DSetProjection**(cameraId, type) | CAMERA_PERSPECTIVE / CAMERA_ORTHOGRAPHIC |
+| **Camera3DMoveForward**(amount) | Move camera and target along look direction |
+| **Camera3DMoveBackward**(amount) | Move backward (opposite of forward) |
+| **Camera3DMoveRight**(amount) **Camera3DMoveLeft**(amount) | Move along right / left |
+| **Camera3DMoveUp**(amount) **Camera3DMoveDown**(amount) | Move along camera up / down |
+| **Camera3DRotateYaw**(angleRad) | Rotate position around target on Y axis |
+| **Camera3DRotatePitch**(angleRad) | Tilt camera up/down (clamped) |
+| **Camera3DRotateRoll**(angleRad) | Rotate camera up vector around forward axis |
+| **BeginCamera2D**(cameraID) **EndCamera2D**() | Set active 2D camera by ID; use default if no ID |
+| **Camera2DCreate**() | Create 2D camera → cameraID |
+| **Camera2DSetPosition**(cameraID, x, y) | Set camera target (world position) |
+| **Camera2DSetZoom**(cameraID, zoom) | Set zoom level |
+| **Camera2DSetRotation**(cameraID, angle) | Set rotation (radians) |
+| **Camera2DMove**(cameraID, dx, dy) | Move camera target by offset |
+| **Camera2DSmoothFollow**(cameraID, targetX, targetY, speed) | Smooth follow; update each frame |
+| **BeginCamera3D** **EndCamera3D** | Aliases of BeginMode3D, EndMode3D (3D camera) |
+
+---
+
+## Layer system (2D)
+
+| Command | Description |
+|--------|-------------|
+| **LayerCreate**(name, order) | Create layer → layerID (order = draw priority, lower first) |
+| **LayerSetOrder**(layerID, order) | Change draw order |
+| **LayerSetVisible**(layerID, flag) | Hide (0) or show (non‑zero) layer |
+| **LayerSetParallax**(layerID, parallaxX, parallaxY) | Parallax factors (e.g. 0.5 = half speed) |
+| **LayerSetScroll**(layerID, scrollX, scrollY) | Scroll offset for layer |
+| **LayerClear**(layerID) | Remove all sprites/tilemaps/particles from this layer |
+| **LayerSortSprites**(layerID) | No‑op (flush sorts by z automatically) |
+| **SpriteSetLayer**(spriteID, layerID) | Assign sprite to layer |
+| **SpriteSetZIndex**(spriteID, z) | Draw order within layer (higher = on top) |
+| **TilemapSetLayer**(tilemapID, layerID) | Assign tilemap to layer |
+| **TilemapSetParallax**(tilemapID, px, py) | Parallax for tilemap |
+| **ParticleSetLayer**(particleID, layerID) | Assign particle system to layer |
+
+---
+
+## Background system (2D)
+
+| Command | Description |
+|--------|-------------|
+| **BackgroundCreate**(textureId) | Create background from texture → backgroundId |
+| **BackgroundSetColor**(backgroundId, r, g, b, a) | Tint (0–1 or 0–255) |
+| **BackgroundSetTexture**(backgroundId, textureId) | Change texture |
+| **BackgroundSetScroll**(backgroundId, speedX, speedY) | Scroll speed |
+| **BackgroundSetOffset**(backgroundId, offsetX, offsetY) | Base offset |
+| **BackgroundSetParallax**(backgroundId, px, py) | Parallax factors |
+| **BackgroundSetTiled**(backgroundId, flag) | Enable tiling |
+| **BackgroundSetTileSize**(backgroundId, width, height) | Tile size for tiling |
+| **BackgroundAddLayer**(backgroundId, textureId, parallaxX, parallaxY) | Add extra layer |
+| **BackgroundRemoveLayer**(backgroundId, layerIndex) | Remove layer by index |
+| **DrawBackground**(backgroundId) | Draw background (call in draw(); uses current 2D camera) |
+
+---
+
+## Tilemap (2D) – extended
+
+| Command | Description |
+|--------|-------------|
+| **TilemapCreate**(tileWidth, tileHeight, mapWidth, mapHeight) | Create empty tilemap → mapId |
+| **LoadTilemap**(path) | Load or create tilemap from path → mapId |
+| **TilemapLoad**(path) | Alias of LoadTilemap |
+| **TilemapSave**(tilemapId, path) | Save tilemap to JSON file |
+| **TilemapFill**(tilemapId, tileId) | Fill all cells with tileId |
+| **SetTile**(mapId, x, y, tileId) **TilemapSetTile**(…) | Set cell (x,y) to tileId |
+| **GetTile**(mapId, x, y) **TilemapGetTile**(…) | Get tile at (x,y) |
+| **DrawTilemap**(mapId) | Draw tile grid (respects layer/parallax) |
+| **TilemapSetLayer**(tilemapId, layerId) **TilemapSetParallax**(tilemapId, px, py) | Layer and parallax |
+
+---
+
+## Sprite animation and batching
+
+| Command | Description |
+|--------|-------------|
+| **SpriteSetFrame**(spriteId, frameIndex) | Set current frame (for atlas) |
+| **SpriteSetFrameSize**(spriteId, frameWidth, frameHeight) | Set frame size (grid) |
+| **SpriteSetFrameCount**(spriteId, count) | Number of frames (for wrap) |
+| **SpriteSetAnimSpeed**(spriteId, framesPerSecond) | Animation speed |
+| **SpritePlay**(spriteId) | Start playing animation |
+| **SpritePause**(spriteId) | Pause animation |
+| **SpriteStop**(spriteId) | Stop and reset to frame 0 |
+| **SpriteBatchBegin**() | Start collecting SpriteDraw/DrawTexture |
+| **SpriteBatchEnd**() | Flush batch (draw grouped by texture) |
+
+---
+
+## 2D particle emitter
+
+| Command | Description |
+|--------|-------------|
+| **ParticleEmitterCreate**(textureId) | Create 2D emitter → emitterId |
+| **ParticleEmitterSetRate**(emitterId, rate) | Particles per second |
+| **ParticleEmitterSetLifetime**(emitterId, min, max) | Lifetime range (seconds) |
+| **ParticleEmitterSetVelocity**(emitterId, vx, vy) | Base velocity |
+| **ParticleEmitterSetSpread**(emitterId, angleRad) | Spread angle |
+| **ParticleEmitterSetColor**(emitterId, r, g, b, a) | Particle color (0–1) |
+| **ParticleEmitterSetLayer**(emitterId, layerId) | Assign to layer |
+| **DrawParticleEmitter**(emitterId) | Update and draw (call in draw()) |
+
+---
+
+## 2D culling and atlas
+
+| Command | Description |
+|--------|-------------|
+| **Enable2DCulling**(flag) | Skip sprites outside camera + margin |
+| **SetCullingMargin**(pixels) | Margin around camera view |
+| **AtlasLoad**(path) | Load atlas JSON + texture → atlasId |
+| **AtlasGetRegion**(atlasId, name) | Get [x, y, w, h] for region name |
+| **AtlasGetTextureId**(atlasId) | Get texture id for DrawTextureRec |
+
+---
+
+## 2D scene save/load
+
+| Command | Description |
+|--------|-------------|
+| **SceneSave2D**(path) | Save 2D scene to JSON (version + placeholder data) |
+| **SceneLoad2D**(path) | Load 2D scene from JSON (stub: validates format) |
+
+---
+
+## Physics 2D helpers
+
+| Command | Description |
+|--------|-------------|
+| **Physics2DSetGravity**(worldId, x, y) | Set world gravity vector |
+| **Physics2DRaycast**(originX, originY, dirX, dirY) | Raycast in world "default"; use RayHit* for result |
+| **Physics2DSetLayerCollision**(layerA, layerB, flag) | Set whether two layers collide (for contact filter) |
+
+---
+
+## Terrain and water physics
+
+| Command | Description |
+|--------|-------------|
+| **TerrainEnableCollision**(terrainId, flag) | Enable/disable terrain as physics collider (state stored) |
+| **TerrainSetFriction**(terrainId, value) | Set friction for terrain collider |
+| **TerrainSetBounce**(terrainId, value) | Set bounce for terrain collider |
+| **WaterSetDensity**(waterId, value) | Set water density (affects buoyancy) |
+| **WaterSetDrag**(waterId, linear, angular) | Set drag when submerged |
+| **WaterApplyBuoyancy**(bodyId, waterId) | Apply buoyancy to body (stub; call each frame) |
+
+---
+
+## Vegetation physics and weather
+
+| Command | Description |
+|--------|-------------|
+| **TreeEnableCollision**(treeId, flag) | Enable collision (capsule) on tree |
+| **TreeSetCollisionRadius**(treeId, radius) | Set capsule radius |
+| **TreeSetWind**(typeId, strength, speed) | Wind for tree type (shader) |
+| **TreeApplyWind**(treeId, vx, vy, vz) | Apply wind vector (stub) |
+| **TreeRaycast**(systemId, ox, oy, oz, dx, dy, dz) | Ray vs trees (stub) |
+| **GrassSetBendAmount**(grassId, value) | Wind bend amount |
+| **GrassSetInteraction**(grassId, flag) | Player displacement |
+| **WeatherSetType**(type) **WeatherSetIntensity**(…) **WeatherSetWindDirection**(…) **WeatherSetWindSpeed**(…) **WeatherSetFogDensity**(…) **WeatherSetLightningFrequency**(…) | Weather stubs |
+| **FireCreate** **FireSetSpreadRate** **FireSetSmokeEmitter** **FireSetLight** **SmokeSetDissolveRate** **SmokeSetRiseSpeed** | Fire/smoke stubs |
+| **EnvironmentSetGlobalWind** **EnvironmentSetTemperature** **EnvironmentSetHumidity** **EnvironmentAffectParticles/Water/Vegetation** | Environment stubs |
+
+---
+
+## Navigation
+
+| Command | Description |
+|--------|-------------|
+| **NavGridCreate**(width, height) **NavGridSetWalkable**(gridId, x, y, flag) **NavGridSetCost**(…) **NavGridFindPath**(gridId, startX, startY, endX, endY) | Grid pathfinding (stubs) |
+| **NavMeshCreateFromTerrain**(terrainId) **NavMeshAddObstacle** **NavMeshRemoveObstacle** **NavMeshFindPath**(…) | NavMesh (stubs) |
+| **NavAgentCreate** **NavAgentSetSpeed** **NavAgentSetRadius** **NavAgentSetDestination** **NavAgentGetNextWaypoint** | Agents (stubs) |
+
+---
+
+## Sky, time, clouds
+
+| Command | Description |
+|--------|-------------|
+| **TimeSet**(hour) **TimeGet**() **TimeSetSpeed**(multiplier) | Time of day (stubs) |
+| **SkyboxCreate** **SkyboxSetTexture** **SkyboxSetRotation** **SkyboxSetTint** **DrawSkybox** | Skybox (stubs) |
+| **CloudLayerCreate** **CloudLayerSetTexture** **CloudLayerSetHeight** **DrawCloudLayer** | Clouds (stubs) |
+
+---
+
+## Indoor and interaction
+
+| Command | Description |
+|--------|-------------|
+| **RoomCreate** **RoomSetBounds** **RoomAddPortal** **PortalCreate** **PortalSetOpen** | Rooms/portals (stubs) |
+| **DoorCreate** **DoorSetOpen** **DoorToggle** **DoorSetLocked** **LeverCreate** **ButtonCreate** **SwitchCreate** | Doors/levers (stubs) |
+| **TriggerCreate** **InteractableCreate** **PickupCreate** **LightZoneCreate** **WorldSaveInteractables** **WorldLoadInteractables** | Triggers/interact (stubs) |
+
+---
+
+## Streaming and editor
+
+| Command | Description |
+|--------|-------------|
+| **WorldStreamEnable**(flag) **WorldStreamSetRadius**(…) **WorldStreamSetCenter**(x,y,z) **WorldLoadChunk**(chunkX, chunkZ) **WorldUnloadChunk**(…) **WorldIsChunkLoaded**(…) **WorldGetLoadedChunks** | Chunk streaming (stubs) |
+| **EditorEnable**(flag) **EditorSetMode** **EditorSetBrushSize** **EditorSetBrushStrength** **EditorSetBrushFalloff** **EditorSetBrushShape** | Editor tools (stubs) |
+
+---
+
+## Decals
+
+| Command | Description |
+|--------|-------------|
+| **DecalCreate**(textureId, x, y, z, size) **DecalSetLifetime** **DecalRemove** | Decals (stubs) |
 
 ---
 
@@ -99,6 +319,9 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 |--------|-------------|
 | **LoadModel**(path) | Load model from file → model id |
 | **LoadModelFromMesh**(meshId) | Create model from mesh → model id |
+| **DrawMesh**(meshId, materialId, posX,Y,Z, scaleX,Y,Z) | Draw mesh with position and scale |
+| **DrawMeshMatrix**(meshId, materialId, m0..m15) | Draw mesh with full 4x4 matrix (row-major) |
+| **DrawMeshInstanced**(meshId, materialId, instanceCount, …matrix floats) | Draw multiple instances |
 | **GenMeshCube**(w, h, d) | Create cube mesh → mesh id |
 | **LoadCube**(size) | Create cube model (single size) → model id |
 | **DrawModel**(id, x, y, z, scale [, tint]) | Draw model at position with scale |
@@ -107,8 +330,19 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **DrawCube**(posX, posY, posZ, width, height, length, color) | Filled 3D cube (primitive) |
 | **cube**(…) | Alias of DrawCube |
 | **SetModelColor**(modelId, r, g, b, a) | Stored tint for DrawModelSimple |
+| **SetModelPosition**(modelId, x, y, z) | **SetModelRotation**(modelId, axisX, axisY, axisZ, angleRad) | **SetModelScale**(modelId, sx, sy, sz) | Store transform for DrawModelWithState |
+| **DrawModelWithState**(modelId [, tint]) | Draw model using stored position/rotation/scale |
 | **RotateModel**(modelId, speedDegPerSec) | Auto-rotate model each frame |
 | **UnloadModel**(id) | Free model |
+| **SetModelShader**(modelId, shaderId) | Use custom shader on model's first material |
+| **SetModelTexture**(modelId, textureId) | Set diffuse texture on first material |
+| **SetMaterialFloat**(modelId, paramName, value) | Set float uniform on material shader |
+| **SetMaterialVector**(modelId, paramName, x, y, z) | Set vec3 uniform on material shader |
+| **LoadModelAnimations**(path) | Load animations from file; use GetModelAnimationId(n) for ids |
+| **UpdateModelAnimation**(modelId, animId, frame) | Set animation frame |
+| **IsModelAnimationValid**(modelId, animId) | True if anim applies to model |
+| **UnloadModelAnimations**(animId, …) | Unload one or more animation ids |
+| **DrawText3D**(fontId, text, x, y, z, fontSize, spacing [, r,g,b,a]) | Draw text at 3D position (projected to screen) |
 
 ---
 
@@ -120,10 +354,37 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **Background**(r, g, b) | Clear with RGB (alpha 255) |
 | **DrawText**(text, x, y, size, r, g, b, a) | Text at (x,y) with font size and color |
 | **DrawTextSimple**(text, x, y) | Text at (x,y), size 20, white *(use for on-screen; PRINT = console)* |
+| **MeasureText**(text, size) | Width of text in pixels |
 | **DrawRectangle**(x, y, w, h, r, g, b, a) | Filled rectangle |
+| **DrawRect**(…) **DrawRectFill**(…) | Alias: outline = DrawRectangleLines, filled = DrawRectangle |
 | **rect**(…) | Alias of DrawRectangle |
 | **DrawCircle**(x, y, radius, r, g, b, a) | Filled circle |
+| **DrawCircleFill**(…) | Alias of DrawCircle |
 | **circle**(…) | Alias of DrawCircle |
+| **DrawPixel**(x, y, r, g, b, a) | Single pixel |
+| **DrawLine**(x1, y1, x2, y2, r, g, b, a) | Line segment |
+| **LoadTexture**(path) **UnloadTexture**(id) | Load / free texture |
+| **DrawTexture**(id, x, y [, tint]) | Draw texture at position |
+| **DrawTextureEx**(id, x, y, rotation, scale [, tint]) | With rotation and scale |
+| **DrawTextureRec**(id, srcX, srcY, srcW, srcH, x, y [, tint]) | Draw part of texture (sprite frame) |
+| **DrawTexturePro**(id, src…, dest…, origin, rotation, tint) | Full control (source/dest rects) |
+| **DrawTextureFlipH**(textureId, x, y [, tint]) | Draw texture flipped horizontally |
+| **DrawTextureFlipV**(textureId, x, y [, tint]) | Draw texture flipped vertically |
+| **DrawTextureNPatch**(…) | Nine-patch / 9-slice drawing |
+| **GetTextureWidth**(textureId) **GetTextureHeight**(textureId) | Texture dimensions |
+| **GetTextureSize**(textureId) | Returns [width, height] |
+| **LoadTilemap**(path) **DrawTilemap**(mapId [, x, y]) | Tilemap (game package) |
+| **LoadFont**(path) | Load font → font id (use with DrawTextExFont, MeasureTextEx) |
+
+### Sprite (high-level 2D transform)
+
+| Command | Description |
+|--------|-------------|
+| **CreateSprite**(textureId) | Create sprite from texture → spriteId |
+| **SpriteSetPosition**(spriteId, x, y) | **SpriteSetScale**(spriteId, scale) | **SpriteSetScaleXY**(spriteId, sx, sy) |
+| **SpriteSetRotation**(spriteId, angleRad) | **SpriteSetOrigin**(spriteId, ox, oy) | **SpriteSetFlip**(spriteId, flipX, flipY) |
+| **SpriteDraw**(spriteId [, tint]) | Draw sprite with current transform |
+| **DestroySprite**(spriteId) | Free sprite |
 
 ---
 
@@ -131,10 +392,13 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 
 | Command | Description |
 |--------|-------------|
-| **LoadSound**(path) | Load sound file → sound id |
-| **PlaySound**(soundId) | Start playback |
-| **StopSound**(soundId) | Stop playback |
+| **LoadSound**(path) **UnloadSound**(id) | Load / free sound |
+| **PlaySound**(soundId) **StopSound**(soundId) | Start / stop playback |
 | **SetSoundVolume**(soundId, volume) | Set volume (0.0–1.0) |
+| **LoadMusic**(path) **PlayMusicStream**(id) **StopMusicStream**(id) **UnloadMusicStream**(id) | Music stream |
+| **UpdateMusic**(id) / **UpdateMusicStream**(id) | Call each frame while music plays (buffer streaming) |
+| **UnloadMusic**(id) | Alias of UnloadMusicStream |
+| **PauseMusicStream** **ResumeMusicStream** | Pause / resume |
 
 ---
 
@@ -185,7 +449,13 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **Sin**(x) **Cos**(x) **Tan**(x) **Sqrt**(x) | **RandomFloat**(min, max) | **RandomInt**(min, max) | **Vec3Add**(x1,y1,z1, x2,y2,z2) **Vec3Sub** **Vec3Scale**(x,y,z, s) **Vec3Normalize**(x,y,z) |
 
 ### Camera (extended)
-| **CameraFPS**() | **CameraFree**() | **CameraSetFOV**(fov) | **CameraSetClipping**(near, far) | **CameraShake**(amount, duration) |
+| **CameraFPS**() | **CameraFree**() | **CameraSetFOV**(fov) | **CameraSetClipping**(near, far) | **CameraShake**(amount, duration) | **CAMERA3D**() → cameraId | **SetCurrentCamera**(cameraId) | **BeginMode3D** **EndMode3D** |
+
+### Shaders & lighting
+| **LoadShader**(vsPath, fsPath) **UnloadShader**(id) | **BeginShaderMode**(shaderId) **EndShaderMode**() | **SetShaderUniform**(id, name, value) | **SetShaderValueMatrix**(id, name, m0…m15) | **SetShaderValueTexture**(id, name, textureId) |
+
+### 3D raycasting & collision
+| **GetMouseRay**() | **GetRayCollisionMesh**(rayPos 3, rayDir 3, meshId, pos 3, scale 3) | **GetRayCollisionModel**(ray 6, modelId, pos 3, scale 3) | **GetRayCollisionTriangle**(ray 6, p1 3, p2 3, p3 3) | Use **GetRayCollisionPointX/Y/Z**(), **GetRayCollisionDistance**() for last hit |
 
 ### 3D models (extended)
 | **LoadModelAnimated**(path) | **PlayModelAnimation**(model, anim) | **SetModelTexture**(model, texture) | **LoadTexture**(path) **UnloadTexture**(id) | **SetObjectPosition**(obj, x,y,z) **SetObjectRotation**(obj, pitch,yaw,roll) **SetObjectScale**(obj, sx,sy,sz) | **ObjectLookAt**(obj, x,y,z) |
@@ -199,6 +469,24 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 ### File I/O (extended)
 | **LoadJSON**(path) **SaveJSON**(path, object) | **LoadImage**(path) **SaveImage**(imageId, path) | **DirectoryList**(path) (alias ListDir) |
 
+### Image-level commands (CPU-side; edit pixels in RAM)
+
+| Command | Description |
+|--------|-------------|
+| **LoadImage**(path) **UnloadImage**(imageId) | Load / free image |
+| **GetImageColor**(imageId, x, y) | Get pixel (returns r,g,b,a) |
+| **SetImageColor**(imageId, x, y, r, g, b, a) | Set pixel (alias ImageDrawPixel) |
+| **ImageClearBackground**(imageId, r, g, b, a) | Fill image with color |
+| **ImageDrawPixel**(imageId, x, y, r, g, b, a) | Draw one pixel |
+| **ImageDrawRectangle**(imageId, x, y, w, h, r, g, b, a) | Filled rectangle on image |
+| **ImageDrawCircle**(imageId, cx, cy, radius, r, g, b, a) | Circle on image |
+| **ImageResize**(imageId, newW, newH) **ImageResizeNN**(…) | Resize (bilinear / nearest-neighbor) |
+| **ImageRotateCW**(imageId) **ImageFlipHorizontal**(imageId) **ImageFlipVertical**(imageId) | Transform |
+| **ImageCrop**(imageId, x, y, w, h) **ImageColorTint**(imageId, r, g, b, a) | Crop / tint |
+| **LoadTextureFromImage**(imageId) | Upload image to GPU → texture id |
+| **ExportImage**(imageId, path) **ExportImageAsCode**(imageId, path) | Save to file / export as code |
+| **GenImageColor**(w, h, r, g, b, a) **GenImageGradientLinear**(…) **GenImageChecked**(…) etc. | Generate images |
+
 ### Gameplay helpers
 | **TimerStart**(name) | **TimerElapsed**(name) → seconds | **CollisionBox**(x,y,z, w,h,d) → boxId | **CheckCollision**(boxIdA, boxIdB) | **RayCast**(ox,oy,oz, dx,dy,dz [, boxId]) → distance or −1 |
 
@@ -210,32 +498,63 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 
 ---
 
-## Physics commands (default 3D world)
+## Physics commands
 
-Use `PhysicsEnable()` then `BULLET.Step("default", GetFrameTime())` each frame. Bodies use the default world `"default"`.
+### 2D physics (Box2D)
 
 | Command | Description |
 |--------|-------------|
+| **CreateWorld2D**(worldName$, gravityX, gravityY) | Create 2D physics world |
+| **Physics2DCreateWorld**(gravityX, gravityY) | Same using world name `"default"` |
+| **Step2D**(worldName$, dt) **StepAllPhysics2D**(dt) | Step world(s) |
+| **Physics2DStep**(dt) | Step world `"default"` |
+| **CreateBox2D**(world$, body$, x, y, w, h, mass, isDynamic) | Create box body → bodyId |
+| **CreateCircle2D**(world$, body$, x, y, radius, mass, isDynamic) | Create circle body |
+| **GetPositionX2D**(world$, body$) **GetPositionY2D**(…) | Body position |
+| **SetVelocity2D**(world$, body$, vx, vy) **ApplyForce2D**(…) **ApplyImpulse2D**(…) | Velocity and forces |
+| **SetCollisionHandler**(bodyId, subName) | When bodyId collides, call Sub subName(otherBodyId) |
+| **ProcessCollisions2D**(worldId) | Dispatch collision callbacks (call after Step2D) |
+| **BOX2D.CreateWorld** **BOX2D.Step** **BOX2D.CreateBody** etc. | Same API with BOX2D. prefix |
+
+### 3D physics (Bullet)
+
+| Command | Description |
+|--------|-------------|
+| **CreateWorld3D**(worldName$, gx, gy, gz) **Step3D**(worldName$, dt) **StepAllPhysics3D**(dt) | Create and step 3D world |
 | **PhysicsEnable**() | Create/enable default 3D physics world |
 | **PhysicsDisable**() | Destroy default world |
 | **PhysicsSetGravity**(x, y, z) | Set gravity of default world |
 | **CreateRigidBody**([model,] mass) | Create box body in default world → bodyId |
-| **ApplyForce**(bodyId, fx, fy, fz) | Apply force to body |
-| **ApplyImpulse**(bodyId, ix, iy, iz) | Apply impulse |
-| **SetBodyVelocity**(bodyId, vx, vy, vz) | Set linear velocity |
-| **GetBodyVelocity**(bodyId) | → [vx, vy, vz] |
+| **ApplyForce**(bodyId, fx, fy, fz) **ApplyImpulse**(bodyId, ix, iy, iz) | Force / impulse |
+| **SetBodyVelocity**(bodyId, vx, vy, vz) **GetBodyVelocity**(bodyId) | Linear velocity |
 | **CheckCollision3D**(bodyIdA, bodyIdB) | → true if AABBs overlap |
+| **BULLET.CreateWorld** **BULLET.Step** **BULLET.CreateBox** **BULLET.RayCast** etc. | Same API with BULLET. prefix |
 
 ---
 
 ## GUI commands (menus, HUDs)
 
+### Immediate-mode UI (BeginUI / EndUI)
+
 | Command | Description |
 |--------|-------------|
-| **GuiButton**(text, x, y, w, h) | Button; returns 1 if clicked else 0 |
+| **BeginUI**() **EndUI**() | Start / end UI layout (vertical cursor) |
+| **Label**(text) / **UILabel**(text) | Draw label at current layout position |
+| **Button**(text) / **UIButton**(text) | Button; returns 1 if clicked else 0 |
+| **Slider**(…) / **UISlider**(…) | Slider |
+| **Checkbox**(text, checked) / **UICheckbox**(…) | Checkbox |
+| **TextBox**(…) / **UITextBox**(…) | Text input |
+| **ProgressBar**(…) / **UIProgressBar**(…) | Progress bar |
+| **WindowBox**(title, x, y, w, h) **GroupBox**(text, x, y, w, h) | Panels |
+
+### Raygui (positioned widgets)
+
+| Command | Description |
+|--------|-------------|
+| **GuiButton**(x, y, w, h, text) | Button; returns 1 if clicked else 0 |
 | **button**(…) | Alias of GuiButton |
-| **GuiLabel**(x, y, w, h, text) | Label (or GuiLabel text, x, y for simple) |
-| **GuiSlider**(x, y, w, min, max, value) | Slider; returns current value (6-arg). Also (x,y,w,h, textL, textR, value, min, max) |
+| **GuiLabel**(x, y, w, h, text) | Label |
+| **GuiSlider**(x, y, w, min, max, value) | Slider; returns current value |
 | **GuiCheckbox**(text, x, y, checked) | Checkbox; returns 1 if checked else 0 |
 | **GuiTextbox**(x, y, w, text) | Text box; returns current text |
 
@@ -617,6 +936,114 @@ Node-based shader building; **ShaderGraphCompile** returns empty string (stub).
 | **AnimSetParameter**(name, value) | Set param for conditions |
 | **AnimSetState**(entityId, stateId) | Set entity state |
 | **AnimUpdate**(entityId) | No-op |
+
+---
+
+## Terrain (heightmap + mesh)
+
+| Command | Description |
+|--------|-------------|
+| **LoadHeightmap**(imageId) | Create heightmap from image (grayscale) → heightmap id |
+| **GenHeightmap**(width, depth, noiseScale) | Procedural heightmap → heightmap id |
+| **GenHeightmapPerlin**(width, depth, offsetX, offsetY, scale) | Perlin noise heightmap → heightmap id |
+| **GenTerrainMesh**(heightmapId, sizeX, sizeZ, heightScale [, lod]) | Build mesh from heightmap → mesh id |
+| **TerrainCreate**(heightmapId, sizeX, sizeZ, heightScale) | Create terrain → terrain id |
+| **TerrainUpdate**(terrainId) | Rebuild mesh from heightmap |
+| **DrawTerrain**(terrainId, posX, posY, posZ) | Draw terrain at position (Render3D) |
+| **SetTerrainTexture**(terrainId, textureId) | **SetTerrainMaterial**(terrainId, materialId) |
+| **SetTerrainLOD**(terrainId, lodLevel) | Set LOD for next TerrainUpdate |
+| **TerrainRaise**(terrainId, x, z, radius, amount) | **TerrainLower**(…) | **TerrainSmooth**(…) | **TerrainFlatten**(terrainId, x, z, radius, targetHeight) |
+| **TerrainPaint**(terrainId, x, z, radius, paintValue [, blend]) | Blend paint value in disk |
+| **TerrainGetHeight**(terrainId, x, z) | World Y at (x,z) |
+| **TerrainGetNormal**(terrainId, x, z) | Normal vector at (x,z) → [nx, ny, nz] |
+| **TerrainRaycast**(terrainId, ox, oy, oz, dx, dy, dz) | Ray vs terrain → [hit, dist, hx, hy, hz] |
+
+---
+
+## Water
+
+| Command | Description |
+|--------|-------------|
+| **WaterCreate**(width, depth, tileSize) | Create water plane → water id |
+| **DrawWater**(waterId [, posX, posY, posZ]) | Draw water (Render3D) |
+| **SetWaterPosition**(waterId, x, y, z) | **SetWaterWaveSpeed**(waterId, speed) | **SetWaterWaveHeight**(waterId, height) | **SetWaterWaveFrequency**(waterId, freq) |
+| **SetWaterTime**(waterId, time) | **WaterGetHeight**(waterId, x, z) | Wave formula height |
+| **SetWaterTexture** / **SetWaterReflectionTexture** / **SetWaterRefractionTexture** / **SetWaterNormalMap** | Store texture refs |
+| **SetWaterColor**(waterId, r, g, b, a) | **SetWaterShininess**(waterId, shininess) |
+| **WaterEnableFoam**(waterId, enabled) | **WaterSetFoamIntensity**(…) | **WaterSetDepthFade**(…) | **WaterSetTransparency**(…) |
+
+---
+
+## Vegetation (trees and grass)
+
+| Command | Description |
+|--------|-------------|
+| **TreeTypeCreate**(modelId, trunkTexId, leafTexId) | → tree type id |
+| **TreeSystemCreate**() | → tree system id |
+| **TreePlace**(systemId, typeId, x, y, z, scale, rotation) | Place tree → tree id |
+| **TreeRemove**(treeId) | **TreeSetPosition**(treeId, x, y, z) | **TreeSetScale**(treeId, scale) | **TreeSetRotation**(treeId, rotation) |
+| **TreeSystemSetLOD**(systemId, near, mid, far) | **TreeSystemEnableInstancing**(systemId, on) |
+| **TreeGetAt**(systemId, x, z) | Nearest tree id at (x,z) |
+| **DrawTrees**(systemId) | Draw all trees in system (Render3D) |
+| **GrassCreate**(textureId, density, patchSize) | → grass id |
+| **GrassSetWind**(grassId, speed, strength) | **GrassSetHeight**(grassId, height) | **GrassSetColor**(grassId, r, g, b, a) |
+| **GrassPaint**(grassId, x, z, radius, density) | **GrassErase**(grassId, x, z, radius) | **GrassSetDensity**(grassId, density) |
+| **GrassSetLOD**(grassId, dist) | **GrassEnableInstancing**(grassId, on) |
+| **DrawGrass**(grassId) | Draw grass (Render3D) |
+
+---
+
+## Object placement
+
+| Command | Description |
+|--------|-------------|
+| **ObjectPlace**(modelId, x, y, z, scale, rotation) | Place object → object id |
+| **ObjectRemove**(objectId) | **ObjectSetTransform**(objectId, x, y, z, scaleX, scaleY, scaleZ, rotAxisX, rotAxisY, rotAxisZ, rotAngle) |
+| **ObjectRandomScatter**(modelId, areaX, areaZ, count, minScale, maxScale) | Scatter objects → [id,…] |
+| **ObjectPaint**(modelId, x, z, radius, density) | **ObjectErase**(x, z, radius) |
+| **ObjectGetAt**(x, z) | Nearest object id at (x,z) |
+| **ObjectRaycast**(ox, oy, oz, dx, dy, dz) | Ray vs objects → [hit, objectId, hx, hy, hz] |
+| **DrawObject**(objectId) | **DrawAllObjects**() |
+
+---
+
+## World save/load
+
+| Command | Description |
+|--------|-------------|
+| **WorldSave**(path) | Save world (objects, etc.) to file |
+| **WorldLoad**(path) | Load world from file |
+| **WorldExportJSON**(path) | Export as JSON |
+| **WorldImportJSON**(path) | Import from JSON |
+
+---
+
+## Procedural generation
+
+| Command | Description |
+|--------|-------------|
+| **NoisePerlin2D**(x, y, scale) | **NoiseFractal2D**(x, y, octaves, persistence, lacunarity) | **NoiseSimplex2D**(x, y, scale) | Noise value [0,1] |
+| **ScatterTrees**(treeSystemId, treeTypeId, areaX, areaZ, density) | **ScatterGrass**(grassId, centerX, centerZ, radius, density) |
+| **ScatterObjects**(modelId, areaX, areaZ, count [, minScale, maxScale]) |
+
+---
+
+## Optimization
+
+| Command | Description |
+|--------|-------------|
+| **SetCullingDistance**(distance) | Max draw distance for culling |
+| **EnableFrustumCulling**(flag) | Enable/disable frustum culling |
+
+---
+
+## Mesh (low-level)
+
+| Command | Description |
+|--------|-------------|
+| **MeshCreate**(vertices, normals, uvs, indices) | Create mesh from arrays → mesh id |
+| **MeshUpdate**(meshId) | Re-upload mesh to GPU |
+| **MeshSetVertices**(meshId, array) | **MeshSetNormals**(meshId, array) | **MeshSetUVs**(meshId, array) | **MeshSetIndices**(meshId, array) |
 
 ---
 

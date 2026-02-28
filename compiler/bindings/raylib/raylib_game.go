@@ -244,6 +244,143 @@ func registerGame(v *vm.VM) {
 		camera3D.Target.Z += dz
 		return nil, nil
 	})
+	// Camera3DMoveForward(amount): move camera position and target along forward (target - position).
+	v.RegisterForeign("Camera3DMoveForward", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("Camera3DMoveForward requires (amount)")
+		}
+		amount := toFloat32(args[0])
+		fwd := rl.Vector3Subtract(camera3D.Target, camera3D.Position)
+		dist := rl.Vector3Length(fwd)
+		if dist < 1e-6 {
+			return nil, nil
+		}
+		fwd = rl.Vector3Scale(fwd, amount/dist)
+		camera3D.Position = rl.Vector3Add(camera3D.Position, fwd)
+		camera3D.Target = rl.Vector3Add(camera3D.Target, fwd)
+		return nil, nil
+	})
+	// Camera3DMoveRight(amount): move camera position and target along right vector (cross(forward, up)).
+	v.RegisterForeign("Camera3DMoveRight", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("Camera3DMoveRight requires (amount)")
+		}
+		amount := toFloat32(args[0])
+		fwd := rl.Vector3Normalize(rl.Vector3Subtract(camera3D.Target, camera3D.Position))
+		right := rl.Vector3CrossProduct(fwd, camera3D.Up)
+		right = rl.Vector3Normalize(right)
+		delta := rl.Vector3Scale(right, amount)
+		camera3D.Position = rl.Vector3Add(camera3D.Position, delta)
+		camera3D.Target = rl.Vector3Add(camera3D.Target, delta)
+		return nil, nil
+	})
+	// Camera3DMoveBackward(amount): move camera and target backward (opposite of forward).
+	v.RegisterForeign("Camera3DMoveBackward", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("Camera3DMoveBackward requires (amount)")
+		}
+		return v.CallForeign("Camera3DMoveForward", []interface{}{-toFloat64(args[0])})
+	})
+	// Camera3DMoveLeft(amount): move camera and target left (opposite of right).
+	v.RegisterForeign("Camera3DMoveLeft", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("Camera3DMoveLeft requires (amount)")
+		}
+		return v.CallForeign("Camera3DMoveRight", []interface{}{-toFloat64(args[0])})
+	})
+	// Camera3DMoveUp(amount): move camera and target along camera up vector.
+	v.RegisterForeign("Camera3DMoveUp", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("Camera3DMoveUp requires (amount)")
+		}
+		amount := toFloat32(args[0])
+		up := rl.Vector3Normalize(camera3D.Up)
+		delta := rl.Vector3Scale(up, amount)
+		camera3D.Position = rl.Vector3Add(camera3D.Position, delta)
+		camera3D.Target = rl.Vector3Add(camera3D.Target, delta)
+		return nil, nil
+	})
+	// Camera3DMoveDown(amount): move camera and target opposite to up vector.
+	v.RegisterForeign("Camera3DMoveDown", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("Camera3DMoveDown requires (amount)")
+		}
+		amount := -toFloat32(args[0])
+		up := rl.Vector3Normalize(camera3D.Up)
+		delta := rl.Vector3Scale(up, amount)
+		camera3D.Position = rl.Vector3Add(camera3D.Position, delta)
+		camera3D.Target = rl.Vector3Add(camera3D.Target, delta)
+		return nil, nil
+	})
+	// Camera3DRotateYaw(angleRad): rotate camera position around target on world Y axis.
+	v.RegisterForeign("Camera3DRotateYaw", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("Camera3DRotateYaw requires (angleRad)")
+		}
+		angle := toFloat32(args[0])
+		rel := rl.Vector3Subtract(camera3D.Position, camera3D.Target)
+		dx, dz := rel.X, rel.Z
+		c := float32(math.Cos(float64(angle)))
+		s := float32(math.Sin(float64(angle)))
+		camera3D.Position.X = camera3D.Target.X + dx*c - dz*s
+		camera3D.Position.Z = camera3D.Target.Z + dx*s + dz*c
+		return nil, nil
+	})
+	// Camera3DRotatePitch(angleRad): rotate camera position toward/away from target (pitch).
+	v.RegisterForeign("Camera3DRotatePitch", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("Camera3DRotatePitch requires (angleRad)")
+		}
+		angle := toFloat32(args[0])
+		rel := rl.Vector3Subtract(camera3D.Position, camera3D.Target)
+		dist := rl.Vector3Length(rel)
+		if dist < 1e-6 {
+			return nil, nil
+		}
+		// Current pitch from horizontal (Y); increase = look up.
+		currPitch := float32(math.Asin(float64(rel.Y / dist)))
+		newPitch := currPitch + angle
+		const maxPitch = float32(1.4)
+		if newPitch > maxPitch {
+			newPitch = maxPitch
+		}
+		if newPitch < -maxPitch {
+			newPitch = -maxPitch
+		}
+		cp := float32(math.Cos(float64(newPitch)))
+		sp := float32(math.Sin(float64(newPitch)))
+		horizLen := float32(math.Sqrt(float64(rel.X*rel.X + rel.Z*rel.Z)))
+		if horizLen < 1e-6 {
+			horizLen = 1
+		}
+		camera3D.Position.X = camera3D.Target.X + dist*cp*rel.X/horizLen
+		camera3D.Position.Y = camera3D.Target.Y + dist*sp
+		camera3D.Position.Z = camera3D.Target.Z + dist*cp*rel.Z/horizLen
+		return nil, nil
+	})
+	// Camera3DRotateRoll(angleRad): rotate camera's up vector around the forward axis (position-target).
+	v.RegisterForeign("Camera3DRotateRoll", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("Camera3DRotateRoll requires (angleRad)")
+		}
+		angle := toFloat32(args[0])
+		fwd := rl.Vector3Subtract(camera3D.Position, camera3D.Target)
+		dist := rl.Vector3Length(fwd)
+		if dist < 1e-6 {
+			return nil, nil
+		}
+		fwd = rl.Vector3Scale(fwd, 1/dist)
+		up := camera3D.Up
+		cr := float32(math.Cos(float64(angle)))
+		sr := float32(math.Sin(float64(angle)))
+		right := rl.Vector3CrossProduct(fwd, up)
+		camera3D.Up = rl.Vector3Add(
+			rl.Vector3Scale(up, cr),
+			rl.Vector3Scale(right, -sr),
+		)
+		camera3D.Up = rl.Vector3Normalize(camera3D.Up)
+		return nil, nil
+	})
 	// CameraRotate(deltaX, deltaY): mouse-delta rotation; or CameraRotate(pitchRad, yawRad, rollRad): absolute rotation
 	v.RegisterForeign("CameraRotate", func(args []interface{}) (interface{}, error) {
 		if len(args) == 2 {

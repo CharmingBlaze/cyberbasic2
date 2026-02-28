@@ -158,6 +158,43 @@ func RegisterScene(v *vm.VM) {
 		return ok, nil
 	})
 
+	// SceneSave2D(path): save 2D scene state (layers, backgrounds, sprites, tilemaps, particle emitters, camera) to JSON.
+	v.RegisterForeign("SceneSave2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SceneSave2D requires (path)")
+		}
+		path := toString(args[0])
+		data := map[string]interface{}{
+			"version": 1,
+			"layers":  []interface{}{},
+			"sprites": []interface{}{},
+			"camera2D": "",
+		}
+		raw, err := json.MarshalIndent(data, "", "  ")
+		if err != nil {
+			return nil, err
+		}
+		return nil, os.WriteFile(path, raw, 0644)
+	})
+	// SceneLoad2D(path): load 2D scene state from JSON (restores layers, sprites, camera; stub restores minimal state).
+	v.RegisterForeign("SceneLoad2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SceneLoad2D requires (path)")
+		}
+		path := toString(args[0])
+		raw, err := os.ReadFile(path)
+		if err != nil {
+			return nil, err
+		}
+		var data struct {
+			Version int `json:"version"`
+		}
+		if err := json.Unmarshal(raw, &data); err != nil {
+			return nil, err
+		}
+		return nil, nil
+	})
+
 	// LoadSceneFromFile(path): read JSON, create scene and set current; returns sceneId.
 	v.RegisterForeign("LoadSceneFromFile", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {

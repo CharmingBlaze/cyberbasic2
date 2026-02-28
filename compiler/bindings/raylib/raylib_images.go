@@ -1231,3 +1231,23 @@ func registerImages(v *vm.VM) {
 		return nil, nil
 	})
 }
+
+// GetImageDataForHeightmap returns width, height, and grayscale heights (0-1) for an image id.
+// Used by the terrain package to build heightmaps from raylib images.
+func GetImageDataForHeightmap(imageID string) (width, height int, heights []float32, ok bool) {
+	imageMu.Lock()
+	img, ok := images[imageID]
+	imageMu.Unlock()
+	if !ok || img == nil {
+		return 0, 0, nil, false
+	}
+	w, h := int(img.Width), int(img.Height)
+	heights = make([]float32, w*h)
+	for y := 0; y < h; y++ {
+		for x := 0; x < w; x++ {
+			c := rl.GetImageColor(*img, int32(x), int32(y))
+			heights[y*w+x] = (float32(c.R) + float32(c.G) + float32(c.B)) / (3 * 255)
+		}
+	}
+	return w, h, heights, true
+}

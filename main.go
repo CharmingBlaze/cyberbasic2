@@ -13,11 +13,19 @@ import (
 	"cyberbasic/compiler/bindings/bullet"
 	"cyberbasic/compiler/bindings/ecs"
 	"cyberbasic/compiler/bindings/game"
+	"cyberbasic/compiler/bindings/indoor"
+	"cyberbasic/compiler/bindings/navigation"
 	"cyberbasic/compiler/bindings/net"
 	"cyberbasic/compiler/bindings/raylib"
 	"cyberbasic/compiler/bindings/scene"
 	"cyberbasic/compiler/bindings/sql"
 	"cyberbasic/compiler/bindings/std"
+	"cyberbasic/compiler/bindings/objects"
+	"cyberbasic/compiler/bindings/procedural"
+	"cyberbasic/compiler/bindings/terrain"
+	"cyberbasic/compiler/bindings/vegetation"
+	"cyberbasic/compiler/bindings/water"
+	"cyberbasic/compiler/bindings/world"
 	"cyberbasic/compiler/gogen"
 	"cyberbasic/compiler/lexer"
 	"cyberbasic/compiler/parser"
@@ -214,6 +222,14 @@ func main() {
 	scene.RegisterScene(rt.GetVM())
 	game.RegisterGame(rt.GetVM())
 	sql.RegisterSQL(rt.GetVM())
+	terrain.RegisterTerrain(rt.GetVM())
+	objects.RegisterObjects(rt.GetVM())
+	procedural.RegisterProcedural(rt.GetVM())
+	water.RegisterWater(rt.GetVM())
+	vegetation.RegisterVegetation(rt.GetVM())
+	world.RegisterWorld(rt.GetVM())
+	navigation.RegisterNavigation(rt.GetVM())
+	indoor.RegisterIndoor(rt.GetVM())
 	std.RegisterStd(rt.GetVM())
 
 	fmt.Println("Running program...")

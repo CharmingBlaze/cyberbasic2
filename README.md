@@ -3,6 +3,35 @@
 **CyberBasic2** is a modern BASIC-inspired language with full 2D/3D game development capabilities.  
 Repository: **[github.com/CharmingBlaze/cyberbasic2](https://github.com/CharmingBlaze/cyberbasic2)** · Report issues and contribute there.
 
+### Why CyberBasic?
+
+BASIC is approachable and readable; Go gives a single binary and fast compile; raylib provides cross-platform graphics and input without a heavy engine. CyberBasic combines them so you can script games and tools in a familiar dialect while keeping the runtime small and portable.
+
+### Hello World
+
+```bas
+PRINT "Hello, CyberBasic!"
+```
+
+Or run the **first game** (window + WASD circle) with one command after building (see [Quick start](#quick-start) below):
+
+```bas
+InitWindow(800, 600, "My Game")
+SetTargetFPS(60)
+VAR x = 400
+VAR y = 300
+WHILE NOT WindowShouldClose()
+  IF IsKeyDown(KEY_W) THEN LET y = y - 4
+  IF IsKeyDown(KEY_S) THEN LET y = y + 4
+  IF IsKeyDown(KEY_A) THEN LET x = x - 4
+  IF IsKeyDown(KEY_D) THEN LET x = x + 4
+  ClearBackground(20, 20, 30, 255)
+  DrawCircle(x, y, 30, 255, 100, 100, 255)
+  DrawText("WASD to move", 10, 10, 20, 255, 255, 255, 255)
+WEND
+CloseWindow()
+```
+
 ## Architecture
 
 - **Compiler/Interpreter**: Go-based lexer, parser, and bytecode VM
@@ -53,9 +82,20 @@ CyberBasic/
 
 **Full feature set:** Full 2D and 3D graphics, full 2D physics (Box2D), full 3D physics (Bullet), full ECS, full GUI (widgets above), and multiplayer (TCP Connect/Send/Receive, Host/Accept). See **[docs/DOCUMENTATION_INDEX.md](docs/DOCUMENTATION_INDEX.md)** for the full doc index. **First 2D game:** [CHEATSHEET.md](CHEATSHEET.md) and [docs/2D_GRAPHICS_GUIDE.md](docs/2D_GRAPHICS_GUIDE.md). **First 3D game:** [CHEATSHEET.md](CHEATSHEET.md) and [docs/3D_GRAPHICS_GUIDE.md](docs/3D_GRAPHICS_GUIDE.md). **Examples:** [examples/README.md](examples/README.md).
 
+## Quick start
+
+After building (see [Building](#building)), run the demo with one command:
+
+```bash
+./cyberbasic examples/first_game.bas
+```
+
+On Windows: `.\cyberbasic.exe examples\first_game.bas`. Or use the helper scripts: `./run_demo.sh` (Unix) or `.\run_demo.ps1` (PowerShell)—they build and run the demo.
+
 ## Documentation
 
 - **[Documentation Index](docs/DOCUMENTATION_INDEX.md)** – Master index of all guides
+- **[Roadmap](ROADMAP.md)** – Planned features and priorities
 - **[Getting Started](docs/GETTING_STARTED.md)** – Build, run first program
 - **[Quick Reference](docs/QUICK_REFERENCE.md)** – One-page syntax
 - **[Language Spec](LANGUAGE_SPEC.md)** – Full language reference
@@ -70,10 +110,10 @@ CyberBasic/
 ## Building
 
 ```bash
-# Build and run (uses raylib-go; no C build needed)
+# Build (uses raylib-go; no C build needed)
 go build -o cyberbasic .
 
-# Run a BASIC file
+# Run a BASIC file (e.g. the first-game demo)
 ./cyberbasic examples/first_game.bas
 
 # Optional: build the C engine (requires Raylib and Bullet)

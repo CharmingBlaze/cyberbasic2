@@ -104,6 +104,14 @@ The compiler does not inject frame or mode calls; your code compiles as written.
 | **SetCamera2D** | (camera2D) | — | Set 2D camera |
 | **BeginMode2D** | (camera2D) | — | Begin 2D mode |
 | **EndMode2D** | () | — | End 2D mode |
+| **Camera2DCreate** | () | cameraID | Create 2D camera by ID |
+| **Camera2DSetPosition** | (cameraID, x, y) | — | Set camera target |
+| **Camera2DSetZoom** | (cameraID, zoom) | — | Set zoom |
+| **Camera2DSetRotation** | (cameraID, angle) | — | Set rotation (rad) |
+| **Camera2DMove** | (cameraID, dx, dy) | — | Move target by offset |
+| **Camera2DSmoothFollow** | (cameraID, targetX, targetY, speed) | — | Smooth follow (call each frame) |
+| **BeginCamera2D** | (cameraID) | — | Set active 2D camera for flush |
+| **EndCamera2D** | () | — | Clear active 2D camera |
 | **GetWorldToScreen2D** | (pos, camera) | x, y | World to screen 2D |
 | **GetScreenToWorld2D** | (pos, camera) | x, y | Screen to world 2D |
 | **BeginBlendMode** | (mode) | — | Begin blend mode |
@@ -143,6 +151,39 @@ The compiler does not inject frame or mode calls; your code compiles as written.
 | **FileExists** | (path) | bool | True if file exists |
 
 **Config/blend flags (0-arg):** FLAG_VSYNC_HINT, FLAG_FULLSCREEN_MODE, FLAG_WINDOW_RESIZABLE, FLAG_WINDOW_UNDECORATED, FLAG_WINDOW_HIDDEN, FLAG_WINDOW_MINIMIZED, FLAG_WINDOW_MAXIMIZED, FLAG_WINDOW_UNFOCUSED, FLAG_WINDOW_TOPMOST, FLAG_WINDOW_ALWAYS_RUN, FLAG_MSAA_4X_HINT, FLAG_INTERLACED_HINT, FLAG_WINDOW_HIGHDPI, FLAG_BORDERLESS_WINDOWED_MODE; BLEND_ALPHA, BLEND_ADDITIVE, BLEND_MULTIPLIED, BLEND_ADD_COLORS, BLEND_SUBTRACT_COLORS, BLEND_CUSTOM. See [Windows, scaling, and splitscreen](docs/WINDOWS_AND_VIEWS.md).
+
+### Layer system (raylib_layers.go)
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **LayerCreate** | (name, order) | layerID | Create layer (order = draw priority) |
+| **LayerSetOrder** | (layerID, order) | — | Change draw order |
+| **LayerSetVisible** | (layerID, flag) | — | Hide (0) or show layer |
+| **LayerSetParallax** | (layerID, parallaxX, parallaxY) | — | Parallax factors |
+| **LayerSetScroll** | (layerID, scrollX, scrollY) | — | Scroll offset |
+| **LayerClear** | (layerID) | — | Clear all drawables from layer |
+| **LayerSortSprites** | (layerID) | — | No-op (flush sorts by z) |
+| **SpriteSetLayer** | (spriteID, layerID) | — | Assign sprite to layer (raylib_sprite.go) |
+| **SpriteSetZIndex** | (spriteID, z) | — | Z-order within layer |
+| **TilemapSetLayer** | (tilemapID, layerID) | — | Assign tilemap to layer (game) |
+| **TilemapSetParallax** | (tilemapID, px, py) | — | Parallax for tilemap |
+| **ParticleSetLayer** | (particleID, layerID) | — | Assign particle system to layer (game) |
+
+### Background system (raylib_background.go)
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **BackgroundCreate** | (textureId) | backgroundId | Create background |
+| **BackgroundSetColor** | (backgroundId, r, g, b, a) | — | Tint |
+| **BackgroundSetTexture** | (backgroundId, textureId) | — | Set texture |
+| **BackgroundSetScroll** | (backgroundId, speedX, speedY) | — | Scroll speed |
+| **BackgroundSetOffset** | (backgroundId, offsetX, offsetY) | — | Offset |
+| **BackgroundSetParallax** | (backgroundId, px, py) | — | Parallax |
+| **BackgroundSetTiled** | (backgroundId, flag) | — | Enable tiling |
+| **BackgroundSetTileSize** | (backgroundId, width, height) | — | Tile size |
+| **BackgroundAddLayer** | (backgroundId, textureId, px, py) | — | Add layer |
+| **BackgroundRemoveLayer** | (backgroundId, layerIndex) | — | Remove layer |
+| **DrawBackground** | (backgroundId) | — | Draw (queued in 2D) |
 
 ### Hybrid loop (raylib_hybrid.go)
 
@@ -306,6 +347,9 @@ When **update(dt)** and/or **draw()** are defined and the main loop is a game lo
 |---------|-----------|---------|-------------|
 | **LoadTexture** | (path) | id | Load texture from file |
 | **UnloadTexture** | (id) | — | Unload texture |
+| **GetTextureWidth** | (textureId) | int | Texture width in pixels |
+| **GetTextureHeight** | (textureId) | int | Texture height in pixels |
+| **GetTextureSize** | (textureId) | [w, h] | Texture dimensions |
 | **LoadRenderTexture** | (width, height) | id | Create render texture |
 | **UnloadRenderTexture** | (id) | — | Unload render texture |
 | **BeginTextureMode** | (targetId) | — | Begin drawing to texture |
@@ -315,6 +359,8 @@ When **update(dt)** and/or **draw()** are defined and the main loop is a game lo
 | **DrawTextureEx** | (id, pos, rotation, scale, tint) | — | Draw texture (rotated, scaled) |
 | **DrawTextureRec** | (id, source, pos, tint) | — | Draw texture (source rect) |
 | **DrawTexturePro** | (id, source, dest, origin, rotation, tint) | — | Draw texture (full transform) |
+| **DrawTextureFlipH** | (textureId, x, y [, tint]) | — | Draw texture flipped horizontally |
+| **DrawTextureFlipV** | (textureId, x, y [, tint]) | — | Draw texture flipped vertically |
 | **DrawTextureNPatch** | (id, nPatchInfo, dest, origin, rotation, tint) | — | Draw 9-patch texture |
 | **LoadTextureFromImage** | (imageId) | id | Create texture from image |
 | **LoadTextureCubemap** | (imageId, layout) | id | Load cubemap |
@@ -338,6 +384,20 @@ When **update(dt)** and/or **draw()** are defined and the main loop is a game lo
 | **GetSpriteAnimationFrame** | (animId) | int | Current frame index |
 | **DrawSpriteAnimation** | (animId, posX, posY [, scaleX, scaleY, rotation, r,g,b,a]) | — | Draw animated sprite |
 | **DestroySpriteAnimation** | (animId) | — | Free animation |
+
+### Sprite (raylib_sprite.go)
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **CreateSprite** | (textureId) | spriteId | Create sprite from texture |
+| **SpriteSetPosition** | (spriteId, x, y) | — | Set position |
+| **SpriteSetScale** | (spriteId, scale) | — | Set uniform scale |
+| **SpriteSetScaleXY** | (spriteId, sx, sy) | — | Set X/Y scale |
+| **SpriteSetRotation** | (spriteId, angleRad) | — | Set rotation |
+| **SpriteSetOrigin** | (spriteId, ox, oy) | — | Set pivot (in texture pixels) |
+| **SpriteSetFlip** | (spriteId, flipX, flipY) | — | Set flip (0/1 or bool) |
+| **SpriteDraw** | (spriteId [, tint]) | — | Draw sprite with current transform |
+| **DestroySprite** | (spriteId) | — | Free sprite |
 
 ---
 
@@ -426,6 +486,10 @@ Other image commands: ImageFromImage, ImageFromChannel, ImageText, ImageTextEx, 
 | **SetModelMeshMaterial** | (modelId, meshId, materialId) | — | Set mesh material |
 | **LoadCube** | (size) | id | Create cube model |
 | **SetModelColor** | (modelId, r, g, b, a) | — | Stored tint for DrawModelSimple |
+| **SetModelPosition** | (modelId, x, y, z) | — | Store position for DrawModelWithState |
+| **SetModelRotation** | (modelId, axisX, axisY, axisZ, angleRad) | — | Store rotation |
+| **SetModelScale** | (modelId, sx, sy, sz) | — | Store scale |
+| **DrawModelWithState** | (modelId [, tint]) | — | Draw model using stored transform |
 | **RotateModel** | (modelId, speedDegPerSec) | — | Add rotation each frame |
 | **DrawModelSimple** | (id, x, y, z [, angle]) | — | Draw at (x,y,z), scale 1; uses SetModelColor/RotateModel |
 
@@ -538,7 +602,8 @@ Picking: **GetMouseRay**() (updates internal ray), **GetMouseRayOriginX/Y/Z**(),
 | **UnloadMesh** | (id) | — | Unload mesh |
 | **GetMeshBoundingBox** | (id) | box | Mesh AABB |
 | **ExportMesh** | (id, path) | bool | Export mesh |
-| **DrawMesh** | (id, materialId, transform) | — | Draw mesh |
+| **DrawMesh** | (id, materialId, posX,Y,Z, scaleX,Y,Z) | — | Draw mesh (position + scale) |
+| **DrawMeshMatrix** | (meshId, materialId, m0..m15) | — | Draw mesh with full 4x4 matrix (row-major) |
 | **UpdateMeshBuffer** | (id, index, data) | — | Update mesh buffer |
 | **DrawMeshInstanced** | (id, materialId, transforms) | — | Draw instanced |
 | **LoadMaterialDefault** | () | id | Default material |
@@ -763,6 +828,15 @@ Other Vector2/Vector3/Matrix/Quaternion helpers: Vector2AddValue, Vector2Subtrac
 | **Distance2D** | (x1, y1, x2, y2) | float | 2D distance |
 | **Distance3D** | (x1, y1, z1, x2, y2, z2) | float | 3D distance |
 | **SetCamera2DCenter** | (worldX, worldY) | — | 2D camera center at (worldX, worldY) |
+| **Camera3DMoveForward** | (amount) | — | Move camera and target along look direction |
+| **Camera3DMoveBackward** | (amount) | — | Move backward |
+| **Camera3DMoveRight** | (amount) | — | Move along right |
+| **Camera3DMoveLeft** | (amount) | — | Move along left |
+| **Camera3DMoveUp** | (amount) | — | Move along camera up |
+| **Camera3DMoveDown** | (amount) | — | Move along camera down |
+| **Camera3DRotateYaw** | (angleRad) | — | Rotate position around target (Y axis) |
+| **Camera3DRotatePitch** | (angleRad) | — | Tilt camera up/down |
+| **Camera3DRotateRoll** | (angleRad) | — | Rotate camera up vector around forward axis |
 
 **Key constants (0-arg):** GAME.KEY_W, GAME.KEY_A, GAME.KEY_S, GAME.KEY_D, GAME.KEY_SPACE.
 
@@ -790,9 +864,11 @@ Use **BOX2D.*** prefix or legacy flat names.
 | **BOX2D.GetLinearVelocity** | (worldId, bodyId) | vx, vy | Get velocity |
 | **BOX2D.SetTransform** | (worldId, bodyId, x, y, angle) | — | Set position and angle |
 | **BOX2D.ApplyForce** | (worldId, bodyId, fx, fy, x, y) | — | Apply force |
-| **CreateWorld2D** | () | worldId | Legacy: create world |
-| **DestroyWorld2D** | (worldId) | — | Legacy: destroy world |
-| **Step2D** | (worldId, dt) | — | Legacy: step |
+| **CreateWorld2D** | (worldName$, gravityX, gravityY) | — | Create 2D world |
+| **Physics2DCreateWorld** | (gravityX, gravityY) | — | Create world named "default" |
+| **DestroyWorld2D** | (worldId) | — | Destroy world |
+| **Step2D** | (worldId, dt) | — | Step world |
+| **Physics2DStep** | (dt) | — | Step world "default" |
 | **CreateBox2D** | (worldId, x, y, w, h, …) | bodyId | Create box body |
 | **CreateCircle2D** | (worldId, x, y, radius, …) | bodyId | Create circle body |
 | **CreatePolygon2D** | (…) | bodyId | Create polygon |
@@ -1115,7 +1191,7 @@ All coordinates and sizes in pixels. See [docs/GUI_GUIDE.md](docs/GUI_GUIDE.md).
 | **On KeyDown / On KeyPressed** | `On KeyDown("KEY") … End On`; handlers run when PollInputEvents() is called. Key names: "ESCAPE", "W", "SPACE", or KEY_* constants. |
 | **StartCoroutine** | (subName) — start fiber at that sub. |
 | **Yield** | — switch to next fiber. |
-| **WaitSeconds** | (seconds) — block current fiber (blocks entire VM). |
+| **WaitSeconds** | (seconds) — yield current fiber for N seconds (non-blocking; other fibers keep running). |
 
 Fibers share the same chunk; each has its own IP, stack, and call stack.
 
@@ -1180,9 +1256,134 @@ Logical windows (viewports) in one process; ID 0 = main screen. See [docs/MULTI_
 
 ---
 
+## Terrain – `compiler/bindings/terrain`
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **LoadHeightmap** | (imageId) | heightmap id | Create heightmap from image |
+| **GenHeightmap** | (width, depth, noiseScale) | heightmap id | Procedural heightmap |
+| **GenHeightmapPerlin** | (width, depth, offsetX, offsetY, scale) | heightmap id | Perlin heightmap |
+| **GenTerrainMesh** | (heightmapId, sizeX, sizeZ, heightScale [, lod]) | mesh id | Build terrain mesh |
+| **TerrainCreate** | (heightmapId, sizeX, sizeZ, heightScale) | terrain id | Create terrain |
+| **TerrainUpdate** | (terrainId) | — | Rebuild mesh |
+| **DrawTerrain** | (terrainId, posX, posY, posZ) | — | Draw terrain (Render3D) |
+| **SetTerrainMaterial** / **SetTerrainTexture** | (terrainId, id) | — | Set material/texture |
+| **SetTerrainLOD** | (terrainId, lodLevel) | — | Set LOD |
+| **TerrainRaise** / **TerrainLower** / **TerrainSmooth** / **TerrainFlatten** / **TerrainPaint** | (terrainId, x, z, radius, …) | — | Edit heightmap |
+| **TerrainGetHeight** | (terrainId, x, z) | float | Height at (x,z) |
+| **TerrainGetNormal** | (terrainId, x, z) | [nx, ny, nz] | Normal at (x,z) |
+| **TerrainRaycast** | (terrainId, ox, oy, oz, dx, dy, dz) | [hit, dist, hx, hy, hz] | Ray vs terrain |
+| **TerrainEnableCollision** / **TerrainSetFriction** / **TerrainSetBounce** | (terrainId, …) | — | Physics (state stored) |
+
+---
+
+## Water – `compiler/bindings/water`
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **WaterCreate** | (width, depth, tileSize) | water id | Create water plane |
+| **DrawWater** | (waterId [, posX, posY, posZ]) | — | Draw water (Render3D) |
+| **SetWaterPosition** / **SetWaterWaveSpeed** / **SetWaterWaveHeight** / **SetWaterWaveFrequency** / **SetWaterTime** | (waterId, …) | — | State |
+| **WaterGetHeight** | (waterId, x, z) | float | Wave height at (x,z) |
+| **SetWaterTexture** / **SetWaterReflectionTexture** / **SetWaterRefractionTexture** / **SetWaterNormalMap** / **SetWaterColor** / **SetWaterShininess** | (waterId, …) | — | Rendering params |
+| **WaterEnableFoam** / **WaterSetFoamIntensity** / **WaterSetDepthFade** / **WaterSetTransparency** | (waterId, …) | — | Advanced |
+| **WaterSetDensity** / **WaterSetDrag** | (waterId, …) | — | Physics (buoyancy) |
+| **WaterApplyBuoyancy** | (bodyId, waterId) | — | Apply buoyancy (stub) |
+
+---
+
+## Vegetation – `compiler/bindings/vegetation`
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **TreeTypeCreate** | (modelId, trunkTexId, leafTexId) | type id | Tree type |
+| **TreeSystemCreate** | () | system id | Tree system |
+| **TreePlace** | (systemId, typeId, x, y, z, scale, rotation) | tree id | Place tree |
+| **TreeRemove** / **TreeSetPosition** / **TreeSetScale** / **TreeSetRotation** | (treeId, …) | — | Edit tree |
+| **TreeSystemSetLOD** / **TreeSystemEnableInstancing** | (systemId, …) | — | LOD/instancing |
+| **TreeGetAt** | (systemId, x, z) | tree id or "" | Nearest tree |
+| **DrawTrees** | (systemId) | — | Draw trees (Render3D) |
+| **GrassCreate** | (textureId, density, patchSize) | grass id | Grass system |
+| **GrassSetWind** / **GrassSetHeight** / **GrassSetColor** / **GrassPaint** / **GrassErase** / **GrassSetDensity** / **GrassSetLOD** / **GrassEnableInstancing** | (grassId, …) | — | Grass state |
+| **GrassSetBendAmount** / **GrassSetInteraction** | (grassId, …) | — | Wind bend, interaction |
+| **DrawGrass** | (grassId) | — | Draw grass (Render3D) |
+| **TreeEnableCollision** / **TreeSetCollisionRadius** / **TreeSetWind** / **TreeApplyWind** / **TreeRaycast** | (…) | — | Tree physics (stubs) |
+
+---
+
+## Objects – `compiler/bindings/objects`
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **ObjectPlace** | (modelId, x, y, z, scale, rotation) | object id | Place object |
+| **ObjectRemove** / **ObjectSetTransform** | (objectId, …) | — | Edit/remove |
+| **ObjectRandomScatter** | (modelId, areaX, areaZ, count, minScale, maxScale) | [id,…] | Scatter |
+| **ObjectPaint** / **ObjectErase** | (…) | — | Paint/erase by area |
+| **ObjectGetAt** | (x, z) | object id | Nearest at (x,z) |
+| **ObjectRaycast** | (ox, oy, oz, dx, dy, dz) | [hit, objectId, hx, hy, hz] | Ray vs objects |
+| **DrawObject** / **DrawAllObjects** | (objectId) / () | — | Draw |
+
+---
+
+## World – `compiler/bindings/world`
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **WorldSave** / **WorldLoad** | (path) | — | Save/load world (e.g. objects) |
+| **WorldExportJSON** / **WorldImportJSON** | (path) | — | Export/import JSON |
+| **WorldStreamEnable** / **WorldStreamSetRadius** / **WorldStreamSetCenter** | (…) | — | Chunk streaming (stubs) |
+| **WorldLoadChunk** / **WorldUnloadChunk** / **WorldIsChunkLoaded** / **WorldGetLoadedChunks** | (…) | — | Chunk API (stubs) |
+
+---
+
+## Navigation – `compiler/bindings/navigation`
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **NavGridCreate** / **NavGridSetWalkable** / **NavGridSetCost** / **NavGridFindPath** | (…) | gridId / path | Grid pathfinding (stubs) |
+| **NavMeshCreateFromTerrain** / **NavMeshAddObstacle** / **NavMeshRemoveObstacle** / **NavMeshFindPath** | (…) | meshId / path | NavMesh (stubs) |
+| **NavAgentCreate** / **NavAgentSetSpeed** / **NavAgentSetRadius** / **NavAgentSetDestination** / **NavAgentGetNextWaypoint** | (…) | agentId / waypoint | Agents (stubs) |
+
+---
+
+## Indoor – `compiler/bindings/indoor`
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **RoomCreate** / **RoomSetBounds** / **RoomAddPortal** | (…) | roomId | Rooms (stubs) |
+| **PortalCreate** / **PortalSetOpen** | (…) | portalId | Portals (stubs) |
+| **DoorCreate** / **DoorSetOpen** / **DoorToggle** / **DoorSetLocked** | (…) | doorId | Doors (stubs) |
+| **LeverCreate** / **ButtonCreate** / **SwitchCreate** / **TriggerCreate** / **InteractableCreate** / **PickupCreate** / **LightZoneCreate** | (…) | id | Interaction (stubs) |
+| **WorldSaveInteractables** / **WorldLoadInteractables** | (path) | — | Save/load (stubs) |
+
+---
+
+## Procedural – `compiler/bindings/procedural`
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **NoisePerlin2D** | (x, y, scale) | float | Perlin-style noise [0,1] |
+| **NoiseFractal2D** | (x, y, octaves, persistence, lacunarity) | float | Fractal noise |
+| **NoiseSimplex2D** | (x, y, scale) | float | Simplex-style noise |
+| **ScatterTrees** | (treeSystemId, treeTypeId, areaX, areaZ, density) | — | Scatter trees |
+| **ScatterGrass** | (grassId, centerX, centerZ, radius, density) | — | Scatter grass |
+| **ScatterObjects** | (modelId, areaX, areaZ, count [, minScale, maxScale]) | — | Scatter objects |
+
+---
+
+## Optimization (raylib 3D)
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **SetCullingDistance** | (distance) | — | Max draw distance |
+| **EnableFrustumCulling** | (flag) | — | Toggle frustum culling |
+
+---
+
 ## Notes
 
 - **Conventions:** All names are case-insensitive. Flat names (e.g. InitWindow) and optional namespaces (e.g. RL.InitWindow, BOX2D.*) are supported.
+- **Alternate names / Aliases:** Many commands have aliases for familiarity: IsKeyDown/KeyDown, IsKeyPressed/KeyPressed, DrawRect/DrawRectangleLines, DrawRectFill/DrawRectangle, DrawCircleFill/DrawCircle, BeginCamera2D/BeginMode2D, EndCamera2D/EndMode2D, BeginCamera3D/BeginMode3D, EndCamera3D/EndMode3D, UILabel/Label, UIButton/Button, UpdateMusic/UpdateMusicStream, UnloadMusic/UnloadMusicStream, SetImageColor/ImageDrawPixel. See [Command Reference](docs/COMMAND_REFERENCE.md) for the full list.
 - **Constant limit:** Bytecode uses 1-byte constant indices; each chunk supports at most 256 constants. Programs that exceed this (e.g. very large literals or many distinct identifiers) will fail at compile time with "too many constants".
 - **Resource IDs:** Load* functions (LoadImage, LoadTexture, LoadSound, LoadMusicStream, LoadWave, LoadFont, LoadModel, LoadMesh, LoadShader, LoadRenderTexture, LoadAudioStream, etc.) return string IDs (e.g. `img_1`, `sound_1`). Pass these IDs to the matching Unload* and other APIs.
 - **Vectors/Matrix/Quaternion:** Pass as flat numbers: Vector2 (x,y), Vector3 (x,y,z), Matrix (16 floats row-major), Quaternion (x,y,z,w). Functions that return vectors/matrices return a list (e.g. [x,y] or 16 values).

@@ -31,6 +31,16 @@ var (
 	camCounter int
 	camMu      sync.Mutex
 
+	// 2D cameras by ID (Phase 1)
+	cameras2D          = make(map[string]rl.Camera2D)
+	cameras2DCounter   int
+	currentCamera2DID  string
+	camera2DMu         sync.Mutex
+	camera2DFollowTgtX float32
+	camera2DFollowTgtY float32
+	camera2DFollowSpd  float32
+	camera2DFollowID   string
+
 	lightIds   = make(map[string]bool)
 	lightCtr   int
 	lightMu    sync.Mutex
@@ -175,6 +185,12 @@ var (
 
 	// Skybox: cubemap texture id (optional); drawing uses SetSkyColor clear or cubemap
 	skyboxTexId string
+
+	// Optimization (Phase 8): culling distance and frustum culling flag
+	cullingDistance  float32 = 1000
+	frustumCulling   bool
+	enable2DCulling  bool
+	cullingMargin    float32 = 64
 )
 
 // getRand returns the seedable RNG, creating it with a time-based seed if never set.
@@ -263,6 +279,36 @@ func toUint8(v interface{}) uint8 {
 	}
 }
 
+// toFloat32Slice converts a BASIC array ([]interface{} of numbers) or flat list to []float32.
+func toFloat32Slice(v interface{}) []float32 {
+	if v == nil {
+		return nil
+	}
+	if arr, ok := v.([]interface{}); ok {
+		out := make([]float32, 0, len(arr))
+		for _, x := range arr {
+			out = append(out, toFloat32(x))
+		}
+		return out
+	}
+	return nil
+}
+
+// toUint16Slice converts a BASIC array ([]interface{} of numbers) to []uint16 for mesh indices.
+func toUint16Slice(v interface{}) []uint16 {
+	if v == nil {
+		return nil
+	}
+	if arr, ok := v.([]interface{}); ok {
+		out := make([]uint16, 0, len(arr))
+		for _, x := range arr {
+			out = append(out, uint16(toInt32(x)))
+		}
+		return out
+	}
+	return nil
+}
+
 // colorToPacked returns the format draw functions expect for a single int: R<<16|G<<8|B (A=255).
 func colorToPacked(c rl.Color) int {
 	return int(c.R)<<16 | int(c.G)<<8 | int(c.B)
@@ -297,6 +343,11 @@ func RegisterRaylib(v *vm.VM) {
 	registerShapes(v)
 	registerText(v)
 	registerTextures(v)
+	registerSprite(v)
+	registerLayers(v)
+	registerBackground(v)
+	registerParticles2D(v)
+	registerAtlas(v)
 	registerImages(v)
 	register3D(v)
 	registerMesh(v)
@@ -329,4 +380,112 @@ func registerAliases(v *vm.VM) {
 	alias("cube", "DrawCube")
 	alias("button", "GuiButton")
 	alias("sprite", "DrawTexture")
+	// Camera3D* aliases (same args as SetCamera*)
+	alias("Camera3DSetPosition", "SetCameraPosition")
+	alias("Camera3DSetTarget", "SetCameraTarget")
+	alias("Camera3DSetUp", "SetCameraUp")
+	alias("Camera3DSetFOV", "SetCameraFOV")
+	alias("Camera3DSetProjection", "SetCameraProjection")
+	// Vector3 short names
+	alias("Vector3Cross", "Vector3CrossProduct")
+	alias("Vector3Dot", "Vector3DotProduct")
+	// 2D shape aliases (user names)
+	alias("DrawRect", "DrawRectangleLines")
+	alias("DrawRectFill", "DrawRectangle")
+	alias("DrawCircleFill", "DrawCircle")
+	// 2D camera: BeginCamera2D(cameraID)/EndCamera2D() are real (Phase 1); 3D are aliases
+	alias("BeginCamera3D", "BeginMode3D")
+	alias("EndCamera3D", "EndMode3D")
+	// UI prefix aliases (BeginUI/Label/Button etc. in raylib_ui.go)
+	alias("UILabel", "Label")
+	alias("UIButton", "Button")
+	alias("UICheckbox", "Checkbox")
+	alias("UISlider", "Slider")
+	alias("UITextBox", "TextBox")
+	alias("UIProgressBar", "ProgressBar")
+	// Audio aliases
+	alias("UpdateMusic", "UpdateMusicStream")
+	alias("UnloadMusic", "UnloadMusicStream")
+	// Image: SetImageColor(imageId, x, y, r, g, b, a) same as ImageDrawPixel
+	alias("SetImageColor", "ImageDrawPixel")
+}
+
+// getCullingRect returns world-space AABB (minX, minY, maxX, maxY) for 2D culling (camera view + margin).
+func getCullingRect() (minX, minY, maxX, maxY float32) {
+	cam := getCurrentCamera2D()
+	sw := float32(rl.GetScreenWidth())
+	sh := float32(rl.GetScreenHeight())
+	halfW := (sw/2)/cam.Zoom + cullingMargin
+	halfH := (sh/2)/cam.Zoom + cullingMargin
+	return cam.Target.X - halfW, cam.Target.Y - halfH, cam.Target.X + halfW, cam.Target.Y + halfH
+}
+
+// SpriteInCullingRect returns true if the sprite is inside the 2D culling rect (or if 2D culling is disabled).
+func SpriteInCullingRect(spriteID string) bool {
+	if !enable2DCulling {
+		return true
+	}
+	spriteMu.Lock()
+	s := sprites[spriteID]
+	spriteMu.Unlock()
+	if s == nil {
+		return true
+	}
+	texMu.Lock()
+	tex := textures[s.TextureId]
+	texMu.Unlock()
+	w := float32(tex.Width) * s.ScaleX
+	h := float32(tex.Height) * s.ScaleY
+	if tex.ID == 0 {
+		w, h = 32, 32
+	}
+	if s.FlipX {
+		w = -w
+	}
+	if s.FlipY {
+		h = -h
+	}
+	sLeft := s.X - s.OriginX*s.ScaleX
+	sTop := s.Y - s.OriginY*s.ScaleY
+	sRight := sLeft + w
+	sBottom := sTop + h
+	if sRight < sLeft {
+		sLeft, sRight = sRight, sLeft
+	}
+	if sBottom < sTop {
+		sTop, sBottom = sBottom, sTop
+	}
+	minX, minY, maxX, maxY := getCullingRect()
+	return sLeft < maxX && sRight > minX && sTop < maxY && sBottom > minY
+}
+
+// getCurrentCamera2D returns the active 2D camera (by ID or default). Applies smooth follow if set.
+func getCurrentCamera2D() rl.Camera2D {
+	camera2DMu.Lock()
+	id := currentCamera2DID
+	fid := camera2DFollowID
+	tx := camera2DFollowTgtX
+	ty := camera2DFollowTgtY
+	spd := camera2DFollowSpd
+	cam, hasCam := cameras2D[id]
+	camera2DMu.Unlock()
+	if id == "" || !hasCam {
+		cam = camera2D
+	}
+	if fid != "" && id == fid && spd > 0 {
+		dt := rl.GetFrameTime()
+		cam.Target.X += (tx - cam.Target.X) * spd * dt
+		cam.Target.Y += (ty - cam.Target.Y) * spd * dt
+		camera2DMu.Lock()
+		if id != "" {
+			if c, ok := cameras2D[id]; ok {
+				c.Target = cam.Target
+				cameras2D[id] = c
+			}
+		} else {
+			camera2D.Target = cam.Target
+		}
+		camera2DMu.Unlock()
+	}
+	return cam
 }

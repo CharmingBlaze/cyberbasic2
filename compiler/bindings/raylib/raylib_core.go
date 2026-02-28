@@ -414,6 +414,115 @@ func registerCore(v *vm.VM) {
 		camera2D.Zoom = toFloat32(args[5])
 		return nil, nil
 	})
+	// 2D camera by ID (Phase 1)
+	v.RegisterForeign("Camera2DCreate", func(args []interface{}) (interface{}, error) {
+		camera2DMu.Lock()
+		cameras2DCounter++
+		id := fmt.Sprintf("cam2d_%d", cameras2DCounter)
+		w, h := float32(rl.GetScreenWidth()), float32(rl.GetScreenHeight())
+		cameras2D[id] = rl.Camera2D{
+			Offset:   rl.Vector2{X: w / 2, Y: h / 2},
+			Target:   rl.Vector2{},
+			Rotation: 0,
+			Zoom:     1,
+		}
+		camera2DMu.Unlock()
+		return id, nil
+	})
+	v.RegisterForeign("Camera2DSetPosition", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("Camera2DSetPosition requires (cameraID, x, y)")
+		}
+		id := toString(args[0])
+		x, y := toFloat32(args[1]), toFloat32(args[2])
+		camera2DMu.Lock()
+		defer camera2DMu.Unlock()
+		cam, ok := cameras2D[id]
+		if !ok {
+			return nil, fmt.Errorf("unknown 2D camera: %s", id)
+		}
+		cam.Target = rl.Vector2{X: x, Y: y}
+		cameras2D[id] = cam
+		return nil, nil
+	})
+	v.RegisterForeign("Camera2DSetZoom", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("Camera2DSetZoom requires (cameraID, zoom)")
+		}
+		id := toString(args[0])
+		zoom := toFloat32(args[1])
+		camera2DMu.Lock()
+		defer camera2DMu.Unlock()
+		cam, ok := cameras2D[id]
+		if !ok {
+			return nil, fmt.Errorf("unknown 2D camera: %s", id)
+		}
+		cam.Zoom = zoom
+		cameras2D[id] = cam
+		return nil, nil
+	})
+	v.RegisterForeign("Camera2DSetRotation", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("Camera2DSetRotation requires (cameraID, angle)")
+		}
+		id := toString(args[0])
+		angle := toFloat32(args[1])
+		camera2DMu.Lock()
+		defer camera2DMu.Unlock()
+		cam, ok := cameras2D[id]
+		if !ok {
+			return nil, fmt.Errorf("unknown 2D camera: %s", id)
+		}
+		cam.Rotation = angle
+		cameras2D[id] = cam
+		return nil, nil
+	})
+	v.RegisterForeign("Camera2DMove", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("Camera2DMove requires (cameraID, dx, dy)")
+		}
+		id := toString(args[0])
+		dx, dy := toFloat32(args[1]), toFloat32(args[2])
+		camera2DMu.Lock()
+		defer camera2DMu.Unlock()
+		cam, ok := cameras2D[id]
+		if !ok {
+			return nil, fmt.Errorf("unknown 2D camera: %s", id)
+		}
+		cam.Target.X += dx
+		cam.Target.Y += dy
+		cameras2D[id] = cam
+		return nil, nil
+	})
+	v.RegisterForeign("Camera2DSmoothFollow", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("Camera2DSmoothFollow requires (cameraID, targetX, targetY, speed)")
+		}
+		id := toString(args[0])
+		camera2DMu.Lock()
+		camera2DFollowID = id
+		camera2DFollowTgtX = toFloat32(args[1])
+		camera2DFollowTgtY = toFloat32(args[2])
+		camera2DFollowSpd = toFloat32(args[3])
+		camera2DMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("BeginCamera2D", func(args []interface{}) (interface{}, error) {
+		id := ""
+		if len(args) >= 1 {
+			id = toString(args[0])
+		}
+		camera2DMu.Lock()
+		currentCamera2DID = id
+		camera2DMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("EndCamera2D", func(args []interface{}) (interface{}, error) {
+		camera2DMu.Lock()
+		currentCamera2DID = ""
+		camera2DMu.Unlock()
+		return nil, nil
+	})
 	v.RegisterForeign("BeginMode2D", func(args []interface{}) (interface{}, error) {
 		if len(args) >= 6 {
 			camera2D.Offset = rl.Vector2{X: toFloat32(args[0]), Y: toFloat32(args[1])}
@@ -538,6 +647,52 @@ func registerCore(v *vm.VM) {
 		loc := rl.GetShaderLocation(sh, name)
 		if loc >= 0 {
 			rl.SetShaderValue(sh, loc, []float32{val}, rl.ShaderUniformFloat)
+		}
+		return nil, nil
+	})
+	// SetShaderValueMatrix(shaderId, uniformName, m0..m15): set shader uniform to 4x4 matrix (row-major: M0,M4,M8,M12, M1,M5,M9,M13, ...).
+	v.RegisterForeign("SetShaderValueMatrix", func(args []interface{}) (interface{}, error) {
+		if len(args) < 19 {
+			return nil, fmt.Errorf("SetShaderValueMatrix requires (shaderId, uniformName, 16 matrix floats)")
+		}
+		id := toString(args[0])
+		name := toString(args[1])
+		shaderMu.Lock()
+		sh, ok := shaders[id]
+		shaderMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown shader id: %s", id)
+		}
+		loc := rl.GetShaderLocation(sh, name)
+		if loc >= 0 {
+			mat := argsToMatrix(args, 2)
+			rl.SetShaderValueMatrix(sh, loc, mat)
+		}
+		return nil, nil
+	})
+	// SetShaderValueTexture(shaderId, uniformName, textureId): set shader uniform to texture (sampler2d).
+	v.RegisterForeign("SetShaderValueTexture", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("SetShaderValueTexture requires (shaderId, uniformName, textureId)")
+		}
+		id := toString(args[0])
+		name := toString(args[1])
+		texId := toString(args[2])
+		shaderMu.Lock()
+		sh, ok := shaders[id]
+		shaderMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown shader id: %s", id)
+		}
+		texMu.Lock()
+		tex, okTex := textures[texId]
+		texMu.Unlock()
+		if !okTex {
+			return nil, fmt.Errorf("unknown texture id: %s", texId)
+		}
+		loc := rl.GetShaderLocation(sh, name)
+		if loc >= 0 {
+			rl.SetShaderValueTexture(sh, loc, tex)
 		}
 		return nil, nil
 	})

@@ -58,6 +58,8 @@ var (
 	worldMu            sync.RWMutex
 	bodies             = make(map[string]*box2d.B2Body) // key: worldId.bodyId
 	bodiesMu           sync.RWMutex
+	layerCollision     = make(map[string]map[string]bool) // layerA -> layerB -> collide
+	layerCollisionMu   sync.RWMutex
 	bodyOrder          = make(map[string][]string) // worldId -> ordered body IDs for iteration
 	bodyOrderMu        sync.RWMutex
 	collisionBuffer2D  = make(map[string][]collisionHit2D)
@@ -558,6 +560,13 @@ func registerFlat2D(v *vm.VM) {
 		worldMu.Unlock()
 		return nil, nil
 	})
+	// Physics2DCreateWorld(gravityX, gravityY): alias that uses world name "default".
+	v.RegisterForeign("Physics2DCreateWorld", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("Physics2DCreateWorld requires (gravityX, gravityY)")
+		}
+		return v.CallForeign("CreateWorld2D", []interface{}{"default", args[0], args[1]})
+	})
 	v.RegisterForeign("DestroyWorld2D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("DestroyWorld2D requires (worldName$)")
@@ -601,6 +610,59 @@ func registerFlat2D(v *vm.VM) {
 		}
 		collisionBuffer2DMu.Unlock()
 		w.Step(dt, 8, 3)
+		return nil, nil
+	})
+	// Physics2DStep(dt): alias that steps world "default".
+	v.RegisterForeign("Physics2DStep", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("Physics2DStep requires (dt)")
+		}
+		return v.CallForeign("Step2D", []interface{}{"default", args[0]})
+	})
+	// Physics2DSetGravity(worldId, x, y): set world gravity.
+	v.RegisterForeign("Physics2DSetGravity", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("Physics2DSetGravity requires (worldId, x, y)")
+		}
+		worldId := toString(args[0])
+		gx, gy := toFloat64(args[1]), toFloat64(args[2])
+		worldMu.RLock()
+		w := worlds[worldId]
+		worldMu.RUnlock()
+		if w == nil {
+			return nil, fmt.Errorf("world not found: %s", worldId)
+		}
+		w.SetGravity(box2d.MakeB2Vec2(gx, gy))
+		return nil, nil
+	})
+	// Physics2DRaycast(originX, originY, dirX, dirY): raycast in world "default"; dir*1000 = end point. Use RayHit* for result.
+	v.RegisterForeign("Physics2DRaycast", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("Physics2DRaycast requires (originX, originY, dirX, dirY)")
+		}
+		ox, oy := toFloat64(args[0]), toFloat64(args[1])
+		dx, dy := toFloat64(args[2]), toFloat64(args[3])
+		dist := 1000.0
+		if dx*dx+dy*dy > 1e-10 {
+			dist = 1000.0
+		}
+		tx := ox + dx*dist
+		ty := oy + dy*dist
+		return v.CallForeign("RayCast2D", []interface{}{"default", ox, oy, tx, ty})
+	})
+	// Physics2DSetLayerCollision(layerA, layerB, flag): set whether layerA and layerB collide (for contact filter; body layers TBD).
+	v.RegisterForeign("Physics2DSetLayerCollision", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("Physics2DSetLayerCollision requires (layerA, layerB, flag)")
+		}
+		la, lb := toString(args[0]), toString(args[1])
+		flag := toFloat64(args[2]) != 0
+		layerCollisionMu.Lock()
+		if layerCollision[la] == nil {
+			layerCollision[la] = make(map[string]bool)
+		}
+		layerCollision[la][lb] = flag
+		layerCollisionMu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("StepAllPhysics2D", func(args []interface{}) (interface{}, error) {

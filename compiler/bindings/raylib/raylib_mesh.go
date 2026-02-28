@@ -4,11 +4,247 @@ package raylib
 import (
 	"cyberbasic/compiler/vm"
 	"fmt"
+	"sync"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+// customMeshData holds backing slices for meshes created via MeshCreate so pointers stay valid.
+type customMeshData struct {
+	vertices  []float32
+	normals   []float32
+	texcoords []float32
+	indices   []uint16
+}
+
+var (
+	customMeshDataStore = make(map[string]*customMeshData)
+	customMeshDataMu    sync.Mutex
+)
+
 func registerMesh(v *vm.VM) {
+	// MeshCreate(vertices, normals, uvs, indices): create mesh from 4 arrays (each []interface{} of numbers). Returns meshId.
+	v.RegisterForeign("MeshCreate", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("MeshCreate requires (vertices, normals, uvs, indices)")
+		}
+		vertices := toFloat32Slice(args[0])
+		normals := toFloat32Slice(args[1])
+		uvs := toFloat32Slice(args[2])
+		indices := toUint16Slice(args[3])
+		vertexCount := len(vertices) / 3
+		if vertexCount == 0 {
+			return nil, fmt.Errorf("MeshCreate: vertices must have at least 3 floats (one vertex)")
+		}
+		if len(normals) != 0 && len(normals)/3 != vertexCount {
+			return nil, fmt.Errorf("MeshCreate: normals length must match vertex count")
+		}
+		if len(uvs) != 0 && len(uvs)/2 != vertexCount {
+			return nil, fmt.Errorf("MeshCreate: uvs length must match vertex count")
+		}
+		triangleCount := 0
+		if len(indices) > 0 {
+			triangleCount = len(indices) / 3
+		} else {
+			triangleCount = vertexCount / 3
+		}
+		// Ensure we have at least placeholder normals/uvs so pointers are valid
+		if len(normals) == 0 {
+			normals = make([]float32, vertexCount*3)
+		}
+		if len(uvs) == 0 {
+			uvs = make([]float32, vertexCount*2)
+		}
+		data := &customMeshData{
+			vertices:  vertices,
+			normals:   normals,
+			texcoords: uvs,
+			indices:   indices,
+		}
+		mesh := rl.Mesh{
+			VertexCount:   int32(vertexCount),
+			TriangleCount: int32(triangleCount),
+			Vertices:      &data.vertices[0],
+			Normals:       &data.normals[0],
+			Texcoords:     &data.texcoords[0],
+		}
+		if len(indices) > 0 {
+			mesh.Indices = &data.indices[0]
+		}
+		rl.UploadMesh(&mesh, true)
+		meshMu.Lock()
+		meshCounter++
+		id := fmt.Sprintf("mesh_%d", meshCounter)
+		meshes[id] = mesh
+		meshMu.Unlock()
+		customMeshDataMu.Lock()
+		customMeshDataStore[id] = data
+		customMeshDataMu.Unlock()
+		return id, nil
+	})
+
+	// MeshUpdate(meshId): re-upload mesh to GPU (call after MeshSetVertices/Normals/UVs/Indices).
+	v.RegisterForeign("MeshUpdate", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("MeshUpdate requires (meshId)")
+		}
+		meshId := toString(args[0])
+		customMeshDataMu.Lock()
+		data, hasData := customMeshDataStore[meshId]
+		customMeshDataMu.Unlock()
+		meshMu.Lock()
+		mesh, ok := meshes[meshId]
+		meshMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown mesh id: %s", meshId)
+		}
+		if hasData && data != nil {
+			if len(data.vertices) > 0 {
+				mesh.Vertices = &data.vertices[0]
+			}
+			if len(data.normals) > 0 {
+				mesh.Normals = &data.normals[0]
+			}
+			if len(data.texcoords) > 0 {
+				mesh.Texcoords = &data.texcoords[0]
+			}
+			if len(data.indices) > 0 {
+				mesh.Indices = &data.indices[0]
+			}
+			mesh.VertexCount = int32(len(data.vertices) / 3)
+			mesh.TriangleCount = int32(len(data.indices) / 3)
+			if mesh.TriangleCount == 0 {
+				mesh.TriangleCount = mesh.VertexCount / 3
+			}
+		}
+		rl.UploadMesh(&mesh, true)
+		meshMu.Lock()
+		meshes[meshId] = mesh
+		meshMu.Unlock()
+		return nil, nil
+	})
+
+	// MeshSetVertices(meshId, array): set vertex buffer from []interface{} of floats (x,y,z per vertex).
+	setMeshBuffer := func(name string, setter func(meshId string, arr []float32) error) func([]interface{}) (interface{}, error) {
+		return func(args []interface{}) (interface{}, error) {
+			if len(args) < 2 {
+				return nil, fmt.Errorf("%s requires (meshId, array)", name)
+			}
+			meshId := toString(args[0])
+			arr := toFloat32Slice(args[1])
+			if err := setter(meshId, arr); err != nil {
+				return nil, err
+			}
+			return nil, nil
+		}
+	}
+	v.RegisterForeign("MeshSetVertices", setMeshBuffer("MeshSetVertices", func(meshId string, arr []float32) error {
+		vertexCount := len(arr) / 3
+		if vertexCount == 0 {
+			return fmt.Errorf("vertices must have at least 3 floats")
+		}
+		customMeshDataMu.Lock()
+		defer customMeshDataMu.Unlock()
+		data, ok := customMeshDataStore[meshId]
+		if !ok {
+			return fmt.Errorf("mesh %s was not created with MeshCreate; cannot set vertices", meshId)
+		}
+		data.vertices = arr
+		meshMu.Lock()
+		mesh, ok := meshes[meshId]
+		if ok && len(data.vertices) > 0 {
+			mesh.Vertices = &data.vertices[0]
+			mesh.VertexCount = int32(vertexCount)
+			meshes[meshId] = mesh
+		}
+		meshMu.Unlock()
+		rl.UploadMesh(&mesh, true)
+		meshMu.Lock()
+		meshes[meshId] = mesh
+		meshMu.Unlock()
+		return nil
+	}))
+	v.RegisterForeign("MeshSetNormals", setMeshBuffer("MeshSetNormals", func(meshId string, arr []float32) error {
+		customMeshDataMu.Lock()
+		defer customMeshDataMu.Unlock()
+		data, ok := customMeshDataStore[meshId]
+		if !ok {
+			return fmt.Errorf("mesh %s was not created with MeshCreate; cannot set normals", meshId)
+		}
+		if len(arr) == 0 {
+			arr = make([]float32, len(data.vertices)/3*3)
+		}
+		data.normals = arr
+		meshMu.Lock()
+		mesh, ok := meshes[meshId]
+		if ok && len(data.normals) > 0 {
+			mesh.Normals = &data.normals[0]
+			meshes[meshId] = mesh
+		}
+		meshMu.Unlock()
+		rl.UploadMesh(&mesh, true)
+		meshMu.Lock()
+		meshes[meshId] = mesh
+		meshMu.Unlock()
+		return nil
+	}))
+	v.RegisterForeign("MeshSetUVs", setMeshBuffer("MeshSetUVs", func(meshId string, arr []float32) error {
+		customMeshDataMu.Lock()
+		defer customMeshDataMu.Unlock()
+		data, ok := customMeshDataStore[meshId]
+		if !ok {
+			return fmt.Errorf("mesh %s was not created with MeshCreate; cannot set UVs", meshId)
+		}
+		if len(arr) == 0 {
+			arr = make([]float32, len(data.vertices)/3*2)
+		}
+		data.texcoords = arr
+		meshMu.Lock()
+		mesh, ok := meshes[meshId]
+		if ok && len(data.texcoords) > 0 {
+			mesh.Texcoords = &data.texcoords[0]
+			meshes[meshId] = mesh
+		}
+		meshMu.Unlock()
+		rl.UploadMesh(&mesh, true)
+		meshMu.Lock()
+		meshes[meshId] = mesh
+		meshMu.Unlock()
+		return nil
+	}))
+
+	// MeshSetIndices(meshId, array): set index buffer from []interface{} of integers.
+	v.RegisterForeign("MeshSetIndices", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("MeshSetIndices requires (meshId, array)")
+		}
+		meshId := toString(args[0])
+		arr := toUint16Slice(args[1])
+		customMeshDataMu.Lock()
+		defer customMeshDataMu.Unlock()
+		data, ok := customMeshDataStore[meshId]
+		if !ok {
+			return nil, fmt.Errorf("mesh %s was not created with MeshCreate; cannot set indices", meshId)
+		}
+		data.indices = arr
+		triangleCount := len(arr) / 3
+		meshMu.Lock()
+		mesh, ok := meshes[meshId]
+		if ok {
+			if len(arr) > 0 {
+				mesh.Indices = &data.indices[0]
+				mesh.TriangleCount = int32(triangleCount)
+			}
+			meshes[meshId] = mesh
+		}
+		meshMu.Unlock()
+		rl.UploadMesh(&mesh, true)
+		meshMu.Lock()
+		meshes[meshId] = mesh
+		meshMu.Unlock()
+		return nil, nil
+	})
+
 	// Mesh generation - each returns meshId
 	v.RegisterForeign("GenMeshPoly", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
@@ -203,6 +439,9 @@ func registerMesh(v *vm.VM) {
 		mesh, ok := meshes[meshId]
 		delete(meshes, meshId)
 		meshMu.Unlock()
+		customMeshDataMu.Lock()
+		delete(customMeshDataStore, meshId)
+		customMeshDataMu.Unlock()
 		if ok {
 			rl.UnloadMesh(&mesh)
 		}
@@ -258,6 +497,35 @@ func registerMesh(v *vm.VM) {
 			return nil, fmt.Errorf("unknown material id: %s", matId)
 		}
 		transform := rl.MatrixMultiply(rl.MatrixScale(scale.X, scale.Y, scale.Z), rl.MatrixTranslate(pos.X, pos.Y, pos.Z))
+		rl.DrawMesh(mesh, mat, transform)
+		return nil, nil
+	})
+
+	// DrawMeshMatrix(meshId, materialId, m0..m15): draw mesh with full 4x4 transform matrix (row-major).
+	v.RegisterForeign("DrawMeshMatrix", func(args []interface{}) (interface{}, error) {
+		if len(args) < 19 {
+			return nil, fmt.Errorf("DrawMeshMatrix requires (meshId, materialId, m0..m15)")
+		}
+		meshId := toString(args[0])
+		matId := toString(args[1])
+		meshMu.Lock()
+		mesh, ok := meshes[meshId]
+		meshMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown mesh id: %s", meshId)
+		}
+		materialMu.Lock()
+		mat, okMat := materials[matId]
+		materialMu.Unlock()
+		if !okMat {
+			return nil, fmt.Errorf("unknown material id: %s", matId)
+		}
+		transform := rl.NewMatrix(
+			toFloat32(args[2]), toFloat32(args[6]), toFloat32(args[10]), toFloat32(args[14]),
+			toFloat32(args[3]), toFloat32(args[7]), toFloat32(args[11]), toFloat32(args[15]),
+			toFloat32(args[4]), toFloat32(args[8]), toFloat32(args[12]), toFloat32(args[16]),
+			toFloat32(args[5]), toFloat32(args[9]), toFloat32(args[13]), toFloat32(args[17]),
+		)
 		rl.DrawMesh(mesh, mat, transform)
 		return nil, nil
 	})
@@ -448,6 +716,41 @@ func registerMesh(v *vm.VM) {
 		lastRayCollision = coll
 		lastRayCollisionMu.Unlock()
 		if coll.Hit {
+			return 1, nil
+		}
+		return 0, nil
+	})
+
+	// GetRayCollisionModel: ray (6), modelId, pos (3), scale (3). Tests all meshes in the model; stores closest hit in lastRayCollision; returns 1 if hit else 0.
+	v.RegisterForeign("GetRayCollisionModel", func(args []interface{}) (interface{}, error) {
+		if len(args) < 13 {
+			return nil, fmt.Errorf("GetRayCollisionModel requires (rayPosX,Y,Z, rayDirX,Y,Z, modelId, posX,posY,posZ, scaleX,scaleY,scaleZ)")
+		}
+		ray := rl.Ray{
+			Position:  rl.Vector3{X: toFloat32(args[0]), Y: toFloat32(args[1]), Z: toFloat32(args[2])},
+			Direction: rl.Vector3{X: toFloat32(args[3]), Y: toFloat32(args[4]), Z: toFloat32(args[5])},
+		}
+		modelId := toString(args[6])
+		pos := rl.Vector3{X: toFloat32(args[7]), Y: toFloat32(args[8]), Z: toFloat32(args[9])}
+		scale := rl.Vector3{X: toFloat32(args[10]), Y: toFloat32(args[11]), Z: toFloat32(args[12])}
+		modelMu.Lock()
+		model, ok := models[modelId]
+		modelMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown model id: %s", modelId)
+		}
+		transform := rl.MatrixMultiply(rl.MatrixScale(scale.X, scale.Y, scale.Z), rl.MatrixTranslate(pos.X, pos.Y, pos.Z))
+		var best rl.RayCollision
+		for _, mesh := range model.GetMeshes() {
+			coll := rl.GetRayCollisionMesh(ray, mesh, transform)
+			if coll.Hit && (!best.Hit || coll.Distance < best.Distance) {
+				best = coll
+			}
+		}
+		lastRayCollisionMu.Lock()
+		lastRayCollision = best
+		lastRayCollisionMu.Unlock()
+		if best.Hit {
 			return 1, nil
 		}
 		return 0, nil

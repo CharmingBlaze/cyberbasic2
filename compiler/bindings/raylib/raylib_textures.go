@@ -37,6 +37,93 @@ func registerTextures(v *vm.VM) {
 		}
 		return nil, nil
 	})
+	v.RegisterForeign("GetTextureWidth", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("GetTextureWidth requires (textureId)")
+		}
+		id := toString(args[0])
+		texMu.Lock()
+		tex, ok := textures[id]
+		texMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown texture id: %s", id)
+		}
+		return int(tex.Width), nil
+	})
+	v.RegisterForeign("GetTextureHeight", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("GetTextureHeight requires (textureId)")
+		}
+		id := toString(args[0])
+		texMu.Lock()
+		tex, ok := textures[id]
+		texMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown texture id: %s", id)
+		}
+		return int(tex.Height), nil
+	})
+	v.RegisterForeign("GetTextureSize", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("GetTextureSize requires (textureId)")
+		}
+		id := toString(args[0])
+		texMu.Lock()
+		tex, ok := textures[id]
+		texMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown texture id: %s", id)
+		}
+		return []interface{}{int(tex.Width), int(tex.Height)}, nil
+	})
+	// DrawTextureFlipH(textureId, x, y [, tint]) — draw texture flipped horizontally
+	v.RegisterForeign("DrawTextureFlipH", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("DrawTextureFlipH requires (textureId, x, y) and optional tint r,g,b,a")
+		}
+		id := toString(args[0])
+		texMu.Lock()
+		tex, ok := textures[id]
+		texMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown texture id: %s", id)
+		}
+		x, y := toFloat32(args[1]), toFloat32(args[2])
+		w, h := float32(tex.Width), float32(tex.Height)
+		source := rl.Rectangle{X: 0, Y: 0, Width: w, Height: h}
+		dest := rl.Rectangle{X: x, Y: y, Width: -w, Height: h} // negative width = flip H
+		origin := rl.Vector2{X: 0, Y: 0}
+		c := rl.White
+		if len(args) >= 7 {
+			c = argsToColor(args, 3)
+		}
+		rl.DrawTexturePro(tex, source, dest, origin, 0, c)
+		return nil, nil
+	})
+	// DrawTextureFlipV(textureId, x, y [, tint]) — draw texture flipped vertically
+	v.RegisterForeign("DrawTextureFlipV", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("DrawTextureFlipV requires (textureId, x, y) and optional tint r,g,b,a")
+		}
+		id := toString(args[0])
+		texMu.Lock()
+		tex, ok := textures[id]
+		texMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown texture id: %s", id)
+		}
+		x, y := toFloat32(args[1]), toFloat32(args[2])
+		w, h := float32(tex.Width), float32(tex.Height)
+		source := rl.Rectangle{X: 0, Y: 0, Width: w, Height: h}
+		dest := rl.Rectangle{X: x, Y: y, Width: w, Height: -h} // negative height = flip V
+		origin := rl.Vector2{X: 0, Y: 0}
+		c := rl.White
+		if len(args) >= 7 {
+			c = argsToColor(args, 3)
+		}
+		rl.DrawTexturePro(tex, source, dest, origin, 0, c)
+		return nil, nil
+	})
 	v.RegisterForeign("LoadSprite", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("LoadSprite requires (path)")

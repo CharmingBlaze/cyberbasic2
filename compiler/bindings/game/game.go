@@ -50,6 +50,8 @@ type particleSystem struct {
 	DefaultA   uint8
 	Lifetime   float32
 	VelX, VelY, VelZ float32
+	LayerID   string
+	ZIndex    int
 }
 
 var (
@@ -156,9 +158,12 @@ type animTransition struct {
 }
 
 type tilemapData struct {
-	Tiles    [][]int
-	TileSize int
-	Solid    map[int]bool
+	Tiles      [][]int
+	TileSize   int
+	Solid      map[int]bool
+	LayerID    string
+	ParallaxX   float32
+	ParallaxY   float32
 }
 
 func ensureTilemapSize(tm *tilemapData, w, h int) {
@@ -176,6 +181,73 @@ func ensureTilemapSize(tm *tilemapData, w, h int) {
 			tm.Tiles[y] = append(tm.Tiles[y], 0)
 		}
 	}
+}
+
+type tilemapFile struct {
+	TileSize int      `json:"tileSize"`
+	Width    int      `json:"width"`
+	Height   int      `json:"height"`
+	Tiles    [][]int   `json:"tiles"`
+	Solid    []int     `json:"solid,omitempty"`
+}
+
+func tilemapLoad(path string) (string, error) {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return "", err
+	}
+	var f tilemapFile
+	if err := json.Unmarshal(raw, &f); err != nil {
+		return "", err
+	}
+	if f.Width <= 0 || f.Height <= 0 {
+		f.Width, f.Height = 1, 1
+	}
+	if f.TileSize <= 0 {
+		f.TileSize = 32
+	}
+	tiles := f.Tiles
+	if len(tiles) != f.Height || (len(tiles) > 0 && len(tiles[0]) != f.Width) {
+		tiles = make([][]int, f.Height)
+		for i := 0; i < f.Height; i++ {
+			tiles[i] = make([]int, f.Width)
+		}
+	}
+	solid := make(map[int]bool)
+	for _, s := range f.Solid {
+		solid[s] = true
+	}
+	tilemapMu.Lock()
+	tilemapSeq++
+	id := fmt.Sprintf("tm_%d", tilemapSeq)
+	tilemaps[id] = &tilemapData{
+		Tiles: tiles, TileSize: f.TileSize, Solid: solid,
+	}
+	tilemapMu.Unlock()
+	return id, nil
+}
+
+func tilemapSave(id string, tm *tilemapData, path string) error {
+	var solid []int
+	for s := range tm.Solid {
+		solid = append(solid, s)
+	}
+	w, h := 0, len(tm.Tiles)
+	if h > 0 {
+		w = len(tm.Tiles[0])
+	}
+	f := tilemapFile{
+		TileSize: tm.TileSize,
+		Width:    w,
+		Height:   h,
+		Tiles:    tm.Tiles,
+		Solid:    solid,
+	}
+	raw, err := json.MarshalIndent(f, "", "  ")
+	if err != nil {
+		return err
+	}
+	return os.WriteFile(path, raw, 0644)
 }
 
 // valueNoise2D returns deterministic noise in [0,1] for procedural gen.
@@ -339,6 +411,21 @@ func RegisterGame(v *vm.VM) {
 			c := rl.NewColor(p.R, p.G, p.B, uint8(float32(p.A)*p.Life/p.MaxLife))
 			rl.DrawSphere(rl.Vector3{X: p.X, Y: p.Y, Z: p.Z}, 0.1, c)
 		}
+		return nil, nil
+	})
+	v.RegisterForeign("ParticleSetLayer", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("ParticleSetLayer requires (particleId, layerId)")
+		}
+		id := toString(args[0])
+		layerID := toString(args[1])
+		particleMu.Lock()
+		defer particleMu.Unlock()
+		ps := particleSystems[id]
+		if ps == nil {
+			return nil, fmt.Errorf("unknown particle system: %s", id)
+		}
+		ps.LayerID = layerID
 		return nil, nil
 	})
 
@@ -574,18 +661,98 @@ func RegisterGame(v *vm.VM) {
 	v.RegisterForeign("CoroutineStop", func(args []interface{}) (interface{}, error) { return nil, nil })
 
 	// --- Tilemap (2D grid of tile IDs) ---
+	v.RegisterForeign("TilemapCreate", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("TilemapCreate requires (tileWidth, tileHeight, mapWidth, mapHeight)")
+		}
+		tw := int(toFloat64(args[0]))
+		th := int(toFloat64(args[1]))
+		mw := int(toFloat64(args[2]))
+		mh := int(toFloat64(args[3]))
+		if tw <= 0 {
+			tw = 32
+		}
+		if th <= 0 {
+			th = 32
+		}
+		if mw <= 0 {
+			mw = 1
+		}
+		if mh <= 0 {
+			mh = 1
+		}
+		tiles := make([][]int, mh)
+		for i := 0; i < mh; i++ {
+			tiles[i] = make([]int, mw)
+		}
+		tilemapMu.Lock()
+		tilemapSeq++
+		id := fmt.Sprintf("tm_%d", tilemapSeq)
+		tilemaps[id] = &tilemapData{
+			Tiles: tiles, TileSize: tw, Solid: make(map[int]bool),
+		}
+		tilemapMu.Unlock()
+		return id, nil
+	})
 	v.RegisterForeign("LoadTilemap", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("LoadTilemap requires (path)")
 		}
 		path := toString(args[0])
-		_ = path
-		tilemapMu.Lock()
-		tilemapSeq++
-		id := fmt.Sprintf("tm_%d", tilemapSeq)
-		tilemaps[id] = &tilemapData{Tiles: [][]int{}, TileSize: 32, Solid: make(map[int]bool)}
-		tilemapMu.Unlock()
+		id, err := tilemapLoad(path)
+		if err != nil {
+			tilemapMu.Lock()
+			tilemapSeq++
+			id = fmt.Sprintf("tm_%d", tilemapSeq)
+			tilemaps[id] = &tilemapData{Tiles: [][]int{}, TileSize: 32, Solid: make(map[int]bool)}
+			tilemapMu.Unlock()
+		}
 		return id, nil
+	})
+	v.RegisterForeign("TilemapLoad", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("TilemapLoad requires (path)")
+		}
+		return v.CallForeign("LoadTilemap", args)
+	})
+	v.RegisterForeign("TilemapSave", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("TilemapSave requires (tilemapId, path)")
+		}
+		id := toString(args[0])
+		path := toString(args[1])
+		tilemapMu.RLock()
+		tm := tilemaps[id]
+		tilemapMu.RUnlock()
+		if tm == nil {
+			return nil, fmt.Errorf("unknown tilemap: %s", id)
+		}
+		return nil, tilemapSave(id, tm, path)
+	})
+	v.RegisterForeign("TilemapFill", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("TilemapFill requires (tilemapId, tileId)")
+		}
+		id := toString(args[0])
+		tid := int(toFloat64(args[1]))
+		tilemapMu.Lock()
+		defer tilemapMu.Unlock()
+		tm := tilemaps[id]
+		if tm == nil {
+			return nil, fmt.Errorf("unknown tilemap: %s", id)
+		}
+		for y := 0; y < len(tm.Tiles); y++ {
+			for x := 0; x < len(tm.Tiles[y]); x++ {
+				tm.Tiles[y][x] = tid
+			}
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("TilemapSetTile", func(args []interface{}) (interface{}, error) {
+		return v.CallForeign("SetTile", args)
+	})
+	v.RegisterForeign("TilemapGetTile", func(args []interface{}) (interface{}, error) {
+		return v.CallForeign("GetTile", args)
 	})
 	v.RegisterForeign("DrawTilemap", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
@@ -660,6 +827,129 @@ func RegisterGame(v *vm.VM) {
 		tid := tm.Tiles[ty][tx]
 		return tm.Solid[tid], nil
 	})
+	v.RegisterForeign("TilemapSetLayer", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("TilemapSetLayer requires (tilemapId, layerId)")
+		}
+		id := toString(args[0])
+		layerID := toString(args[1])
+		tilemapMu.Lock()
+		defer tilemapMu.Unlock()
+		tm := tilemaps[id]
+		if tm == nil {
+			return nil, fmt.Errorf("unknown tilemap: %s", id)
+		}
+		tm.LayerID = layerID
+		return nil, nil
+	})
+	v.RegisterForeign("TilemapSetParallax", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("TilemapSetParallax requires (tilemapId, px, py)")
+		}
+		id := toString(args[0])
+		px := float32(toFloat64(args[1]))
+		py := float32(toFloat64(args[2]))
+		tilemapMu.Lock()
+		defer tilemapMu.Unlock()
+		tm := tilemaps[id]
+		if tm == nil {
+			return nil, fmt.Errorf("unknown tilemap: %s", id)
+		}
+		tm.ParallaxX = px
+		tm.ParallaxY = py
+		return nil, nil
+	})
+
+	// --- Weather (stubs) ---
+	v.RegisterForeign("WeatherSetType", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("WeatherSetType requires (type)")
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("WeatherSetIntensity", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("WeatherSetWindDirection", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, nil
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("WeatherSetWindSpeed", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("WeatherSetFogDensity", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("WeatherSetLightningFrequency", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("FireCreate", func(args []interface{}) (interface{}, error) {
+		return fmt.Sprintf("fire_%d", 0), nil
+	})
+	v.RegisterForeign("FireSetSpreadRate", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("FireSetSmokeEmitter", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("FireSetLight", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("SmokeSetDissolveRate", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("SmokeSetRiseSpeed", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("EnvironmentSetGlobalWind", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("EnvironmentSetTemperature", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("EnvironmentSetHumidity", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("EnvironmentAffectParticles", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("EnvironmentAffectWater", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("EnvironmentAffectVegetation", func(args []interface{}) (interface{}, error) { return nil, nil })
+
+	// --- Time of day (stubs) ---
+	v.RegisterForeign("TimeSet", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("TimeSet requires (hour)")
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("TimeGet", func(args []interface{}) (interface{}, error) {
+		return 12.0, nil
+	})
+	v.RegisterForeign("TimeSetSpeed", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("SkyboxCreate", func(args []interface{}) (interface{}, error) {
+		return fmt.Sprintf("skybox_%d", 0), nil
+	})
+	v.RegisterForeign("SkyboxSetTexture", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("SkyboxSetRotation", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("SkyboxSetTint", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("DrawSkybox", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("CloudLayerCreate", func(args []interface{}) (interface{}, error) {
+		return fmt.Sprintf("cloud_%d", 0), nil
+	})
+	v.RegisterForeign("CloudLayerSetTexture", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("CloudLayerSetHeight", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("DrawCloudLayer", func(args []interface{}) (interface{}, error) { return nil, nil })
+
+	v.RegisterForeign("DecalCreate", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("DecalCreate requires (textureId, x, y, z, size)")
+		}
+		return fmt.Sprintf("decal_%d", 0), nil
+	})
+	v.RegisterForeign("DecalSetLifetime", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("DecalRemove", func(args []interface{}) (interface{}, error) { return nil, nil })
 
 	// --- Pathfinding (simple grid A* stub; returns empty path) ---
 	v.RegisterForeign("PathfindGrid", func(args []interface{}) (interface{}, error) {
@@ -1275,4 +1565,44 @@ func RegisterGame(v *vm.VM) {
 	v.RegisterForeign("AnimUpdate", func(args []interface{}) (interface{}, error) {
 		return nil, nil
 	})
+}
+
+// GetTilemapLayerAndZ returns layerID and zIndex for a tilemap (zIndex 0 for tilemaps). Used by 2D flush for layer sorting.
+func GetTilemapLayerAndZ(tilemapID string) (layerID string, zIndex int) {
+	tilemapMu.RLock()
+	defer tilemapMu.RUnlock()
+	tm := tilemaps[tilemapID]
+	if tm == nil {
+		return "", 0
+	}
+	return tm.LayerID, 0
+}
+
+// GetParticleSystemLayerAndZ returns layerID and zIndex for a particle system. Used by 2D flush for layer sorting.
+func GetParticleSystemLayerAndZ(systemID string) (layerID string, zIndex int) {
+	particleMu.Lock()
+	defer particleMu.Unlock()
+	ps := particleSystems[systemID]
+	if ps == nil {
+		return "", 0
+	}
+	return ps.LayerID, ps.ZIndex
+}
+
+// ClearLayerAssignments clears the given layerID from all tilemaps and particle systems (used by LayerClear).
+func ClearLayerAssignments(layerID string) {
+	tilemapMu.Lock()
+	for _, tm := range tilemaps {
+		if tm.LayerID == layerID {
+			tm.LayerID = ""
+		}
+	}
+	tilemapMu.Unlock()
+	particleMu.Lock()
+	for _, ps := range particleSystems {
+		if ps.LayerID == layerID {
+			ps.LayerID = ""
+		}
+	}
+	particleMu.Unlock()
 }

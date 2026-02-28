@@ -44,6 +44,17 @@ func toFloat64Editor(v interface{}) float64 {
 }
 
 func registerEditor(v *vm.VM) {
+	v.RegisterForeign("EditorEnable", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("EditorEnable requires (flag)")
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("EditorSetMode", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("EditorSetBrushSize", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("EditorSetBrushStrength", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("EditorSetBrushFalloff", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("EditorSetBrushShape", func(args []interface{}) (interface{}, error) { return nil, nil })
 	// ---- Mouse ray (3D picking) ----
 	v.RegisterForeign("GetMouseRay", func(args []interface{}) (interface{}, error) {
 		mousePos := rl.GetMousePosition()

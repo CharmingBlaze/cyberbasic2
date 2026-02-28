@@ -4,6 +4,9 @@ Complete guide to all CyberBasic documentation.
 
 ## Getting Started
 
+- **[Quick Start Guide](QUICK_START_GUIDE.md)** - Get running in 5 minutes
+- **[Roadmap (ROADMAP.md)](../ROADMAP.md)** – Planned features and priorities
+- **[Learning Path](LEARNING_PATH.md)** – Complete structured curriculum from beginner to advanced
 - **[Getting Started Guide](GETTING_STARTED.md)** – Installation, building, running your first program
 - **[Quick Reference](QUICK_REFERENCE.md)** – One-page syntax reference for daily use
 - **[BASIC Programming Guide](BASIC_PROGRAMMING_GUIDE.md)** – Step-by-step tutorial: variables, types, I/O, errors
@@ -25,31 +28,32 @@ Complete guide to all CyberBasic documentation.
 
 - **[Program Structure](PROGRAM_STRUCTURE.md)** – Comments (`//`), feature list, block quick reference, example skeleton
 
-- **[Command Reference](COMMAND_REFERENCE.md)** – Structured command set: window, input, math, camera, 3D, 2D, audio, file, game loop, utility
+- **[Command Reference](COMMAND_REFERENCE.md)** – Structured command set: window, input, math, camera, 3D, 2D, audio, file, game loop, utility; layers, backgrounds, tilemap, particle emitters, scene save/load 2D, physics 2D helpers, terrain/water physics, vegetation, weather, navigation, indoor, streaming, editor, decals
 
 ## Game Development
 
+- **[Learning Path](LEARNING_PATH.md)** – Complete curriculum from basics to advanced games
+- **[2D Games Tutorial](TUTORIAL_2D_GAMES.md)** – Complete 2D game development guide
+- **[3D Games Tutorial](TUTORIAL_3D_GAMES.md)** – Complete 3D game development guide
+- **[GUI Development Tutorial](TUTORIAL_GUI_DEVELOPMENT.md)** – User interfaces and menus
+- **[Multiplayer Tutorial](TUTORIAL_MULTIPLAYER.md)** – Network programming and multiplayer games
 - **[Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)** – Making games with CyberBasic
   - Game loop, input handling
   - GAME.* helpers (camera, movement, collision)
   - 2D/3D physics (Box2D, Bullet)
   - ECS (entity-component system)
   - Best practices
-
 - **[2D Graphics Guide](2D_GRAPHICS_GUIDE.md)** – Full 2D rendering reference
   - Window and frame (InitWindow, ClearBackground; no auto-wrap, compiles as written)
   - Primitives, textures, text, colors
   - 2D camera (SetCamera2D)
   - 2D game checklist
-
 - **[2D Physics Guide](2D_PHYSICS_GUIDE.md)** – Box2D: worlds, bodies, shapes, joints, raycast, collision, StepAllPhysics2D, GAME.* helpers
-
 - **[3D Graphics Guide](3D_GRAPHICS_GUIDE.md)** – Full 3D rendering reference
   - 3D camera (SetCamera3D, GAME.CameraOrbit)
   - Primitives, models, meshes
   - 3D game checklist
   - **3D editor and level builder** (GetMouseRay, PickGroundPlane, level objects, SaveLevel/LoadLevel)
-
 - **[3D Physics Guide](3D_PHYSICS_GUIDE.md)** – Bullet: worlds, bodies, position/rotation, forces, raycast, StepAllPhysics3D, GAME.* helpers
 
 - **[Windows, scaling, and splitscreen](WINDOWS_AND_VIEWS.md)** – Window commands, DPI/scaling, views and split-screen
@@ -107,14 +111,14 @@ Complete guide to all CyberBasic documentation.
 
 | I want to… | Start here |
 |------------|------------|
-| **Learn the language** | [Getting Started](GETTING_STARTED.md) → [Quick Reference](QUICK_REFERENCE.md) → [Language Spec](../LANGUAGE_SPEC.md) |
-| **Make a 2D game** | [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) → [2D Graphics Guide](2D_GRAPHICS_GUIDE.md) → [Cheatsheet](../CHEATSHEET.md) |
-| **Make a 3D game** | [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) → [3D Graphics Guide](3D_GRAPHICS_GUIDE.md) → [Cheatsheet](../CHEATSHEET.md) |
+| **Get started immediately** | [Quick Start Guide](QUICK_START_GUIDE.md) |
+| **Learn the language step-by-step** | [Learning Path](LEARNING_PATH.md) → [Quick Reference](QUICK_REFERENCE.md) → [Language Spec](../LANGUAGE_SPEC.md) |
+| **Make a 2D game** | [2D Games Tutorial](TUTORIAL_2D_GAMES.md) → [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) → [2D Graphics Guide](2D_GRAPHICS_GUIDE.md) |
+| **Make a 3D game** | [3D Games Tutorial](TUTORIAL_3D_GAMES.md) → [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) → [3D Graphics Guide](3D_GRAPHICS_GUIDE.md) |
+| **Create user interfaces** | [GUI Development Tutorial](TUTORIAL_GUI_DEVELOPMENT.md) → [GUI Guide](GUI_GUIDE.md) |
+| **Add multiplayer** | [Multiplayer Tutorial](TUTORIAL_MULTIPLAYER.md) → [Multiplayer Guide](MULTIPLAYER.md) |
 | **Use 2D physics (Box2D)** | [2D Physics Guide](2D_PHYSICS_GUIDE.md) |
 | **Use 3D physics (Bullet)** | [3D Physics Guide](3D_PHYSICS_GUIDE.md) |
-| **Use GUI** | [GUI Guide](GUI_GUIDE.md) |
-| **Use multiplayer (TCP)** | [Multiplayer (TCP)](MULTIPLAYER.md) |
-| **Use SQL (SQLite)** | [SQL (SQLite)](SQL.md) |
 | **Use the hybrid loop** | [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop) (define update(dt) and draw()) |
 | **Use in-process multi-window** | [In-process multi-window](MULTI_WINDOW_INPROCESS.md) |
 | **Use ECS** | [ECS Guide](ECS_GUIDE.md) → [API Reference](../API_REFERENCE.md) |

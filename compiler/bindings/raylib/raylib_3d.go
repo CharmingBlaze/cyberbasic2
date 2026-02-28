@@ -20,10 +20,19 @@ type modelAnimState struct {
 	FrameCount   int32
 }
 
+type modelTransform struct {
+	Position   rl.Vector3
+	RotAxis    rl.Vector3
+	RotAngle   float32
+	Scale      rl.Vector3
+}
+
 var (
-	modelAnimStates   = make(map[string]*modelAnimState)
-	modelAnimStateCtr int
-	modelAnimStateMu  sync.Mutex
+	modelAnimStates     = make(map[string]*modelAnimState)
+	modelAnimStateCtr   int
+	modelAnimStateMu    sync.Mutex
+	modelTransformState = make(map[string]*modelTransform)
+	modelTransformMu    sync.Mutex
 )
 
 func register3D(v *vm.VM) {
@@ -353,6 +362,87 @@ func register3D(v *vm.VM) {
 		rl.DrawModel(model, pos, scale, c)
 		return nil, nil
 	})
+	// SetModelPosition(modelId, x, y, z): store position for DrawModelWithState
+	v.RegisterForeign("SetModelPosition", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetModelPosition requires (modelId, x, y, z)")
+		}
+		id := toString(args[0])
+		modelTransformMu.Lock()
+		if modelTransformState[id] == nil {
+			modelTransformState[id] = &modelTransform{
+				Scale: rl.Vector3{X: 1, Y: 1, Z: 1},
+			}
+		}
+		modelTransformState[id].Position = rl.Vector3{X: toFloat32(args[1]), Y: toFloat32(args[2]), Z: toFloat32(args[3])}
+		modelTransformMu.Unlock()
+		return nil, nil
+	})
+	// SetModelRotation(modelId, axisX, axisY, axisZ, angleRad): store rotation for DrawModelWithState
+	v.RegisterForeign("SetModelRotation", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("SetModelRotation requires (modelId, axisX, axisY, axisZ, angleRad)")
+		}
+		id := toString(args[0])
+		modelTransformMu.Lock()
+		if modelTransformState[id] == nil {
+			modelTransformState[id] = &modelTransform{
+				Scale: rl.Vector3{X: 1, Y: 1, Z: 1},
+			}
+		}
+		modelTransformState[id].RotAxis = rl.Vector3{X: toFloat32(args[1]), Y: toFloat32(args[2]), Z: toFloat32(args[3])}
+		modelTransformState[id].RotAngle = toFloat32(args[4])
+		modelTransformMu.Unlock()
+		return nil, nil
+	})
+	// SetModelScale(modelId, sx, sy, sz): store scale for DrawModelWithState
+	v.RegisterForeign("SetModelScale", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetModelScale requires (modelId, sx, sy, sz)")
+		}
+		id := toString(args[0])
+		modelTransformMu.Lock()
+		if modelTransformState[id] == nil {
+			modelTransformState[id] = &modelTransform{
+				Scale: rl.Vector3{X: 1, Y: 1, Z: 1},
+			}
+		}
+		modelTransformState[id].Scale = rl.Vector3{X: toFloat32(args[1]), Y: toFloat32(args[2]), Z: toFloat32(args[3])}
+		modelTransformMu.Unlock()
+		return nil, nil
+	})
+	// DrawModelWithState(modelId [, tint]): draw using stored position, rotation, scale (defaults if never set)
+	v.RegisterForeign("DrawModelWithState", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DrawModelWithState requires (modelId) and optional tint")
+		}
+		id := toString(args[0])
+		modelMu.Lock()
+		model, ok := models[id]
+		modelMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown model id: %s", id)
+		}
+		modelTransformMu.Lock()
+		t := modelTransformState[id]
+		modelTransformMu.Unlock()
+		pos := rl.Vector3{X: 0, Y: 0, Z: 0}
+		rotAxis := rl.Vector3{X: 0, Y: 1, Z: 0}
+		rotAngle := float32(0)
+		scale := rl.Vector3{X: 1, Y: 1, Z: 1}
+		if t != nil {
+			pos = t.Position
+			rotAxis = t.RotAxis
+			rotAngle = t.RotAngle
+			scale = t.Scale
+		}
+		c := rl.White
+		if len(args) >= 5 {
+			c = argsToColor(args, 1)
+		}
+		rl.DrawModelEx(model, pos, rotAxis, rotAngle, scale, c)
+		return nil, nil
+	})
 	v.RegisterForeign("DrawCube", func(args []interface{}) (interface{}, error) {
 		if len(args) < 7 {
 			return nil, fmt.Errorf("DrawCube requires (posX, posY, posZ, width, height, length, color)")
@@ -507,6 +597,37 @@ func register3D(v *vm.VM) {
 			c = argsToColor(args, 7)
 		}
 		rl.DrawCylinderWires(pos, radiusTop, radiusBottom, height, slices, c)
+		return nil, nil
+	})
+	// DrawText3D(fontId, text, posX, posY, posZ, fontSize, spacing, r, g, b, a): draw text at 3D world position (projects to screen using current camera).
+	v.RegisterForeign("DrawText3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 7 {
+			return nil, fmt.Errorf("DrawText3D requires (fontId, text, posX, posY, posZ, fontSize, spacing) and optional tint r,g,b,a")
+		}
+		fontId := toString(args[0])
+		text := toString(args[1])
+		pos := rl.Vector3{X: toFloat32(args[2]), Y: toFloat32(args[3]), Z: toFloat32(args[4])}
+		fontSize := toFloat32(args[5])
+		spacing := toFloat32(args[6])
+		screenPos := rl.GetWorldToScreen(pos, camera3D)
+		var font rl.Font
+		if fontId != "" {
+			fontMu.Lock()
+			f, ok := fonts[fontId]
+			fontMu.Unlock()
+			if ok {
+				font = f
+			} else {
+				font = rl.GetFontDefault()
+			}
+		} else {
+			font = rl.GetFontDefault()
+		}
+		c := rl.White
+		if len(args) >= 11 {
+			c = argsToColor(args, 7)
+		}
+		rl.DrawTextEx(font, text, screenPos, fontSize, spacing, c)
 		return nil, nil
 	})
 	v.RegisterForeign("DrawRay", func(args []interface{}) (interface{}, error) {
@@ -1041,6 +1162,81 @@ func register3D(v *vm.VM) {
 		modelStateMu.Unlock()
 		return nil, nil
 	})
+	// SetModelShader(modelId, shaderId): set the model's first material shader for custom rendering.
+	v.RegisterForeign("SetModelShader", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetModelShader requires (modelId, shaderId)")
+		}
+		modelId := toString(args[0])
+		shaderId := toString(args[1])
+		modelMu.Lock()
+		model, okModel := models[modelId]
+		modelMu.Unlock()
+		if !okModel {
+			return nil, fmt.Errorf("unknown model id: %s", modelId)
+		}
+		shaderMu.Lock()
+		sh, okShader := shaders[shaderId]
+		shaderMu.Unlock()
+		if !okShader {
+			return nil, fmt.Errorf("unknown shader id: %s", shaderId)
+		}
+		if model.MaterialCount > 0 && model.Materials != nil {
+			model.Materials.Shader = sh
+			modelMu.Lock()
+			models[modelId] = model
+			modelMu.Unlock()
+		}
+		return nil, nil
+	})
+	// SetMaterialFloat(modelId, paramName, value): set float uniform on the model's first material shader.
+	v.RegisterForeign("SetMaterialFloat", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("SetMaterialFloat requires (modelId, paramName, value)")
+		}
+		modelId := toString(args[0])
+		paramName := toString(args[1])
+		value := toFloat32(args[2])
+		modelMu.Lock()
+		model, ok := models[modelId]
+		modelMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown model id: %s", modelId)
+		}
+		if model.MaterialCount == 0 || model.Materials == nil {
+			return nil, nil
+		}
+		sh := model.Materials.Shader
+		loc := rl.GetShaderLocation(sh, paramName)
+		if loc >= 0 {
+			rl.SetShaderValue(sh, loc, []float32{value}, rl.ShaderUniformFloat)
+		}
+		return nil, nil
+	})
+	// SetMaterialVector(modelId, paramName, x, y, z): set vec3 uniform on the model's first material shader.
+	v.RegisterForeign("SetMaterialVector", func(args []interface{}) (interface{}, error) {
+		if len(args) < 6 {
+			return nil, fmt.Errorf("SetMaterialVector requires (modelId, paramName, x, y, z)")
+		}
+		modelId := toString(args[0])
+		paramName := toString(args[1])
+		vec := []float32{toFloat32(args[2]), toFloat32(args[3]), toFloat32(args[4])}
+		modelMu.Lock()
+		model, ok := models[modelId]
+		modelMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown model id: %s", modelId)
+		}
+		if model.MaterialCount == 0 || model.Materials == nil {
+			return nil, nil
+		}
+		sh := model.Materials.Shader
+		loc := rl.GetShaderLocation(sh, paramName)
+		if loc >= 0 {
+			rl.SetShaderValue(sh, loc, vec, rl.ShaderUniformVec3)
+		}
+		return nil, nil
+	})
 
 	v.RegisterForeign("UpdateModelAnimation", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {
@@ -1477,6 +1673,36 @@ func register3D(v *vm.VM) {
 		ambientR = toFloat32(args[0])
 		ambientG = toFloat32(args[1])
 		ambientB = toFloat32(args[2])
+		return nil, nil
+	})
+
+	// Phase 8: Optimization (store flags for future use)
+	v.RegisterForeign("SetCullingDistance", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SetCullingDistance requires (distance)")
+		}
+		cullingDistance = toFloat32(args[0])
+		return nil, nil
+	})
+	v.RegisterForeign("EnableFrustumCulling", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("EnableFrustumCulling requires (flag)")
+		}
+		frustumCulling = toFloat32(args[0]) != 0
+		return nil, nil
+	})
+	v.RegisterForeign("Enable2DCulling", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("Enable2DCulling requires (flag)")
+		}
+		enable2DCulling = toFloat32(args[0]) != 0
+		return nil, nil
+	})
+	v.RegisterForeign("SetCullingMargin", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SetCullingMargin requires (pixels)")
+		}
+		cullingMargin = toFloat32(args[0])
 		return nil, nil
 	})
 }
