@@ -655,12 +655,14 @@ Picking: **GetMouseRay**() (updates internal ray), **GetMouseRayOriginX/Y/Z**(),
 | **LoadSoundFromWave** | (waveId) | id | Create sound from wave |
 | **LoadAudioStream** | (sampleRate, sampleSize, channels) | id | Create audio stream |
 | **UnloadAudioStream** | (id) | — | Unload stream |
-| **UpdateAudioStream** | (id, data) | — | Push samples |
+| **UpdateAudioStream** | (id, data) | — | Push samples (use this for procedural/decoded audio; stream callbacks that require C function pointers are not exposed from BASIC) |
 | **PlayAudioStream** | (id) | — | Play stream |
 | **StopAudioStream** | (id) | — | Stop stream |
 | **SetAudioStreamVolume** | (id, volume) | — | Volume |
 | **SetAudioStreamPitch** | (id, pitch) | — | Pitch |
 | **SetAudioStreamPan** | (id, pan) | — | Pan |
+
+**Audio stream callbacks:** Stream callbacks that require C function pointers are not exposed from BASIC. Use **UpdateAudioStream**(streamId, sample1, sample2, …) to push samples. For procedural or decoded audio, generate chunks in BASIC and call UpdateAudioStream each frame or on a timer.
 | **ExportWaveAsCode** | (waveId, fileName) | bool | Export as C header |
 
 Not supported from BASIC (return error): SetAudioStreamCallback, AttachAudioStreamProcessor, DetachAudioStreamProcessor, AttachAudioMixedProcessor, DetachAudioMixedProcessor.
@@ -884,7 +886,17 @@ Use **BOX2D.*** prefix or legacy flat names.
 | **SetVelocity2D** | (worldId, bodyId, vx, vy) | — | Set velocity |
 | **ApplyForce2D** | (worldId, bodyId, fx, fy, …) | — | Apply force |
 | **ApplyImpulse2D** | (…) | — | Apply impulse |
-| **CreateDistanceJoint2D** | (worldId, bodyAId, bodyBId, length) | — | Distance joint (implemented) |
+| **CreateDistanceJoint2D** | (worldId, bodyAId, bodyBId, length) | jointId | Distance joint |
+| **CreateRevoluteJoint2D** | (worldId, bodyAId, bodyBId, anchorX, anchorY [, lowerAngle, upperAngle, enableMotor, motorSpeed, maxMotorTorque]) | jointId | Revolute (hinge) joint |
+| **CreatePrismaticJoint2D** | (worldId, bodyAId, bodyBId, anchorX, anchorY, axisX, axisY) | jointId | Prismatic joint |
+| **CreateWeldJoint2D** | (worldId, bodyAId, bodyBId, anchorX, anchorY) | jointId | Weld joint |
+| **CreateRopeJoint2D** | (worldId, bodyAId, bodyBId, maxLength) | jointId | Rope (max distance) joint |
+| **CreateWheelJoint2D** | (worldId, bodyAId, bodyBId, anchorX, anchorY, axisX, axisY) | jointId | Wheel (suspension) joint |
+| **CreatePulleyJoint2D** | (worldId, bodyAId, bodyBId, groundAX, groundAY, groundBX, groundBY, anchorAX, anchorAY, anchorBX, anchorBY, ratio) | jointId | Pulley joint |
+| **CreateGearJoint2D** | (worldId, joint1Id, joint2Id, ratio) | jointId | Gear joint (joint1 and joint2 must be revolute or prismatic) |
+| **SetJointLimits2D** | (worldId, jointId, lower, upper) | — | Set limits (angles for revolute, translation for prismatic) |
+| **SetJointMotor2D** | (worldId, jointId, enableMotor, motorSpeed, maxTorqueOrForce) | — | Set motor (revolute, prismatic, wheel) |
+| **DestroyJoint2D** | (worldId, jointId) | — | Destroy joint |
 | **RayCast2D** | (worldId, x1, y1, x2, y2) | bool | Ray cast; use RayHit* for result |
 | **RayHitX2D** | () | float | Hit X |
 | **RayHitY2D** | () | float | Hit Y |
@@ -892,7 +904,7 @@ Use **BOX2D.*** prefix or legacy flat names.
 | **GetCollisionCount2D** | (worldId) | int | Collision count (after Step) |
 | **GetCollisionOther2D** | (index) | bodyId | Other body in collision |
 
-Other: SetSensor2D, ApplyTorque2D, SetAngularVelocity2D, GetAngularVelocity2D, SetFriction2D, SetRestitution2D, SetDamping2D, SetFixedRotation2D, SetGravityScale2D, SetMass2D, SetBullet2D, GetCollisionNormalX2D, GetCollisionNormalY2D. Joints (Revolute, Prismatic, etc.) are stubbed.
+Other: SetSensor2D, ApplyTorque2D, SetAngularVelocity2D, GetAngularVelocity2D, SetFriction2D, SetRestitution2D, SetDamping2D, SetFixedRotation2D, SetGravityScale2D, SetMass2D, SetBullet2D, GetCollisionNormalX2D, GetCollisionNormalY2D.
 
 ---
 
@@ -941,7 +953,7 @@ Use **BULLET.*** prefix or legacy flat names.
 | **GetCollisionCount3D** | (worldId) | int | Collision count |
 | **GetCollisionOther3D** | (index) | bodyId | Other body |
 
-Other legacy: CreateCapsule3D, CreateStaticMesh3D, CreateCylinder3D, CreateCone3D, CreateHeightmap3D, CreateCompound3D, AddShapeToCompound3D, SetScale3D, GetVelocityX3D/Y3D/Z3D, SetAngularVelocity3D, GetAngularVelocityX3D/Y3D/Z3D, ApplyTorque3D, ApplyTorqueImpulse3D, SetMass3D. Stubs: SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, joints (CreateHingeJoint3D, etc.).
+Other legacy: CreateCapsule3D, CreateStaticMesh3D, CreateCylinder3D, CreateCone3D, CreateHeightmap3D, CreateCompound3D, AddShapeToCompound3D, SetScale3D, GetVelocityX3D/Y3D/Z3D, SetAngularVelocity3D, GetAngularVelocityX3D/Y3D/Z3D, ApplyTorque3D, ApplyTorqueImpulse3D, SetMass3D. **Body properties (implemented):** SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, SetGravity3D (per-body gravity scale), SetLinearFactor3D, SetAngularFactor3D, SetCCD3D (stored). **3D joints (stubs):** CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, CreatePointToPointJoint3D, CreateFixedJoint3D, SetJointLimits3D, SetJointMotor3D — not implemented in the pure-Go engine; use a full Bullet CGO build for constraint joints.
 
 ---
 

@@ -288,4 +288,36 @@ func registerRaygui(v *vm.VM) {
 		out := raygui.ProgressBar(b, "", "", val, 0, 1)
 		return float64(out), nil
 	})
+
+	// Theme and style (raygui)
+	v.RegisterForeign("GuiLoadStyle", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("GuiLoadStyle(filePath) requires 1 argument")
+		}
+		raygui.LoadStyle(toString(args[0]))
+		return nil, nil
+	})
+	v.RegisterForeign("GuiLoadStyleDefault", func(args []interface{}) (interface{}, error) {
+		raygui.LoadStyleDefault()
+		return nil, nil
+	})
+	v.RegisterForeign("GuiSetStyle", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("GuiSetStyle(controlId, propertyId, value) requires 3 arguments")
+		}
+		control := raygui.ControlID(toInt32(args[0]))
+		property := raygui.PropertyID(toInt32(args[1]))
+		value := raygui.PropertyValue(toInt32(args[2]))
+		raygui.SetStyle(control, property, value)
+		return nil, nil
+	})
+	v.RegisterForeign("GuiGetStyle", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("GuiGetStyle(controlId, propertyId) requires 2 arguments")
+		}
+		control := raygui.ControlID(toInt32(args[0]))
+		property := raygui.PropertyID(toInt32(args[1]))
+		v := raygui.GetStyle(control, property)
+		return int(v), nil
+	})
 }

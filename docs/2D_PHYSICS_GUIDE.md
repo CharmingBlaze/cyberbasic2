@@ -84,8 +84,21 @@ Use **SetSensor2D**(worldId, bodyId, 1) to make a body a sensor (no physical col
 
 ## Joints
 
-- **CreateDistanceJoint2D**(worldId, bodyAId, bodyBId, length) — distance constraint between two bodies (implemented).
-- Other joint types (Revolute, Prismatic, Pulley, Gear, Weld, Rope, Wheel) and **SetJointLimits2D** / **SetJointMotor2D** are stubbed; see [API Reference](../API_REFERENCE.md).
+All joint creation functions return a **jointId** (string) so you can call **SetJointLimits2D** and **SetJointMotor2D** later.
+
+- **CreateDistanceJoint2D**(worldId, bodyAId, bodyBId, length) — distance constraint; returns jointId.
+- **CreateRevoluteJoint2D**(worldId, bodyAId, bodyBId, anchorX, anchorY [, lowerAngle, upperAngle, enableMotor, motorSpeed, maxMotorTorque]) — hinge; returns jointId.
+- **CreatePrismaticJoint2D**(worldId, bodyAId, bodyBId, anchorX, anchorY, axisX, axisY) — sliding along axis; returns jointId.
+- **CreateWeldJoint2D**(worldId, bodyAId, bodyBId, anchorX, anchorY) — weld two bodies; returns jointId.
+- **CreateRopeJoint2D**(worldId, bodyAId, bodyBId, maxLength) — max distance (rope); returns jointId.
+- **CreateWheelJoint2D**(worldId, bodyAId, bodyBId, anchorX, anchorY, axisX, axisY) — vehicle suspension; returns jointId.
+- **CreatePulleyJoint2D**(worldId, bodyAId, bodyBId, groundAX, groundAY, groundBX, groundBY, anchorAX, anchorAY, anchorBX, anchorBY, ratio) — pulley; returns jointId.
+- **CreateGearJoint2D**(worldId, joint1Id, joint2Id, ratio) — links two revolute/prismatic joints; returns jointId.
+- **SetJointLimits2D**(worldId, jointId, lower, upper) — set angle limits (revolute) or translation limits (prismatic).
+- **SetJointMotor2D**(worldId, jointId, enableMotor, motorSpeed, maxTorqueOrForce) — enable motor and set speed/force.
+- **DestroyJoint2D**(worldId, jointId) — destroy a joint.
+
+See [API Reference](../API_REFERENCE.md) section 14 for full signatures.
 
 ---
 

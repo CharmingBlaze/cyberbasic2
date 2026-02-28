@@ -83,7 +83,7 @@ All commands are **case-insensitive**. For the complete list see [API Reference]
 - **CreateStaticMesh3D**, **CreateHeightmap3D** — static mesh and heightfield (legacy; see API Reference).
 - **CreateCompound3D**, **AddShapeToCompound3D** — compound bodies (multiple shapes). **SetScale3D** for scaling.
 
-Other options: **SetMass3D**, **SetKinematic3D** (stub), **SetFriction3D**, **SetRestitution3D**, **SetDamping3D** (stubs; see API Reference). Joints (e.g. **CreateHingeJoint3D**) are stubbed.
+**Body properties (implemented):** **SetFriction3D**(worldId, bodyId, friction), **SetRestitution3D**(worldId, bodyId, restitution), **SetDamping3D**(worldId, bodyId, linearDamp, angularDamp), **SetKinematic3D**(worldId, bodyId, kinematic), **SetGravity3D**(worldId, bodyId, gravityScale), **SetLinearFactor3D**(worldId, bodyId, fx, fy, fz), **SetAngularFactor3D**(worldId, bodyId, ax, ay, az), **SetCCD3D**(worldId, bodyId, enable). These are used in the pure-Go engine's Step and collision resolution. **3D joints** (CreateHingeJoint3D, CreateSliderJoint3D, etc.) remain stubbed in the pure-Go engine; see API Reference.
 
 ---
 

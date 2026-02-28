@@ -15,7 +15,7 @@ Complete guide to making games with CyberBasic: game loop, input, GAME.* helpers
 9. [Quality of life](#quality-of-life)
 10. [State machines](#state-machines)
 11. [Best practices](#best-practices)
-12. [Physics stubs](#physics-stubs)
+12. [Physics implementation status](#physics-implementation-status)
 13. [2D and 3D quick reference](#2d-and-3d-quick-reference)
 
 ---
@@ -286,14 +286,12 @@ WEND
 
 ---
 
-## Physics stubs
+## Physics implementation status
 
-Some Box2D and Bullet APIs are **stubbed (no-op)** until implemented:
+- **Box2D (2D):** Worlds, bodies, shapes, raycast, and collision are implemented. All joint types are supported: **CreateDistanceJoint2D**, **CreateRevoluteJoint2D**, **CreatePrismaticJoint2D**, **CreateWeldJoint2D**, **CreateRopeJoint2D**, **CreatePulleyJoint2D**, **CreateGearJoint2D**, **CreateWheelJoint2D**. Use **SetJointLimits2D** and **SetJointMotor2D** to configure joints; **DestroyJoint2D** to remove them.
+- **Bullet (3D):** Worlds, bodies, shapes, raycast, step, and collision are implemented. Body properties are supported: **SetFriction3D**, **SetRestitution3D**, **SetDamping3D**, **SetKinematic3D**, **SetGravity3D**, **SetLinearFactor3D**, **SetAngularFactor3D**, **SetCCD3D**. **3D constraint joints** (CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, CreatePointToPointJoint3D, CreateFixedJoint3D, SetJointLimits3D, SetJointMotor3D) remain stubbed in the pure-Go engine.
 
-- **Box2D:** Most joints (Revolute, Prismatic, Pulley, Gear, Weld, Rope, Wheel, SetJointLimits2D, SetJointMotor2D) are stubs. **CreateDistanceJoint2D** is implemented.
-- **Bullet:** SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, SetGravity3D, SetLinearFactor3D, SetAngularFactor3D, SetCCD3D, and joint creation (CreateHingeJoint3D, CreateSliderJoint3D, etc.) and SetJointLimits3D / SetJointMotor3D are stubs.
-
-Core features (world, bodies, step, position/velocity, apply force, raycast) work. See [API_REFERENCE.md](../API_REFERENCE.md) for the full list.
+See [API_REFERENCE.md](../API_REFERENCE.md) and [2D Physics Guide](2D_PHYSICS_GUIDE.md) / [3D Physics Guide](3D_PHYSICS_GUIDE.md) for the full list.
 
 ---
 

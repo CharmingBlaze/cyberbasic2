@@ -6,6 +6,14 @@ All notable changes to CyberBasic are documented here. The project follows a sin
 
 ## [Unreleased] – release preparation
 
+### Physics, UI, and audio (full implementation)
+
+- **Box2D:** All joint types implemented (Revolute, Prismatic, Weld, Rope, Pulley, Gear, Wheel); joint ID storage; **SetJointLimits2D**, **SetJointMotor2D**, **DestroyJoint2D**. Distance joint returns jointId.
+- **Bullet:** Body properties implemented and used in Step and collision: friction, restitution, linear/angular damping, kinematic, gravity scale, linear/angular factor, CCD. Setters: SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, SetGravity3D, SetLinearFactor3D, SetAngularFactor3D, SetCCD3D. 3D constraint joints remain stubs.
+- **UI (raygui):** **GuiLoadStyle**(filePath), **GuiLoadStyleDefault**(), **GuiSetStyle**(controlId, propertyId, value), **GuiGetStyle**(controlId, propertyId) for theme and layout.
+- **Audio:** Documented that stream callbacks requiring C function pointers are not exposed from BASIC; use **UpdateAudioStream** to push samples.
+- Documentation: API_REFERENCE, COMMAND_REFERENCE, 2D_PHYSICS_GUIDE, 3D_PHYSICS_GUIDE, GUI_GUIDE, README, and GAME_DEVELOPMENT_GUIDE updated.
+
 ### Cleanup and documentation
 
 - Moved root-level ad-hoc test scripts (`test_*.bas`) and the raylib diagnostic (`test_raylib_window.go`) into `deprecated/` with a README. These are not part of the main build or test suite.

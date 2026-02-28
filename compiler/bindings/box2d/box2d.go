@@ -58,6 +58,9 @@ var (
 	worldMu            sync.RWMutex
 	bodies             = make(map[string]*box2d.B2Body) // key: worldId.bodyId
 	bodiesMu           sync.RWMutex
+	joints             = make(map[string]box2d.B2JointInterface) // key: worldId + "\x00" + jointId
+	jointsMu           sync.RWMutex
+	jointSeq           int
 	layerCollision     = make(map[string]map[string]bool) // layerA -> layerB -> collide
 	layerCollisionMu   sync.RWMutex
 	bodyOrder          = make(map[string][]string) // worldId -> ordered body IDs for iteration
@@ -189,11 +192,23 @@ func RegisterBox2D(v *vm.VM) {
 		}
 		worldId := toString(args[0])
 		worldMu.Lock()
-		if w := worlds[worldId]; w != nil {
+		w := worlds[worldId]
+		if w != nil {
 			delete(worldIdByPtr, w)
 		}
 		delete(worlds, worldId)
 		worldMu.Unlock()
+		jointsMu.Lock()
+		prefix := worldId + "\x00"
+		for k, j := range joints {
+			if len(k) > len(prefix) && k[:len(prefix)] == prefix {
+				if w != nil {
+					w.DestroyJoint(j)
+				}
+				delete(joints, k)
+			}
+		}
+		jointsMu.Unlock()
 		bodyOrderMu.Lock()
 		delete(bodyOrder, worldId)
 		bodyOrderMu.Unlock()
@@ -573,11 +588,23 @@ func registerFlat2D(v *vm.VM) {
 		}
 		worldId := toString(args[0])
 		worldMu.Lock()
-		if w := worlds[worldId]; w != nil {
+		w := worlds[worldId]
+		if w != nil {
 			delete(worldIdByPtr, w)
 		}
 		delete(worlds, worldId)
 		worldMu.Unlock()
+		jointsMu.Lock()
+		prefix := worldId + "\x00"
+		for k, j := range joints {
+			if len(k) > len(prefix) && k[:len(prefix)] == prefix {
+				if w != nil {
+					w.DestroyJoint(j)
+				}
+				delete(joints, k)
+			}
+		}
+		jointsMu.Unlock()
 		bodiesMu.Lock()
 		for k := range bodies {
 			if len(k) > len(worldId) && k[:len(worldId)] == worldId && k[len(worldId)] == '\x00' {
@@ -1127,7 +1154,20 @@ func registerFlat2D(v *vm.VM) {
 		return nil, nil
 	})
 
-	// Joints: CreateDistanceJoint2D implemented; others stubbed
+	// Joints: all create functions return jointId for SetJointLimits2D/SetJointMotor2D
+	registerJoint := func(worldId string, w *box2d.B2World, j box2d.B2JointInterface) (string, error) {
+		if j == nil {
+			return "", fmt.Errorf("CreateJoint failed")
+		}
+		jointsMu.Lock()
+		jointSeq++
+		jointId := strconv.Itoa(jointSeq)
+		key := worldId + "\x00" + jointId
+		joints[key] = j
+		jointsMu.Unlock()
+		return jointId, nil
+	}
+
 	v.RegisterForeign("CreateDistanceJoint2D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 4 {
 			return nil, fmt.Errorf("CreateDistanceJoint2D requires (worldId, bodyAId, bodyBId, length)")
@@ -1160,18 +1200,325 @@ func registerFlat2D(v *vm.VM) {
 		def := box2d.MakeB2DistanceJointDef()
 		def.Initialize(bodyA, bodyB, anchorA, anchorB)
 		def.Length = length
-		w.CreateJoint(&def)
+		j := w.CreateJoint(&def)
+		return registerJoint(worldId, w, j)
+	})
+
+	v.RegisterForeign("CreateRevoluteJoint2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("CreateRevoluteJoint2D requires (worldId, bodyAId, bodyBId, anchorX, anchorY)")
+		}
+		worldId := toString(args[0])
+		bodyAId := toString(args[1])
+		bodyBId := toString(args[2])
+		ax, ay := toFloat64(args[3]), toFloat64(args[4])
+		worldMu.RLock()
+		w := worlds[worldId]
+		worldMu.RUnlock()
+		if w == nil {
+			return nil, fmt.Errorf("world not found: %s", worldId)
+		}
+		bodiesMu.RLock()
+		bodyA := bodies[bodyKey(worldId, bodyAId)]
+		bodyB := bodies[bodyKey(worldId, bodyBId)]
+		bodiesMu.RUnlock()
+		if bodyA == nil {
+			return nil, fmt.Errorf("body not found: %s", bodyAId)
+		}
+		if bodyB == nil {
+			return nil, fmt.Errorf("body not found: %s", bodyBId)
+		}
+		anchor := box2d.MakeB2Vec2(ax, ay)
+		def := box2d.MakeB2RevoluteJointDef()
+		def.Initialize(bodyA, bodyB, anchor)
+		if len(args) >= 8 {
+			def.EnableLimit = toFloat64(args[5]) != 0
+			def.LowerAngle = toFloat64(args[6])
+			def.UpperAngle = toFloat64(args[7])
+		}
+		if len(args) >= 11 {
+			def.EnableMotor = toFloat64(args[8]) != 0
+			def.MotorSpeed = toFloat64(args[9])
+			def.MaxMotorTorque = toFloat64(args[10])
+		}
+		j := w.CreateJoint(&def)
+		return registerJoint(worldId, w, j)
+	})
+
+	v.RegisterForeign("CreatePrismaticJoint2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 7 {
+			return nil, fmt.Errorf("CreatePrismaticJoint2D requires (worldId, bodyAId, bodyBId, anchorX, anchorY, axisX, axisY)")
+		}
+		worldId := toString(args[0])
+		bodyAId := toString(args[1])
+		bodyBId := toString(args[2])
+		ax, ay := toFloat64(args[3]), toFloat64(args[4])
+		axisX, axisY := toFloat64(args[5]), toFloat64(args[6])
+		worldMu.RLock()
+		w := worlds[worldId]
+		worldMu.RUnlock()
+		if w == nil {
+			return nil, fmt.Errorf("world not found: %s", worldId)
+		}
+		bodiesMu.RLock()
+		bodyA := bodies[bodyKey(worldId, bodyAId)]
+		bodyB := bodies[bodyKey(worldId, bodyBId)]
+		bodiesMu.RUnlock()
+		if bodyA == nil {
+			return nil, fmt.Errorf("body not found: %s", bodyAId)
+		}
+		if bodyB == nil {
+			return nil, fmt.Errorf("body not found: %s", bodyBId)
+		}
+		anchor := box2d.MakeB2Vec2(ax, ay)
+		axis := box2d.MakeB2Vec2(axisX, axisY)
+		def := box2d.MakeB2PrismaticJointDef()
+		def.Initialize(bodyA, bodyB, anchor, axis)
+		j := w.CreateJoint(&def)
+		return registerJoint(worldId, w, j)
+	})
+
+	v.RegisterForeign("CreateWeldJoint2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("CreateWeldJoint2D requires (worldId, bodyAId, bodyBId, anchorX, anchorY)")
+		}
+		worldId := toString(args[0])
+		bodyAId := toString(args[1])
+		bodyBId := toString(args[2])
+		ax, ay := toFloat64(args[3]), toFloat64(args[4])
+		worldMu.RLock()
+		w := worlds[worldId]
+		worldMu.RUnlock()
+		if w == nil {
+			return nil, fmt.Errorf("world not found: %s", worldId)
+		}
+		bodiesMu.RLock()
+		bodyA := bodies[bodyKey(worldId, bodyAId)]
+		bodyB := bodies[bodyKey(worldId, bodyBId)]
+		bodiesMu.RUnlock()
+		if bodyA == nil {
+			return nil, fmt.Errorf("body not found: %s", bodyAId)
+		}
+		if bodyB == nil {
+			return nil, fmt.Errorf("body not found: %s", bodyBId)
+		}
+		anchor := box2d.MakeB2Vec2(ax, ay)
+		def := box2d.MakeB2WeldJointDef()
+		def.Initialize(bodyA, bodyB, anchor)
+		j := w.CreateJoint(&def)
+		return registerJoint(worldId, w, j)
+	})
+
+	v.RegisterForeign("CreateRopeJoint2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("CreateRopeJoint2D requires (worldId, bodyAId, bodyBId, maxLength)")
+		}
+		worldId := toString(args[0])
+		bodyAId := toString(args[1])
+		bodyBId := toString(args[2])
+		maxLen := toFloat64(args[3])
+		if maxLen <= 0 {
+			maxLen = 1
+		}
+		worldMu.RLock()
+		w := worlds[worldId]
+		worldMu.RUnlock()
+		if w == nil {
+			return nil, fmt.Errorf("world not found: %s", worldId)
+		}
+		bodiesMu.RLock()
+		bodyA := bodies[bodyKey(worldId, bodyAId)]
+		bodyB := bodies[bodyKey(worldId, bodyBId)]
+		bodiesMu.RUnlock()
+		if bodyA == nil {
+			return nil, fmt.Errorf("body not found: %s", bodyAId)
+		}
+		if bodyB == nil {
+			return nil, fmt.Errorf("body not found: %s", bodyBId)
+		}
+		def := box2d.MakeB2RopeJointDef()
+		def.BodyA = bodyA
+		def.BodyB = bodyB
+		def.LocalAnchorA = bodyA.GetLocalPoint(bodyA.GetPosition())
+		def.LocalAnchorB = bodyB.GetLocalPoint(bodyB.GetPosition())
+		def.MaxLength = maxLen
+		j := w.CreateJoint(&def)
+		return registerJoint(worldId, w, j)
+	})
+
+	v.RegisterForeign("CreateWheelJoint2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 7 {
+			return nil, fmt.Errorf("CreateWheelJoint2D requires (worldId, bodyAId, bodyBId, anchorX, anchorY, axisX, axisY)")
+		}
+		worldId := toString(args[0])
+		bodyAId := toString(args[1])
+		bodyBId := toString(args[2])
+		ax, ay := toFloat64(args[3]), toFloat64(args[4])
+		axisX, axisY := toFloat64(args[5]), toFloat64(args[6])
+		worldMu.RLock()
+		w := worlds[worldId]
+		worldMu.RUnlock()
+		if w == nil {
+			return nil, fmt.Errorf("world not found: %s", worldId)
+		}
+		bodiesMu.RLock()
+		bodyA := bodies[bodyKey(worldId, bodyAId)]
+		bodyB := bodies[bodyKey(worldId, bodyBId)]
+		bodiesMu.RUnlock()
+		if bodyA == nil {
+			return nil, fmt.Errorf("body not found: %s", bodyAId)
+		}
+		if bodyB == nil {
+			return nil, fmt.Errorf("body not found: %s", bodyBId)
+		}
+		anchor := box2d.MakeB2Vec2(ax, ay)
+		axis := box2d.MakeB2Vec2(axisX, axisY)
+		def := box2d.MakeB2WheelJointDef()
+		def.Initialize(bodyA, bodyB, anchor, axis)
+		j := w.CreateJoint(&def)
+		return registerJoint(worldId, w, j)
+	})
+
+	v.RegisterForeign("CreatePulleyJoint2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 12 {
+			return nil, fmt.Errorf("CreatePulleyJoint2D requires (worldId, bodyAId, bodyBId, groundAX, groundAY, groundBX, groundBY, anchorAX, anchorAY, anchorBX, anchorBY, ratio)")
+		}
+		worldId := toString(args[0])
+		bodyAId := toString(args[1])
+		bodyBId := toString(args[2])
+		groundA := box2d.MakeB2Vec2(toFloat64(args[3]), toFloat64(args[4]))
+		groundB := box2d.MakeB2Vec2(toFloat64(args[5]), toFloat64(args[6]))
+		anchorA := box2d.MakeB2Vec2(toFloat64(args[7]), toFloat64(args[8]))
+		anchorB := box2d.MakeB2Vec2(toFloat64(args[9]), toFloat64(args[10]))
+		ratio := toFloat64(args[11])
+		if ratio <= 0 {
+			ratio = 1
+		}
+		worldMu.RLock()
+		w := worlds[worldId]
+		worldMu.RUnlock()
+		if w == nil {
+			return nil, fmt.Errorf("world not found: %s", worldId)
+		}
+		bodiesMu.RLock()
+		bodyA := bodies[bodyKey(worldId, bodyAId)]
+		bodyB := bodies[bodyKey(worldId, bodyBId)]
+		bodiesMu.RUnlock()
+		if bodyA == nil {
+			return nil, fmt.Errorf("body not found: %s", bodyAId)
+		}
+		if bodyB == nil {
+			return nil, fmt.Errorf("body not found: %s", bodyBId)
+		}
+		def := box2d.MakeB2PulleyJointDef()
+		def.Initialize(bodyA, bodyB, groundA, groundB, anchorA, anchorB, ratio)
+		j := w.CreateJoint(&def)
+		return registerJoint(worldId, w, j)
+	})
+
+	v.RegisterForeign("CreateGearJoint2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("CreateGearJoint2D requires (worldId, joint1Id, joint2Id, ratio)")
+		}
+		worldId := toString(args[0])
+		joint1Id := toString(args[1])
+		joint2Id := toString(args[2])
+		ratio := toFloat64(args[3])
+		worldMu.RLock()
+		w := worlds[worldId]
+		worldMu.RUnlock()
+		if w == nil {
+			return nil, fmt.Errorf("world not found: %s", worldId)
+		}
+		jointsMu.RLock()
+		j1 := joints[worldId+"\x00"+joint1Id]
+		j2 := joints[worldId+"\x00"+joint2Id]
+		jointsMu.RUnlock()
+		if j1 == nil {
+			return nil, fmt.Errorf("joint not found: %s", joint1Id)
+		}
+		if j2 == nil {
+			return nil, fmt.Errorf("joint not found: %s", joint2Id)
+		}
+		def := box2d.MakeB2GearJointDef()
+		def.Joint1 = j1
+		def.Joint2 = j2
+		def.Ratio = ratio
+		j := w.CreateJoint(&def)
+		return registerJoint(worldId, w, j)
+	})
+
+	v.RegisterForeign("SetJointLimits2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("SetJointLimits2D requires (worldId, jointId, lower, upper)")
+		}
+		worldId := toString(args[0])
+		jointId := toString(args[1])
+		lower, upper := toFloat64(args[2]), toFloat64(args[3])
+		jointsMu.RLock()
+		j := joints[worldId+"\x00"+jointId]
+		jointsMu.RUnlock()
+		if j == nil {
+			return nil, nil
+		}
+		if rj, ok := j.(*box2d.B2RevoluteJoint); ok {
+			rj.EnableLimit(true)
+			rj.SetLimits(lower, upper)
+		} else if pj, ok := j.(*box2d.B2PrismaticJoint); ok {
+			pj.SetLimits(lower, upper)
+		}
 		return nil, nil
 	})
-	v.RegisterForeign("CreateRevoluteJoint2D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("CreatePrismaticJoint2D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("CreatePulleyJoint2D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("CreateGearJoint2D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("CreateWeldJoint2D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("CreateRopeJoint2D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("CreateWheelJoint2D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("SetJointLimits2D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("SetJointMotor2D", func(args []interface{}) (interface{}, error) { return nil, nil })
+
+	v.RegisterForeign("SetJointMotor2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("SetJointMotor2D requires (worldId, jointId, enableMotor, motorSpeed, maxTorqueOrForce)")
+		}
+		worldId := toString(args[0])
+		jointId := toString(args[1])
+		enable := toFloat64(args[2]) != 0
+		speed := toFloat64(args[3])
+		maxVal := toFloat64(args[4])
+		jointsMu.RLock()
+		j := joints[worldId+"\x00"+jointId]
+		jointsMu.RUnlock()
+		if j == nil {
+			return nil, nil
+		}
+		if rj, ok := j.(*box2d.B2RevoluteJoint); ok {
+			rj.EnableMotor(enable)
+			rj.SetMotorSpeed(speed)
+			rj.SetMaxMotorTorque(maxVal)
+		} else if pj, ok := j.(*box2d.B2PrismaticJoint); ok {
+			pj.EnableMotor(enable)
+			pj.SetMotorSpeed(speed)
+			pj.SetMaxMotorForce(maxVal)
+		} else if wj, ok := j.(*box2d.B2WheelJoint); ok {
+			wj.EnableMotor(enable)
+			wj.SetMotorSpeed(speed)
+			wj.SetMaxMotorTorque(maxVal)
+		}
+		return nil, nil
+	})
+
+	v.RegisterForeign("DestroyJoint2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("DestroyJoint2D requires (worldId, jointId)")
+		}
+		worldId := toString(args[0])
+		jointId := toString(args[1])
+		worldMu.RLock()
+		w := worlds[worldId]
+		worldMu.RUnlock()
+		jointsMu.Lock()
+		j := joints[worldId+"\x00"+jointId]
+		delete(joints, worldId+"\x00"+jointId)
+		jointsMu.Unlock()
+		if j != nil && w != nil {
+			w.DestroyJoint(j)
+		}
+		return nil, nil
+	})
 
 	// Raycast
 	v.RegisterForeign("RayCast2D", func(args []interface{}) (interface{}, error) {
@@ -1322,8 +1669,20 @@ func Step(worldId string, dt float64, velocityIters, positionIters int) {
 
 func DestroyWorld(worldId string) {
 	worldMu.Lock()
+	w := worlds[worldId]
 	delete(worlds, worldId)
 	worldMu.Unlock()
+	jointsMu.Lock()
+	prefix := worldId + "\x00"
+	for k, j := range joints {
+		if len(k) > len(prefix) && k[:len(prefix)] == prefix {
+			if w != nil {
+				w.DestroyJoint(j)
+			}
+			delete(joints, k)
+		}
+	}
+	jointsMu.Unlock()
 	bodiesMu.Lock()
 	for k := range bodies {
 		if len(k) > len(worldId) && k[:len(worldId)] == worldId && k[len(worldId)] == '\x00' {

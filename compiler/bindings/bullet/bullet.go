@@ -68,6 +68,16 @@ type body struct {
 	mass            float64
 	active          bool
 	collisions      []collisionHit // filled each Step, cleared at start
+	// body properties (used in Step and resolveCollisions)
+	friction        float64
+	restitution     float64
+	linearDamping   float64
+	angularDamping  float64
+	kinematic       bool
+	gravityScale    float64
+	linearFactor    vec3
+	angularFactor   vec3
+	ccd             bool
 }
 
 type world struct {
@@ -159,12 +169,7 @@ func RegisterBullet(v *vm.VM) {
 			if !b.active || b.mass <= 0 {
 				continue
 			}
-			b.velocity.x += w.gravity.x * dt
-			b.velocity.y += w.gravity.y * dt
-			b.velocity.z += w.gravity.z * dt
-			b.position.x += b.velocity.x * dt
-			b.position.y += b.velocity.y * dt
-			b.position.z += b.velocity.z * dt
+			integrateBody(b, w.gravity, dt)
 		}
 		resolveCollisions(w)
 		w.mu.Unlock()
@@ -193,12 +198,16 @@ func RegisterBullet(v *vm.VM) {
 		}
 		w.mu.Lock()
 		w.bodies[bid] = &body{
-			id:       bid,
-			position: vec3{toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])},
-			halfExt:  vec3{toFloat64(args[5]), toFloat64(args[6]), toFloat64(args[7])},
-			mass:     toFloat64(args[8]),
-			active:   true,
-			scale:    vec3{1, 1, 1},
+			id:             bid,
+			position:       vec3{toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])},
+			halfExt:        vec3{toFloat64(args[5]), toFloat64(args[6]), toFloat64(args[7])},
+			mass:           toFloat64(args[8]),
+			active:         true,
+			scale:          vec3{1, 1, 1},
+			friction:       0.5,
+			gravityScale:   1,
+			linearFactor:   vec3{1, 1, 1},
+			angularFactor:  vec3{1, 1, 1},
 		}
 		w.mu.Unlock()
 		return nil, nil
@@ -215,12 +224,16 @@ func RegisterBullet(v *vm.VM) {
 		}
 		w.mu.Lock()
 		w.bodies[bid] = &body{
-			id:       bid,
-			position: vec3{toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])},
-			radius:   toFloat64(args[5]),
-			mass:     toFloat64(args[6]),
-			active:   true,
-			scale:    vec3{1, 1, 1},
+			id:             bid,
+			position:       vec3{toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])},
+			radius:         toFloat64(args[5]),
+			mass:           toFloat64(args[6]),
+			active:         true,
+			scale:          vec3{1, 1, 1},
+			friction:       0.5,
+			gravityScale:   1,
+			linearFactor:   vec3{1, 1, 1},
+			angularFactor:  vec3{1, 1, 1},
 		}
 		w.mu.Unlock()
 		return nil, nil
@@ -605,12 +618,7 @@ func registerFlat3D(v *vm.VM) {
 			if !b.active || b.mass <= 0 {
 				continue
 			}
-			b.velocity.x += w.gravity.x * dt
-			b.velocity.y += w.gravity.y * dt
-			b.velocity.z += w.gravity.z * dt
-			b.position.x += b.velocity.x * dt
-			b.position.y += b.velocity.y * dt
-			b.position.z += b.velocity.z * dt
+			integrateBody(b, w.gravity, dt)
 		}
 		resolveCollisions(w)
 		w.mu.Unlock()
@@ -637,12 +645,7 @@ func registerFlat3D(v *vm.VM) {
 				if !b.active || b.mass <= 0 {
 					continue
 				}
-				b.velocity.x += w.gravity.x * dt
-				b.velocity.y += w.gravity.y * dt
-				b.velocity.z += w.gravity.z * dt
-				b.position.x += b.velocity.x * dt
-				b.position.y += b.velocity.y * dt
-				b.position.z += b.velocity.z * dt
+				integrateBody(b, w.gravity, dt)
 			}
 			resolveCollisions(w)
 			w.mu.Unlock()
@@ -980,12 +983,63 @@ func registerFlat3D(v *vm.VM) {
 		return nil, nil
 	})
 
-	// Body properties (stubbed; engine does not model these yet)
-	v.RegisterForeign("SetFriction3D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("SetRestitution3D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("SetDamping3D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("SetKinematic3D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("SetGravity3D", func(args []interface{}) (interface{}, error) { return nil, nil })
+	// Body properties (implemented; used in Step and resolveCollisions)
+	v.RegisterForeign("SetFriction3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("SetFriction3D requires (worldId, bodyId, friction)")
+		}
+		b := getBody(getWorld(toString(args[0])), toString(args[1]))
+		if b == nil {
+			return nil, nil
+		}
+		b.friction = toFloat64(args[2])
+		return nil, nil
+	})
+	v.RegisterForeign("SetRestitution3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("SetRestitution3D requires (worldId, bodyId, restitution)")
+		}
+		b := getBody(getWorld(toString(args[0])), toString(args[1]))
+		if b == nil {
+			return nil, nil
+		}
+		b.restitution = toFloat64(args[2])
+		return nil, nil
+	})
+	v.RegisterForeign("SetDamping3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetDamping3D requires (worldId, bodyId, linearDamp, angularDamp)")
+		}
+		b := getBody(getWorld(toString(args[0])), toString(args[1]))
+		if b == nil {
+			return nil, nil
+		}
+		b.linearDamping = toFloat64(args[2])
+		b.angularDamping = toFloat64(args[3])
+		return nil, nil
+	})
+	v.RegisterForeign("SetKinematic3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("SetKinematic3D requires (worldId, bodyId, kinematic)")
+		}
+		b := getBody(getWorld(toString(args[0])), toString(args[1]))
+		if b == nil {
+			return nil, nil
+		}
+		b.kinematic = toFloat64(args[2]) != 0
+		return nil, nil
+	})
+	v.RegisterForeign("SetGravity3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("SetGravity3D requires (worldId, bodyId, gravityScale)")
+		}
+		b := getBody(getWorld(toString(args[0])), toString(args[1]))
+		if b == nil {
+			return nil, nil
+		}
+		b.gravityScale = toFloat64(args[2])
+		return nil, nil
+	})
 	v.RegisterForeign("SetMass3D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {
 			return nil, fmt.Errorf("SetMass3D requires (world$, body$, mass)")
@@ -997,11 +1051,41 @@ func registerFlat3D(v *vm.VM) {
 		b.mass = toFloat64(args[2])
 		return nil, nil
 	})
-	v.RegisterForeign("SetLinearFactor3D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("SetAngularFactor3D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("SetCCD3D", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("SetLinearFactor3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("SetLinearFactor3D requires (worldId, bodyId, fx, fy, fz)")
+		}
+		b := getBody(getWorld(toString(args[0])), toString(args[1]))
+		if b == nil {
+			return nil, nil
+		}
+		b.linearFactor = vec3{toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])}
+		return nil, nil
+	})
+	v.RegisterForeign("SetAngularFactor3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("SetAngularFactor3D requires (worldId, bodyId, ax, ay, az)")
+		}
+		b := getBody(getWorld(toString(args[0])), toString(args[1]))
+		if b == nil {
+			return nil, nil
+		}
+		b.angularFactor = vec3{toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])}
+		return nil, nil
+	})
+	v.RegisterForeign("SetCCD3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("SetCCD3D requires (worldId, bodyId, enable)")
+		}
+		b := getBody(getWorld(toString(args[0])), toString(args[1]))
+		if b == nil {
+			return nil, nil
+		}
+		b.ccd = toFloat64(args[2]) != 0
+		return nil, nil
+	})
 
-	// Joints (stubbed)
+	// 3D joints: stubs (constraint solver not implemented in pure-Go engine; use full Bullet CGO build for joints)
 	v.RegisterForeign("CreateHingeJoint3D", func(args []interface{}) (interface{}, error) { return nil, nil })
 	v.RegisterForeign("CreateSliderJoint3D", func(args []interface{}) (interface{}, error) { return nil, nil })
 	v.RegisterForeign("CreateConeTwistJoint3D", func(args []interface{}) (interface{}, error) { return nil, nil })
@@ -1301,6 +1385,45 @@ func registerFlat3D(v *vm.VM) {
 	})
 }
 
+// integrateBody applies gravity (if not kinematic), integrates position, and applies damping. Call with world mutex held.
+func integrateBody(b *body, gravity vec3, dt float64) {
+	if b.kinematic {
+		return
+	}
+	gs := b.gravityScale
+	if gs == 0 {
+		gs = 1
+	}
+	b.velocity.x += gravity.x * gs * dt
+	b.velocity.y += gravity.y * gs * dt
+	b.velocity.z += gravity.z * gs * dt
+	lf := b.linearFactor
+	if lf.x == 0 && lf.y == 0 && lf.z == 0 {
+		lf = vec3{1, 1, 1}
+	}
+	b.position.x += b.velocity.x * lf.x * dt
+	b.position.y += b.velocity.y * lf.y * dt
+	b.position.z += b.velocity.z * lf.z * dt
+	if b.linearDamping > 0 {
+		damp := 1.0 - b.linearDamping*dt
+		if damp < 0 {
+			damp = 0
+		}
+		b.velocity.x *= damp
+		b.velocity.y *= damp
+		b.velocity.z *= damp
+	}
+	if b.angularDamping > 0 {
+		damp := 1.0 - b.angularDamping*dt
+		if damp < 0 {
+			damp = 0
+		}
+		b.angularVelocity.x *= damp
+		b.angularVelocity.y *= damp
+		b.angularVelocity.z *= damp
+	}
+}
+
 // resolveCollisions resolves overlaps between bodies and records collision events. Call with w.mu held.
 func resolveCollisions(w *world) {
 	if w == nil {
@@ -1327,15 +1450,75 @@ func resolveCollisions(w *world) {
 			}
 			a.collisions = append(a.collisions, collisionHit{b.id, vec3{nx, ny, nz}})
 			b.collisions = append(b.collisions, collisionHit{a.id, vec3{-nx, -ny, -nz}})
-			// Push a out along normal; zero a's velocity along normal
-			a.position.x += nx * depth
-			a.position.y += ny * depth
-			a.position.z += nz * depth
-			vn := a.velocity.x*nx + a.velocity.y*ny + a.velocity.z*nz
-			if vn < 0 {
-				a.velocity.x -= vn * nx
-				a.velocity.y -= vn * ny
-				a.velocity.z -= vn * nz
+			// Only push dynamic bodies; do not move kinematic bodies
+			if !a.kinematic {
+				a.position.x += nx * depth
+				a.position.y += ny * depth
+				a.position.z += nz * depth
+				vn := a.velocity.x*nx + a.velocity.y*ny + a.velocity.z*nz
+				// restitution: reflect normal velocity (use average of both bodies)
+				rest := a.restitution
+				if b.restitution > rest {
+					rest = b.restitution
+				}
+				if vn < 0 {
+					a.velocity.x -= (1 + rest) * vn * nx
+					a.velocity.y -= (1 + rest) * vn * ny
+					a.velocity.z -= (1 + rest) * vn * nz
+				}
+				// friction: reduce tangential velocity
+				fric := a.friction
+				if b.friction > fric {
+					fric = b.friction
+				}
+				if fric > 0 {
+					vx, vy, vz := a.velocity.x, a.velocity.y, a.velocity.z
+					vnVal := vx*nx + vy*ny + vz*nz
+					tx := vx - vnVal*nx
+					ty := vy - vnVal*ny
+					tz := vz - vnVal*nz
+					scale := 1.0 - fric
+					if scale < 0 {
+						scale = 0
+					}
+					a.velocity.x = vnVal*nx + tx*scale
+					a.velocity.y = vnVal*ny + ty*scale
+					a.velocity.z = vnVal*nz + tz*scale
+				}
+			}
+			if !b.kinematic {
+				b.position.x -= nx * depth
+				b.position.y -= ny * depth
+				b.position.z -= nz * depth
+				vn := b.velocity.x*(-nx) + b.velocity.y*(-ny) + b.velocity.z*(-nz)
+				rest := b.restitution
+				if a.restitution > rest {
+					rest = a.restitution
+				}
+				if vn < 0 {
+					b.velocity.x -= (1 + rest) * vn * (-nx)
+					b.velocity.y -= (1 + rest) * vn * (-ny)
+					b.velocity.z -= (1 + rest) * vn * (-nz)
+				}
+				fric := b.friction
+				if a.friction > fric {
+					fric = a.friction
+				}
+				if fric > 0 {
+					vx, vy, vz := b.velocity.x, b.velocity.y, b.velocity.z
+					nnx, nny, nnz := -nx, -ny, -nz
+					vnVal := vx*nnx + vy*nny + vz*nnz
+					tx := vx - vnVal*nnx
+					ty := vy - vnVal*nny
+					tz := vz - vnVal*nnz
+					scale := 1.0 - fric
+					if scale < 0 {
+						scale = 0
+					}
+					b.velocity.x = vnVal*nnx + tx*scale
+					b.velocity.y = vnVal*nny + ty*scale
+					b.velocity.z = vnVal*nnz + tz*scale
+				}
 			}
 		}
 	}
@@ -1500,13 +1683,9 @@ func Step(worldId string, timeStep float64) {
 		if !b.active || b.mass <= 0 {
 			continue
 		}
-		b.velocity.x += w.gravity.x * timeStep
-		b.velocity.y += w.gravity.y * timeStep
-		b.velocity.z += w.gravity.z * timeStep
-		b.position.x += b.velocity.x * timeStep
-		b.position.y += b.velocity.y * timeStep
-		b.position.z += b.velocity.z * timeStep
+		integrateBody(b, w.gravity, timeStep)
 	}
+	resolveCollisions(w)
 	w.mu.Unlock()
 }
 

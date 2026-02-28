@@ -399,6 +399,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **UpdateMusic**(id) / **UpdateMusicStream**(id) | Call each frame while music plays (buffer streaming) |
 | **UnloadMusic**(id) | Alias of UnloadMusicStream |
 | **PauseMusicStream** **ResumeMusicStream** | Pause / resume |
+| **LoadAudioStream**(sampleRate, sampleSize, channels) **UpdateAudioStream**(streamId, sample1, sample2, …) | Procedural/push-based stream; call UpdateAudioStream to push samples. Stream callbacks (C function pointers) are not exposed from BASIC. |
 
 ---
 
@@ -512,6 +513,12 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **CreateCircle2D**(world$, body$, x, y, radius, mass, isDynamic) | Create circle body |
 | **GetPositionX2D**(world$, body$) **GetPositionY2D**(…) | Body position |
 | **SetVelocity2D**(world$, body$, vx, vy) **ApplyForce2D**(…) **ApplyImpulse2D**(…) | Velocity and forces |
+| **CreateDistanceJoint2D**(worldId, bodyAId, bodyBId, length) | Distance joint → jointId |
+| **CreateRevoluteJoint2D**(worldId, bodyAId, bodyBId, anchorX, anchorY) | Revolute (hinge) → jointId |
+| **CreatePrismaticJoint2D**(worldId, bodyAId, bodyBId, anchorX, anchorY, axisX, axisY) | Prismatic → jointId |
+| **CreateWeldJoint2D** **CreateRopeJoint2D** **CreateWheelJoint2D** **CreatePulleyJoint2D** **CreateGearJoint2D** | Other joints → jointId |
+| **SetJointLimits2D**(worldId, jointId, lower, upper) **SetJointMotor2D**(worldId, jointId, enable, speed, maxTorque) | Joint limits and motor |
+| **DestroyJoint2D**(worldId, jointId) | Destroy joint |
 | **SetCollisionHandler**(bodyId, subName) | When bodyId collides, call Sub subName(otherBodyId) |
 | **ProcessCollisions2D**(worldId) | Dispatch collision callbacks (call after Step2D) |
 | **BOX2D.CreateWorld** **BOX2D.Step** **BOX2D.CreateBody** etc. | Same API with BOX2D. prefix |
@@ -528,7 +535,8 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **ApplyForce**(bodyId, fx, fy, fz) **ApplyImpulse**(bodyId, ix, iy, iz) | Force / impulse |
 | **SetBodyVelocity**(bodyId, vx, vy, vz) **GetBodyVelocity**(bodyId) | Linear velocity |
 | **CheckCollision3D**(bodyIdA, bodyIdB) | → true if AABBs overlap |
-| **BULLET.CreateWorld** **BULLET.Step** **BULLET.CreateBox** **BULLET.RayCast** etc. | Same API with BULLET. prefix |
+| **SetFriction3D** **SetRestitution3D** **SetDamping3D** **SetKinematic3D** **SetGravity3D** **SetLinearFactor3D** **SetAngularFactor3D** **SetCCD3D** | Body properties (implemented) |
+| **BULLET.CreateWorld** **BULLET.Step** **BULLET.CreateBox** **BULLET.RayCast** etc. | Same API with BULLET. prefix. 3D constraint joints (CreateHingeJoint3D, etc.) are stubs in pure-Go engine. |
 
 ---
 
@@ -738,6 +746,10 @@ State only; actual effects require render-to-texture and shaders.
 | **GuiWindow**(title, x, y, w, h) | Window box → 1 if close clicked |
 | **GuiList**(items, x, y, w, h) | List; items = "A;B;C" → selected index |
 | **GuiDropdown**(items, x, y, w) | Dropdown → selected index |
+| **GuiLoadStyle**(filePath) | Load raygui style from .rgs file |
+| **GuiLoadStyleDefault**() | Reset to default theme |
+| **GuiSetStyle**(controlId, propertyId, value) | Set one style property (control/property IDs from raygui) |
+| **GuiGetStyle**(controlId, propertyId) | Get style property value |
 | **GuiProgressBar**(x, y, w, value) | Full 9-arg form; **GuiProgressBarSimple**(x, y, w, value) for 0–1 |
 
 ---
@@ -871,11 +883,11 @@ Load JSON: `{ "nodeId": { "text": "...", "next": "otherId", "choices": [{"text":
 
 ## Physics joints & ragdolls
 
-Stubs; use **BULLET.*** for real 3D joints.
+**2D joints:** Use Box2D commands (CreateRevoluteJoint2D, CreatePrismaticJoint2D, SetJointLimits2D, SetJointMotor2D, etc.); see [2D physics (Box2D)](#2d-physics-box2d). **3D joints:** Stubs; use **BULLET.*** for 3D physics; constraint joints (CreateHingeJoint3D, etc.) are not implemented in the pure-Go engine.
 
 | Command | Description |
 |--------|-------------|
-| **CreateHingeJoint**(bodyA, bodyB, anchor, axis) | Stub → "" |
+| **CreateHingeJoint**(bodyA, bodyB, anchor, axis) | Stub → "" (use Box2D for 2D; 3D joints stubbed) |
 | **CreateBallJoint**(bodyA, bodyB, anchor) | Stub |
 | **CreateSliderJoint**(bodyA, bodyB, axis) | Stub |
 | **CreateRagdoll**(model) | Stub |

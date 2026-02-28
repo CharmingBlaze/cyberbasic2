@@ -105,6 +105,11 @@ All coordinates and sizes in pixels (x, y, width, height).
 | **GuiLine** | (x, y, w, h, text) | — | Line |
 | **GuiPanel** | (x, y, w, h, text) | — | Panel |
 
+### Theme and layout (raygui)
+
+- **Layout:** Position controls manually with (x, y, w, h). There is no automatic layout; place each widget at the desired pixel coordinates.
+- **Theme / style:** Use **GuiLoadStyle**(filePath) to load a `.rgs` style file, or **GuiLoadStyleDefault**() to reset to the default theme. Use **GuiSetStyle**(controlId, propertyId, value) to set a single property (e.g. colors, border width, text padding). Use **GuiGetStyle**(controlId, propertyId) to read a property value. Control and property IDs are integers (see raygui documentation: DEFAULT=0, LABEL=1, BUTTON=2, etc.; BORDER=0, BASE=1, TEXT=2, BORDER_WIDTH=12, TEXT_PADDING=13, etc.). Value for colors is typically packed RGBA.
+
 ## Example: options menu
 
 ```basic

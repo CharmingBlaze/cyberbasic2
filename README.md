@@ -172,9 +172,9 @@ cd engine && make
 
 ## Limitations and Roadmap
 
-- **Physics:** Some Box2D/Bullet joint and body-property APIs are stubbed; see API_REFERENCE for the full list. Core worlds, bodies, shapes, raycast, and collision are implemented.
-- **UI:** Full widget set (Label, Button, Slider, Checkbox, TextBox, etc.) is available; some advanced layout or theme options may be extended.
-- **Audio:** Stream callbacks that require C function pointers are not exposed from BASIC; use UpdateAudioStream and similar push APIs.
+- **Physics:** Box2D joints (Revolute, Prismatic, Weld, Rope, Pulley, Gear, Wheel) and SetJointLimits2D/SetJointMotor2D are implemented; Bullet body properties (friction, restitution, damping, kinematic, gravity scale, linear/angular factor) are implemented. 3D constraint joints (CreateHingeJoint3D, etc.) remain stubs in the pure-Go engine; see API_REFERENCE.
+- **UI:** Full widget set and theme/style (GuiLoadStyle, GuiSetStyle, GuiGetStyle) are available; layout is manual (x, y, w, h per control).
+- **Audio:** Stream callbacks that require C function pointers are not exposed from BASIC; use **UpdateAudioStream** to push samples.
 - **Roadmap:** Working debugger, more complete physics joints, REPL, VSCode extension, and CI are on the roadmap. See [ROADMAP.md](ROADMAP.md).
 
 ---
