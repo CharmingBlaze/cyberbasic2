@@ -5,7 +5,7 @@ Complete guide to 3D physics in CyberBasic using Bullet: worlds, gravity, rigid 
 ## Table of Contents
 
 1. [Quick start](#quick-start)
-2. [BULLET.* vs legacy names](#bullet-vs-legacy-names)
+2. [API style (flat names)](#api-style-flat-names)
 3. [Worlds and gravity](#worlds-and-gravity)
 4. [Body shapes](#body-shapes)
 5. [Position and rotation](#position-and-rotation)
@@ -53,14 +53,13 @@ DestroyWorld3D("w")
 CloseWindow()
 ```
 
-You can use **BULLET.*** prefixed names: **BULLET.CreateWorld**(worldId, gravityX, gravityY, gravityZ), **BULLET.SetGravity**(worldId, x, y, z), **BULLET.Step**(worldId, dt), **BULLET.GetPositionX/Y/Z**, etc. See [API Reference](../API_REFERENCE.md) section 15.
+The API uses **flat names** only (no namespace). Legacy **BULLET.*** in source is rewritten at compile time. **3D constraint joints** (CreateHingeJoint3D, CreateSliderJoint3D, etc.) are not implemented in the pure-Go engine. See [API Reference](../API_REFERENCE.md) section 15.
 
 ---
 
-## BULLET.* vs legacy names
+## API style (flat names)
 
-- **Prefixed (BULLET.\*):** **BULLET.CreateWorld**(worldId, gx, gy, gz), **BULLET.SetGravity**(worldId, x, y, z), **BULLET.Step**(worldId, dt), **BULLET.CreateBox**, **BULLET.CreateSphere**, **BULLET.GetPositionX/Y/Z**, **BULLET.SetVelocity**, **BULLET.ApplyForce**, **BULLET.ApplyCentralForce**, **BULLET.ApplyImpulse**, **BULLET.RayCast**, etc.
-- **Legacy (flat):** **CreateWorld3D**(worldId, gx, gy, gz), **Step3D**(worldId, dt), **CreateBox3D**, **CreateSphere3D**, **GetPositionX3D/Y3D/Z3D**, **SetPosition3D**, **SetVelocity3D**, **GetYaw3D**, **GetPitch3D**, **GetRoll3D**, **SetRotation3D**, **ApplyForce3D**, **ApplyImpulse3D**, **RayCast3D**, **RayHitX3D/Y3D/Z3D**, **RayHitBody3D**, etc.
+- **Flat names:** **CreateWorld3D**, **SetWorldGravity3D**, **Step3D**, **CreateBox3D**, **CreateSphere3D**, **GetPositionX3D** / **GetPositionY3D** / **GetPositionZ3D**, **SetVelocity3D**, **ApplyForce3D**, **ApplyImpulse3D**, **RayCastFromDir3D** or **RayCast3D**, **RayHitX3D** / **RayHitY3D** / **RayHitZ3D**, **RayHitBody3D**, etc. Use these in all new code.
 
 All commands are **case-insensitive**. For the complete list see [API Reference](../API_REFERENCE.md) section 15.
 
@@ -68,10 +67,10 @@ All commands are **case-insensitive**. For the complete list see [API Reference]
 
 ## Worlds and gravity
 
-- **Create a world:** **CreateWorld3D**(worldId, gravityX, gravityY, gravityZ) or **BULLET.CreateWorld**(worldId, gx, gy, gz). Gravity is in m/s² (e.g. 0, -18, 0 for downward).
-- **Set gravity:** **BULLET.SetGravity**(worldId, x, y, z) to change gravity after creation. Legacy **SetGravity3D** is available (see API Reference).
-- **Step:** **Step3D**(worldId, dt) or **BULLET.Step**(worldId, dt). Call once per frame; clamp dt (e.g. max 0.05) for stability.
-- **Destroy:** **DestroyWorld3D**(worldId) / **BULLET.DestroyWorld**(worldId). **BULLET.DestroyBody**(worldId, bodyId) to remove a body.
+- **Create a world:** **CreateWorld3D**(worldId, gravityX, gravityY, gravityZ). Gravity is in m/s² (e.g. 0, -18, 0 for downward).
+- **Set gravity:** **SetWorldGravity3D**(worldId, x, y, z) to change gravity after creation.
+- **Step:** **Step3D**(worldId, dt). Call once per frame; clamp dt (e.g. max 0.05) for stability.
+- **Destroy:** **DestroyWorld3D**(worldId). **DestroyBody3D**(worldId, bodyId) to remove a body.
 
 ---
 
@@ -89,8 +88,8 @@ All commands are **case-insensitive**. For the complete list see [API Reference]
 
 ## Position and rotation
 
-- **Position:** **GetPositionX3D**(worldId, bodyId), **GetPositionY3D**, **GetPositionZ3D** — or **BULLET.GetPositionX/Y/Z**. **SetPosition3D**(worldId, bodyId, x, y, z) / **BULLET.SetPosition** to teleport.
-- **Rotation (Euler):** **GetYaw3D**(worldId, bodyId), **GetPitch3D**, **GetRoll3D** — or **BULLET.GetRotationX/Y/Z**. **SetRotation3D**(worldId, bodyId, yaw, pitch, roll) / **BULLET.SetRotation**(worldId, bodyId, x, y, z) to set rotation.
+- **Position:** **GetPositionX3D**(worldId, bodyId), **GetPositionY3D**, **GetPositionZ3D**. **SetPosition3D**(worldId, bodyId, x, y, z) to teleport.
+- **Rotation (Euler):** **GetYaw3D**(worldId, bodyId), **GetPitch3D**, **GetRoll3D**. **SetRotation3D**(worldId, bodyId, rx, ry, rz) to set rotation.
 
 Use these each frame after **Step3D** to draw your 3D model or to drive **GAME.CameraOrbit** / **GAME.SetCamera3DOrbit**.
 
@@ -98,22 +97,22 @@ Use these each frame after **Step3D** to draw your 3D model or to drive **GAME.C
 
 ## Velocity and forces
 
-- **Velocity:** **SetVelocity3D**(worldId, bodyId, vx, vy, vz) / **BULLET.SetVelocity**. **GetVelocityX3D/Y3D/Z3D** or **BULLET.GetVelocityX/Y/Z**.
-- **Angular velocity:** **SetAngularVelocity3D**, **GetAngularVelocityX3D/Y3D/Z3D** (legacy; see API Reference).
-- **Forces:** **BULLET.ApplyForce**(worldId, bodyId, fx, fy, fz, px, py, pz) — force at world point. **BULLET.ApplyCentralForce**(worldId, bodyId, fx, fy, fz) — at center. **ApplyForce3D**, **ApplyImpulse3D** (legacy). **ApplyTorque3D**, **ApplyTorqueImpulse3D** for rotation.
+- **Velocity:** **SetVelocity3D**(worldId, bodyId, vx, vy, vz). **GetVelocityX3D** / **GetVelocityY3D** / **GetVelocityZ3D**.
+- **Angular velocity:** **SetAngularVelocity3D**, **GetAngularVelocityX3D/Y3D/Z3D** (see API Reference).
+- **Forces:** **ApplyForce3D**(worldId, bodyId, fx, fy, fz). **ApplyImpulse3D**(worldId, bodyId, ix, iy, iz). **ApplyTorque3D**, **ApplyTorqueImpulse3D** for rotation.
 
 ---
 
 ## Raycast
 
-- **RayCast3D**(worldId, originX, originY, originZ, dirX, dirY, dirZ) or **BULLET.RayCast**(worldId, ox, oy, oz, dx, dy, dz) — cast a ray from origin along direction. Returns true if hit.
-- After a hit: **RayHitX3D**(), **RayHitY3D**(), **RayHitZ3D**() — hit point; **RayHitBody3D**() — body id. BULLET: **GetRayCastHitX/Y/Z**(), **GetRayCastHitBody**().
+- **RayCast3D**(worldId, fromX, fromY, fromZ, toX, toY, toZ) — cast a ray from point to point. **RayCastFromDir3D**(worldId, sx, sy, sz, dx, dy, dz, maxDist) — from start along direction. Returns 1 if hit, 0 otherwise.
+- After a hit: **RayHitX3D**(), **RayHitY3D**(), **RayHitZ3D**() — hit point; **RayHitBody3D**() — body id; **RayHitNormalX3D**() etc. — hit normal.
 
 ---
 
 ## Hybrid loop (StepAllPhysics3D)
 
-When you define **update(dt)** and **draw()** and use the automatic game loop, the pipeline calls **StepAllPhysics3D(dt)** — all registered Bullet worlds are stepped with the same dt. You do **not** need to call **Step3D** or **BULLET.Step** per world yourself.
+When you define **update(dt)** and **draw()** and use the automatic game loop, the pipeline calls **StepAllPhysics3D(dt)** — all registered Bullet worlds are stepped with the same dt. You do **not** need to call **Step3D** per world yourself.
 
 See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
 
@@ -133,19 +132,19 @@ See [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md#3d-physics-bullet).
 
 | Command | Arguments | Returns | Description |
 |---------|-----------|---------|-------------|
-| **BULLET.CreateWorld** | (worldId, gx, gy, gz) | — | Create world |
-| **BULLET.SetGravity** | (worldId, x, y, z) | — | Set gravity |
-| **BULLET.Step** | (worldId, dt) | — | Step simulation |
-| **BULLET.CreateBox** | (worldId, x, y, z, w, h, d, mass) | bodyId | Box body |
-| **BULLET.CreateSphere** | (worldId, x, y, z, radius, mass) | bodyId | Sphere body |
-| **BULLET.GetPositionX/Y/Z** | (worldId, bodyId) | float | Position |
-| **BULLET.SetPosition** | (worldId, bodyId, x, y, z) | — | Set position |
-| **BULLET.GetRotationX/Y/Z** | (worldId, bodyId) | float | Rotation (euler) |
-| **BULLET.SetVelocity** | (worldId, bodyId, vx, vy, vz) | — | Set velocity |
-| **BULLET.ApplyForce** | (worldId, bodyId, fx, fy, fz, px, py, pz) | — | Apply force at point |
-| **BULLET.ApplyCentralForce** | (worldId, bodyId, fx, fy, fz) | — | Apply force at center |
-| **BULLET.ApplyImpulse** | (worldId, bodyId, ix, iy, iz, x, y, z) | — | Apply impulse |
-| **BULLET.RayCast** | (worldId, ox, oy, oz, dx, dy, dz) | bool | Ray cast |
+| **CreateWorld3D** | (worldId, gx, gy, gz) | — | Create world |
+| **SetWorldGravity3D** | (worldId, x, y, z) | — | Set gravity |
+| **Step3D** | (worldId, dt) | — | Step simulation |
+| **CreateBox3D** | (worldId, bodyId, x, y, z, hx, hy, hz, mass) | — | Box body |
+| **CreateSphere3D** | (worldId, bodyId, x, y, z, radius, mass) | — | Sphere body |
+| **GetPositionX3D** / **GetPositionY3D** / **GetPositionZ3D** | (worldId, bodyId) | float | Position |
+| **SetPosition3D** | (worldId, bodyId, x, y, z) | — | Set position |
+| **GetYaw3D** / **GetPitch3D** / **GetRoll3D** | (worldId, bodyId) | float | Rotation (euler) |
+| **SetVelocity3D** | (worldId, bodyId, vx, vy, vz) | — | Set velocity |
+| **ApplyForce3D** | (worldId, bodyId, fx, fy, fz) | — | Apply force |
+| **ApplyImpulse3D** | (worldId, bodyId, ix, iy, iz) | — | Apply impulse |
+| **RayCastFromDir3D** | (worldId, sx, sy, sz, dx, dy, dz, maxDist) | 1=hit 0=miss | Ray cast (dir + maxDist) |
+| **RayCast3D** | (worldId, fromX, fromY, fromZ, toX, toY, toZ) | 1=hit 0=miss | Ray cast (from–to) |
 | **CreateWorld3D** | (worldId, gx, gy, gz) | — | Legacy: create world |
 | **Step3D** | (worldId, dt) | — | Legacy: step |
 | **CreateBox3D** | (worldId, bodyId, x, y, z, hw, hh, hd, mass) | — | Box |

@@ -26,7 +26,7 @@ From the project root:
 | Feature | Examples | How to run |
 |--------|----------|------------|
 | **2D graphics** | first_game.bas, 2d_shapes_demo.bas, dot_and_colors_demo.bas, window_demo.bas | `cyberbasic examples/first_game.bas` (or the other .bas) |
-| **3D** | run_3d_physics_demo.bas, mario64.bas, minimal_3d_demo.bas | `cyberbasic examples/run_3d_physics_demo.bas` |
+| **3D** | run_3d_physics_demo.bas, orbit_drop_balls_3d.bas, mario64.bas, minimal_3d_demo.bas | `cyberbasic examples/orbit_drop_balls_3d.bas` |
 | **Box2D (2D physics)** | box2d_demo.bas, simple_box2d_demo.bas, simplest_box2d_demo.bas | `cyberbasic examples/box2d_demo.bas` |
 | **ECS** | ecs_demo.bas | `cyberbasic examples/ecs_demo.bas` |
 | **SQL (SQLite)** | sql_demo.bas | `cyberbasic examples/sql_demo.bas` (single process; creates sql_demo.db) |
@@ -59,6 +59,7 @@ From the project root:
 ## 3D
 
 - **run_3d_physics_demo.bas** – 3D physics (Bullet) + raylib 3D
+- **orbit_drop_balls_3d.bas** – Orbit camera (mouse drag + wheel zoom), left-click to drop physics balls
 - **mario64.bas** – Mario64-style camera and movement
 - **minimal_3d_demo.bas** – Basic 3D scene
 
@@ -72,6 +73,7 @@ From the project root:
 
 - **bullet_demo.bas** – Bullet 3D physics
 - **run_3d_physics_demo.bas** – 3D physics demo
+- **orbit_drop_balls_3d.bas** – Orbit camera + click to drop balls (OrbitCamera, CreateSphere3D, PickGroundPlane)
 
 ## Hybrid loop, multi-window, GUI, includes
 
@@ -97,4 +99,4 @@ From the project root:
 - **math_matrix_test.bas** – Matrix math
 - **features_test.bas** – Assorted features
 
-**Note:** **platformer.bas** and several other demos still use legacy names (INITGRAPHICS, CREATEPHYSICSBODY2D, etc.) that are not in the current VM; they compile but will fail at runtime. Use **box2d_demo.bas**, **first_game.bas**, and the current raylib + BOX2D.* API for 2D physics and graphics.
+**Note:** **platformer.bas** and several other demos still use legacy names (INITGRAPHICS, CREATEPHYSICSBODY2D, etc.) that are not in the current VM; they compile but will fail at runtime. Use **box2d_demo.bas**, **first_game.bas**, and the current raylib + flat 2D physics API (CreateWorld2D, Step2D, …) for 2D physics and graphics.

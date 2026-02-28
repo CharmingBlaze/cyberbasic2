@@ -36,9 +36,9 @@ Run **`cyberbasic --list-commands`** for a short grouped list. For the full refe
 
 Make sure you are using the **game loop** (`WHILE NOT WindowShouldClose() WEND` or `REPEAT ... UNTIL WindowShouldClose()`) and that you have defined both **update(dt)** and **draw()** (Sub or Function). The hybrid pipeline only runs when the compiler detects this pattern. See [Program Structure – hybrid loop](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
 
-**When to use BOX2D.* vs flat CreateWorld2D?**
+**Which physics API should I use?**
 
-Both work. **CreateWorld2D**, **CreateBox2D**, **Step2D**, **GetPositionX2D**, etc. are flat names. **BOX2D.CreateWorld**, **BOX2D.Step**, **BOX2D.GetPositionX** are the namespaced form. Prefer flat names for consistency with the rest of the docs. The hybrid loop calls **StepAllPhysics2D(dt)** automatically for all registered 2D worlds.
+Use **flat names** only: **CreateWorld2D**, **Step2D**, **CreateBody2D**, **GetPositionX2D**, etc. for 2D, and **CreateWorld3D**, **Step3D**, **CreateBox3D**, **GetPositionX3D**, etc. for 3D. The **BOX2D.*** and **BULLET.*** namespaces are deprecated; the compiler still rewrites them to flat names for backward compatibility. The hybrid loop calls **StepAllPhysics2D(dt)** and **StepAllPhysics3D(dt)** automatically.
 
 ## See also
 

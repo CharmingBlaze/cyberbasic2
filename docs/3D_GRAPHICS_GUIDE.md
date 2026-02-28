@@ -245,7 +245,7 @@ Use this checklist to confirm your program is a valid 3D game:
 
 Optional for 3D games:
 
-- **Physics:** `BULLET.CreateWorld`, `BULLET.CreateSphere`/`CreateBox`, `BULLET.Step`, `BULLET.GetPositionX/Y/Z`, and **GAME.MoveWASD**, **GAME.CameraOrbit** for character and camera. See [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) and [templates/3d_game.bas](../templates/3d_game.bas).
+- **Physics:** `CreateWorld3D`, `CreateSphere3D`/`CreateBox3D`, `Step3D`, `GetPositionX3D`/`GetPositionY3D`/`GetPositionZ3D`, and **GAME.MoveWASD**, **GAME.CameraOrbit** for character and camera. See [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) and [templates/3d_game.bas](../templates/3d_game.bas).
 
 ---
 
@@ -258,9 +258,9 @@ RL.InitWindow(1024, 600, "3D Game")
 RL.SetTargetFPS(60)
 RL.DisableCursor()
 
-BULLET.CreateWorld("w", 0, -18, 0)
-BULLET.CreateSphere("w", "player", 0, 0.5, 0, 0.5, 1)
-BULLET.CreateBox("w", "ground", 0, -0.5, 0, 12.5, 0.5, 12.5, 0)
+CreateWorld3D("w", 0, -18, 0)
+CreateSphere3D("w", "player", 0, 0.5, 0, 0.5, 1)
+CreateBox3D("w", "ground", 0, -0.5, 0, 12.5, 0.5, 12.5, 0)
 
 VAR camAngle = 0
 VAR camDist = 10
@@ -272,12 +272,12 @@ REPEAT
   LET delta = RL.GetMouseDelta()
   LET camAngle = camAngle - delta.x * 0.002
 
-  BULLET.Step("w", dt)
+  Step3D("w", dt)
   GAME.MoveWASD("w", "player", camAngle, 120, 9, dt)
 
-  LET px = BULLET.GetPositionX("w", "player")
-  LET py = BULLET.GetPositionY("w", "player")
-  LET pz = BULLET.GetPositionZ("w", "player")
+  LET px = GetPositionX3D("w", "player")
+  LET py = GetPositionY3D("w", "player")
+  LET pz = GetPositionZ3D("w", "player")
   GAME.CameraOrbit(px, py + 1.5, pz, camAngle, 0.2, camDist)
 
   RL.ClearBackground(RL.SkyBlue)

@@ -130,378 +130,9 @@ func getBody(w *world, id string) *body {
 	return w.bodies[id]
 }
 
-// RegisterBullet registers Bullet-style physics functions with the VM (BULLET.*).
+// RegisterBullet registers 3D physics with the VM as flat names only (CreateWorld3D, Step3D, etc.).
+// The compiler rewrites BULLET.* calls to these flat names for backward compatibility.
 func RegisterBullet(v *vm.VM) {
-	// World
-	v.RegisterForeign("BULLET.CreateWorld", func(args []interface{}) (interface{}, error) {
-		if len(args) < 4 {
-			return nil, fmt.Errorf("CreateWorld requires (worldId, gravityX, gravityY, gravityZ)")
-		}
-		wid := toString(args[0])
-		gx, gy, gz := toFloat64(args[1]), toFloat64(args[2]), toFloat64(args[3])
-		getOrCreateWorld(wid, gx, gy, gz)
-		return nil, nil
-	})
-	v.RegisterForeign("BULLET.SetGravity", func(args []interface{}) (interface{}, error) {
-		if len(args) < 4 {
-			return nil, fmt.Errorf("SetGravity requires (worldId, gx, gy, gz)")
-		}
-		w := getWorld(toString(args[0]))
-		if w == nil {
-			return nil, fmt.Errorf("world not found")
-		}
-		w.mu.Lock()
-		w.gravity = vec3{toFloat64(args[1]), toFloat64(args[2]), toFloat64(args[3])}
-		w.mu.Unlock()
-		return nil, nil
-	})
-	v.RegisterForeign("BULLET.Step", func(args []interface{}) (interface{}, error) {
-		if len(args) < 2 {
-			return nil, fmt.Errorf("Step requires (worldId, timeStep)")
-		}
-		w := getWorld(toString(args[0]))
-		if w == nil {
-			return nil, fmt.Errorf("world not found")
-		}
-		dt := toFloat64(args[1])
-		w.mu.Lock()
-		for _, b := range w.bodies {
-			if !b.active || b.mass <= 0 {
-				continue
-			}
-			integrateBody(b, w.gravity, dt)
-		}
-		resolveCollisions(w)
-		w.mu.Unlock()
-		return nil, nil
-	})
-	v.RegisterForeign("BULLET.DestroyWorld", func(args []interface{}) (interface{}, error) {
-		if len(args) < 1 {
-			return nil, fmt.Errorf("DestroyWorld requires (worldId)")
-		}
-		worldMu.Lock()
-		delete(worlds, toString(args[0]))
-		worldMu.Unlock()
-		return nil, nil
-	})
-
-	// Bodies - box
-	v.RegisterForeign("BULLET.CreateBox", func(args []interface{}) (interface{}, error) {
-		if len(args) < 9 {
-			return nil, fmt.Errorf("CreateBox requires (worldId, bodyId, x, y, z, halfExX, halfExY, halfExZ, mass)")
-		}
-		wid := toString(args[0])
-		bid := toString(args[1])
-		w := getWorld(wid)
-		if w == nil {
-			w = getOrCreateWorld(wid, 0, -9.81, 0)
-		}
-		w.mu.Lock()
-		w.bodies[bid] = &body{
-			id:             bid,
-			position:       vec3{toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])},
-			halfExt:        vec3{toFloat64(args[5]), toFloat64(args[6]), toFloat64(args[7])},
-			mass:           toFloat64(args[8]),
-			active:         true,
-			scale:          vec3{1, 1, 1},
-			friction:       0.5,
-			gravityScale:   1,
-			linearFactor:   vec3{1, 1, 1},
-			angularFactor:  vec3{1, 1, 1},
-		}
-		w.mu.Unlock()
-		return nil, nil
-	})
-	v.RegisterForeign("BULLET.CreateSphere", func(args []interface{}) (interface{}, error) {
-		if len(args) < 7 {
-			return nil, fmt.Errorf("CreateSphere requires (worldId, bodyId, x, y, z, radius, mass)")
-		}
-		wid := toString(args[0])
-		bid := toString(args[1])
-		w := getWorld(wid)
-		if w == nil {
-			w = getOrCreateWorld(wid, 0, -9.81, 0)
-		}
-		w.mu.Lock()
-		w.bodies[bid] = &body{
-			id:             bid,
-			position:       vec3{toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])},
-			radius:         toFloat64(args[5]),
-			mass:           toFloat64(args[6]),
-			active:         true,
-			scale:          vec3{1, 1, 1},
-			friction:       0.5,
-			gravityScale:   1,
-			linearFactor:   vec3{1, 1, 1},
-			angularFactor:  vec3{1, 1, 1},
-		}
-		w.mu.Unlock()
-		return nil, nil
-	})
-	v.RegisterForeign("BULLET.DestroyBody", func(args []interface{}) (interface{}, error) {
-		if len(args) < 2 {
-			return nil, fmt.Errorf("DestroyBody requires (worldId, bodyId)")
-		}
-		w := getWorld(toString(args[0]))
-		if w == nil {
-			return nil, nil
-		}
-		w.mu.Lock()
-		delete(w.bodies, toString(args[1]))
-		w.mu.Unlock()
-		return nil, nil
-	})
-
-	// Position / velocity
-	v.RegisterForeign("BULLET.SetPosition", func(args []interface{}) (interface{}, error) {
-		if len(args) < 5 {
-			return nil, fmt.Errorf("SetPosition requires (worldId, bodyId, x, y, z)")
-		}
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil {
-			return nil, fmt.Errorf("body not found")
-		}
-		b.position = vec3{toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])}
-		return nil, nil
-	})
-	v.RegisterForeign("BULLET.GetPositionX", func(args []interface{}) (interface{}, error) {
-		if len(args) < 2 {
-			return nil, fmt.Errorf("GetPositionX requires (worldId, bodyId)")
-		}
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil {
-			return 0.0, nil
-		}
-		return b.position.x, nil
-	})
-	v.RegisterForeign("BULLET.GetPositionY", func(args []interface{}) (interface{}, error) {
-		if len(args) < 2 {
-			return nil, fmt.Errorf("GetPositionY requires (worldId, bodyId)")
-		}
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil {
-			return 0.0, nil
-		}
-		return b.position.y, nil
-	})
-	v.RegisterForeign("BULLET.GetPositionZ", func(args []interface{}) (interface{}, error) {
-		if len(args) < 2 {
-			return nil, fmt.Errorf("GetPositionZ requires (worldId, bodyId)")
-		}
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil {
-			return 0.0, nil
-		}
-		return b.position.z, nil
-	})
-	v.RegisterForeign("BULLET.SetVelocity", func(args []interface{}) (interface{}, error) {
-		if len(args) < 5 {
-			return nil, fmt.Errorf("SetVelocity requires (worldId, bodyId, vx, vy, vz)")
-		}
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil {
-			return nil, fmt.Errorf("body not found")
-		}
-		b.velocity = vec3{toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])}
-		return nil, nil
-	})
-	v.RegisterForeign("BULLET.GetVelocityX", func(args []interface{}) (interface{}, error) {
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil {
-			return 0.0, nil
-		}
-		return b.velocity.x, nil
-	})
-	v.RegisterForeign("BULLET.GetVelocityY", func(args []interface{}) (interface{}, error) {
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil {
-			return 0.0, nil
-		}
-		return b.velocity.y, nil
-	})
-	v.RegisterForeign("BULLET.GetVelocityZ", func(args []interface{}) (interface{}, error) {
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil {
-			return 0.0, nil
-		}
-		return b.velocity.z, nil
-	})
-	v.RegisterForeign("BULLET.GetRotationX", func(args []interface{}) (interface{}, error) {
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil {
-			return 0.0, nil
-		}
-		return b.rotation.x, nil
-	})
-	v.RegisterForeign("BULLET.GetRotationY", func(args []interface{}) (interface{}, error) {
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil {
-			return 0.0, nil
-		}
-		return b.rotation.y, nil
-	})
-	v.RegisterForeign("BULLET.GetRotationZ", func(args []interface{}) (interface{}, error) {
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil {
-			return 0.0, nil
-		}
-		return b.rotation.z, nil
-	})
-	v.RegisterForeign("BULLET.SetRotation", func(args []interface{}) (interface{}, error) {
-		if len(args) < 5 {
-			return nil, fmt.Errorf("SetRotation requires (worldId, bodyId, rotX, rotY, rotZ)")
-		}
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil {
-			return nil, fmt.Errorf("body not found")
-		}
-		b.rotation = vec3{toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])}
-		return nil, nil
-	})
-	v.RegisterForeign("BULLET.ApplyForce", func(args []interface{}) (interface{}, error) {
-		if len(args) < 6 {
-			return nil, fmt.Errorf("ApplyForce requires (worldId, bodyId, fx, fy, fz)")
-		}
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil || b.mass <= 0 {
-			return nil, nil
-		}
-		dt := 1.0 / 60.0
-		b.velocity.x += toFloat64(args[2]) / b.mass * dt
-		b.velocity.y += toFloat64(args[3]) / b.mass * dt
-		b.velocity.z += toFloat64(args[4]) / b.mass * dt
-		return nil, nil
-	})
-	v.RegisterForeign("BULLET.ApplyCentralForce", func(args []interface{}) (interface{}, error) {
-		if len(args) < 6 {
-			return nil, fmt.Errorf("ApplyCentralForce requires (worldId, bodyId, fx, fy, fz)")
-		}
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil || b.mass <= 0 {
-			return nil, nil
-		}
-		dt := 1.0 / 60.0
-		b.velocity.x += toFloat64(args[2]) / b.mass * dt
-		b.velocity.y += toFloat64(args[3]) / b.mass * dt
-		b.velocity.z += toFloat64(args[4]) / b.mass * dt
-		return nil, nil
-	})
-	v.RegisterForeign("BULLET.ApplyImpulse", func(args []interface{}) (interface{}, error) {
-		if len(args) < 6 {
-			return nil, fmt.Errorf("ApplyImpulse requires (worldId, bodyId, ix, iy, iz)")
-		}
-		b := getBody(getWorld(toString(args[0])), toString(args[1]))
-		if b == nil || b.mass <= 0 {
-			return nil, nil
-		}
-		m := b.mass
-		b.velocity.x += toFloat64(args[2]) / m
-		b.velocity.y += toFloat64(args[3]) / m
-		b.velocity.z += toFloat64(args[4]) / m
-		return nil, nil
-	})
-
-	// Raycast: returns 1 if hit, 0 otherwise. Use GetRayCastHitX/Y/Z for hit point.
-	v.RegisterForeign("BULLET.RayCast", func(args []interface{}) (interface{}, error) {
-		if len(args) < 8 {
-			return nil, fmt.Errorf("RayCast requires (worldId, startX, startY, startZ, dirX, dirY, dirZ, maxDist)")
-		}
-		w := getWorld(toString(args[0]))
-		if w == nil {
-			lastRayMu.Lock()
-			lastRay.hit = false
-			lastRayMu.Unlock()
-			return 0, nil
-		}
-		sx, sy, sz := toFloat64(args[1]), toFloat64(args[2]), toFloat64(args[3])
-		dx, dy, dz := toFloat64(args[4]), toFloat64(args[5]), toFloat64(args[6])
-		maxDist := toFloat64(args[7])
-		norm := math.Sqrt(dx*dx + dy*dy + dz*dz)
-		if norm < 1e-9 {
-			lastRayMu.Lock()
-			lastRay.hit = false
-			lastRayMu.Unlock()
-			return 0, nil
-		}
-		dx, dy, dz = dx/norm, dy/norm, dz/norm
-
-		w.mu.RLock()
-		var bestT float64 = 1e30
-		hit := false
-		var hitP vec3
-		var hitBodyId string
-		var hitNorm vec3
-		for id, b := range w.bodies {
-			if !b.active {
-				continue
-			}
-			var min, max vec3
-			if b.radius > 0 {
-				min = vec3{b.position.x - b.radius, b.position.y - b.radius, b.position.z - b.radius}
-				max = vec3{b.position.x + b.radius, b.position.y + b.radius, b.position.z + b.radius}
-			} else {
-				min = vec3{b.position.x - b.halfExt.x, b.position.y - b.halfExt.y, b.position.z - b.halfExt.z}
-				max = vec3{b.position.x + b.halfExt.x, b.position.y + b.halfExt.y, b.position.z + b.halfExt.z}
-			}
-			t := rayAABB(sx, sy, sz, dx, dy, dz, min.x, min.y, min.z, max.x, max.y, max.z)
-			if t >= 0 && t < maxDist && t < bestT {
-				bestT = t
-				hit = true
-				hitP = vec3{sx + dx*t, sy + dy*t, sz + dz*t}
-				hitBodyId = id
-				hitNorm = vec3{-dx, -dy, -dz}
-			}
-		}
-		w.mu.RUnlock()
-
-		lastRayMu.Lock()
-		lastRay.hit = hit
-		lastRay.p = hitP
-		lastRay.bodyId = hitBodyId
-		lastRay.normal = hitNorm
-		lastRayMu.Unlock()
-		if hit {
-			return 1, nil
-		}
-		return 0, nil
-	})
-	v.RegisterForeign("BULLET.GetRayCastHitX", func(args []interface{}) (interface{}, error) {
-		lastRayMu.Lock()
-		defer lastRayMu.Unlock()
-		return lastRay.p.x, nil
-	})
-	v.RegisterForeign("BULLET.GetRayCastHitY", func(args []interface{}) (interface{}, error) {
-		lastRayMu.Lock()
-		defer lastRayMu.Unlock()
-		return lastRay.p.y, nil
-	})
-	v.RegisterForeign("BULLET.GetRayCastHitZ", func(args []interface{}) (interface{}, error) {
-		lastRayMu.Lock()
-		defer lastRayMu.Unlock()
-		return lastRay.p.z, nil
-	})
-	v.RegisterForeign("BULLET.GetRayCastHitBody", func(args []interface{}) (interface{}, error) {
-		lastRayMu.Lock()
-		defer lastRayMu.Unlock()
-		return lastRay.bodyId, nil
-	})
-	v.RegisterForeign("BULLET.GetRayCastHitNormalX", func(args []interface{}) (interface{}, error) {
-		lastRayMu.Lock()
-		defer lastRayMu.Unlock()
-		return lastRay.normal.x, nil
-	})
-	v.RegisterForeign("BULLET.GetRayCastHitNormalY", func(args []interface{}) (interface{}, error) {
-		lastRayMu.Lock()
-		defer lastRayMu.Unlock()
-		return lastRay.normal.y, nil
-	})
-	v.RegisterForeign("BULLET.GetRayCastHitNormalZ", func(args []interface{}) (interface{}, error) {
-		lastRayMu.Lock()
-		defer lastRayMu.Unlock()
-		return lastRay.normal.z, nil
-	})
-
-	// --- Flat 3D commands (no namespace, case-insensitive via VM) ---
 	registerFlat3D(v)
 }
 
@@ -604,6 +235,33 @@ func registerFlat3D(v *vm.VM) {
 		worldMu.Unlock()
 		return nil, nil
 	})
+	v.RegisterForeign("SetWorldGravity3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetWorldGravity3D requires (worldId, gx, gy, gz)")
+		}
+		w := getWorld(toString(args[0]))
+		if w == nil {
+			return nil, fmt.Errorf("world not found")
+		}
+		w.mu.Lock()
+		w.gravity = vec3{toFloat64(args[1]), toFloat64(args[2]), toFloat64(args[3])}
+		w.mu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("DestroyBody3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("DestroyBody3D requires (worldId, bodyId)")
+		}
+		w := getWorld(toString(args[0]))
+		if w == nil {
+			return nil, nil
+		}
+		bid := toString(args[1])
+		w.mu.Lock()
+		delete(w.bodies, bid)
+		w.mu.Unlock()
+		return nil, nil
+	})
 	v.RegisterForeign("Step3D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
 			return nil, fmt.Errorf("Step3D requires (worldName$, dt)")
@@ -620,7 +278,9 @@ func registerFlat3D(v *vm.VM) {
 			}
 			integrateBody(b, w.gravity, dt)
 		}
-		resolveCollisions(w)
+		for pass := 0; pass < 3; pass++ {
+			resolveCollisions(w)
+		}
 		w.mu.Unlock()
 		return nil, nil
 	})
@@ -1156,6 +816,68 @@ func registerFlat3D(v *vm.VM) {
 		}
 		return 0, nil
 	})
+	// RayCastFromDir3D(worldId, startX, startY, startZ, dirX, dirY, dirZ, maxDist): same as legacy BULLET.RayCast; use RayHit*3D for results.
+	v.RegisterForeign("RayCastFromDir3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 8 {
+			return nil, fmt.Errorf("RayCastFromDir3D requires (worldId, startX, startY, startZ, dirX, dirY, dirZ, maxDist)")
+		}
+		w := getWorld(toString(args[0]))
+		if w == nil {
+			lastRayMu.Lock()
+			lastRay.hit = false
+			lastRayMu.Unlock()
+			return 0, nil
+		}
+		sx, sy, sz := toFloat64(args[1]), toFloat64(args[2]), toFloat64(args[3])
+		dx, dy, dz := toFloat64(args[4]), toFloat64(args[5]), toFloat64(args[6])
+		maxDist := toFloat64(args[7])
+		norm := math.Sqrt(dx*dx + dy*dy + dz*dz)
+		if norm < 1e-9 {
+			lastRayMu.Lock()
+			lastRay.hit = false
+			lastRayMu.Unlock()
+			return 0, nil
+		}
+		dx, dy, dz = dx/norm, dy/norm, dz/norm
+		w.mu.RLock()
+		var bestT float64 = 1e30
+		hit := false
+		var hitP vec3
+		var hitBodyId string
+		var hitNorm vec3
+		for id, b := range w.bodies {
+			if !b.active {
+				continue
+			}
+			var min, max vec3
+			if b.radius > 0 {
+				min = vec3{b.position.x - b.radius, b.position.y - b.radius, b.position.z - b.radius}
+				max = vec3{b.position.x + b.radius, b.position.y + b.radius, b.position.z + b.radius}
+			} else {
+				min = vec3{b.position.x - b.halfExt.x, b.position.y - b.halfExt.y, b.position.z - b.halfExt.z}
+				max = vec3{b.position.x + b.halfExt.x, b.position.y + b.halfExt.y, b.position.z + b.halfExt.z}
+			}
+			t := rayAABB(sx, sy, sz, dx, dy, dz, min.x, min.y, min.z, max.x, max.y, max.z)
+			if t >= 0 && t < maxDist && t < bestT {
+				bestT = t
+				hit = true
+				hitP = vec3{sx + dx*t, sy + dy*t, sz + dz*t}
+				hitBodyId = id
+				hitNorm = vec3{-dx, -dy, -dz}
+			}
+		}
+		w.mu.RUnlock()
+		lastRayMu.Lock()
+		lastRay.hit = hit
+		lastRay.p = hitP
+		lastRay.bodyId = hitBodyId
+		lastRay.normal = hitNorm
+		lastRayMu.Unlock()
+		if hit {
+			return 1, nil
+		}
+		return 0, nil
+	})
 	v.RegisterForeign("RayHitX3D", func(args []interface{}) (interface{}, error) {
 		lastRayMu.Lock()
 		defer lastRayMu.Unlock()
@@ -1565,8 +1287,35 @@ func overlapSphereBox(sx, sy, sz, sr, bx, by, bz, hx, hy, hz float64) (nx, ny, n
 	dy := sy - cly
 	dz := sz - clz
 	distSq := dx*dx + dy*dy + dz*dz
-	if distSq >= sr*sr || distSq < 1e-18 {
+	if distSq >= sr*sr {
 		return 0, 0, 0, 0
+	}
+	if distSq < 1e-18 {
+		// Sphere center inside box: push out along the axis of minimum penetration (depth = distance to push sphere center so surface touches face)
+		penR := (bx+hx) - sx - sr
+		penL := sx - (bx-hx) - sr
+		penU := (by+hy) - sy - sr
+		penD := sy - (by-hy) - sr
+		penF := (bz+hz) - sz - sr
+		penB := sz - (bz-hz) - sr
+		best := penR
+		nx, ny, nz = 1, 0, 0
+		if penL < best {
+			best, nx, ny, nz = penL, -1, 0, 0
+		}
+		if penU < best {
+			best, nx, ny, nz = penU, 0, 1, 0
+		}
+		if penD < best {
+			best, nx, ny, nz = penD, 0, -1, 0
+		}
+		if penF < best {
+			best, nx, ny, nz = penF, 0, 0, 1
+		}
+		if penB < best {
+			best, nx, ny, nz = penB, 0, 0, -1
+		}
+		return nx, ny, nz, best
 	}
 	dist := math.Sqrt(distSq)
 	depth = sr - dist
@@ -1808,6 +1557,45 @@ func ApplyForce(worldId, bodyId string, fx, fy, fz float64) {
 	b.velocity.z += fz / b.mass * dt
 }
 
+// ApplyImpulse applies an impulse to the body.
+func ApplyImpulse(worldId, bodyId string, ix, iy, iz float64) {
+	b := getBody(getWorld(worldId), bodyId)
+	if b == nil || b.mass <= 0 {
+		return
+	}
+	m := b.mass
+	b.velocity.x += ix / m
+	b.velocity.y += iy / m
+	b.velocity.z += iz / m
+}
+
+// GetRotationX/Y/Z return the body's Euler rotation (radians).
+func GetRotationX(worldId, bodyId string) float64 {
+	if b := getBody(getWorld(worldId), bodyId); b != nil {
+		return b.rotation.x
+	}
+	return 0
+}
+func GetRotationY(worldId, bodyId string) float64 {
+	if b := getBody(getWorld(worldId), bodyId); b != nil {
+		return b.rotation.y
+	}
+	return 0
+}
+func GetRotationZ(worldId, bodyId string) float64 {
+	if b := getBody(getWorld(worldId), bodyId); b != nil {
+		return b.rotation.z
+	}
+	return 0
+}
+
+// SetRotation sets the body's Euler rotation (radians).
+func SetRotation(worldId, bodyId string, rx, ry, rz float64) {
+	if b := getBody(getWorld(worldId), bodyId); b != nil {
+		b.rotation = vec3{rx, ry, rz}
+	}
+}
+
 // RayCast performs a raycast; returns 1 if hit, 0 otherwise. Use GetRayCastHitX/Y/Z for hit point.
 func RayCast(worldId string, startX, startY, startZ, dirX, dirY, dirZ, maxDist float64) int {
 	w := getWorld(worldId)
@@ -1830,7 +1618,9 @@ func RayCast(worldId string, startX, startY, startZ, dirX, dirY, dirZ, maxDist f
 	var bestT float64 = 1e30
 	hit := false
 	var hitP vec3
-	for _, b := range w.bodies {
+	var hitBodyId string
+	var hitNorm vec3
+	for id, b := range w.bodies {
 		if !b.active {
 			continue
 		}
@@ -1847,6 +1637,8 @@ func RayCast(worldId string, startX, startY, startZ, dirX, dirY, dirZ, maxDist f
 			bestT = t
 			hit = true
 			hitP = vec3{startX + dx*t, startY + dy*t, startZ + dz*t}
+			hitBodyId = id
+			hitNorm = vec3{-dx, -dy, -dz}
 		}
 	}
 	w.mu.RUnlock()
@@ -1854,6 +1646,8 @@ func RayCast(worldId string, startX, startY, startZ, dirX, dirY, dirZ, maxDist f
 	lastRayMu.Lock()
 	lastRay.hit = hit
 	lastRay.p = hitP
+	lastRay.bodyId = hitBodyId
+	lastRay.normal = hitNorm
 	lastRayMu.Unlock()
 	if hit {
 		return 1
@@ -1881,3 +1675,63 @@ func GetRayCastHitZ() float64 {
 	defer lastRayMu.Unlock()
 	return lastRay.p.z
 }
+
+// GetRayCastHitBody returns the body ID of the last raycast hit.
+func GetRayCastHitBody() string {
+	lastRayMu.Lock()
+	defer lastRayMu.Unlock()
+	return lastRay.bodyId
+}
+
+// GetRayCastHitNormalX/Y/Z return the normal of the last raycast hit.
+func GetRayCastHitNormalX() float64 {
+	lastRayMu.Lock()
+	defer lastRayMu.Unlock()
+	return lastRay.normal.x
+}
+func GetRayCastHitNormalY() float64 {
+	lastRayMu.Lock()
+	defer lastRayMu.Unlock()
+	return lastRay.normal.y
+}
+func GetRayCastHitNormalZ() float64 {
+	lastRayMu.Lock()
+	defer lastRayMu.Unlock()
+	return lastRay.normal.z
+}
+
+// Flat-name exports for --gen-go (no namespace in generated code).
+func CreateWorld3D(worldId string, gx, gy, gz float64) { CreateWorld(worldId, gx, gy, gz) }
+func SetWorldGravity3D(worldId string, gx, gy, gz float64) { SetGravity(worldId, gx, gy, gz) }
+func Step3D(worldId string, dt float64)                  { Step(worldId, dt) }
+func CreateBox3D(worldId, bodyId string, x, y, z, hx, hy, hz, mass float64) {
+	CreateBox(worldId, bodyId, x, y, z, hx, hy, hz, mass)
+}
+func CreateSphere3D(worldId, bodyId string, x, y, z, radius, mass float64) {
+	CreateSphere(worldId, bodyId, x, y, z, radius, mass)
+}
+func DestroyBody3D(worldId, bodyId string)       { DestroyBody(worldId, bodyId) }
+func SetPosition3D(worldId, bodyId string, x, y, z float64) { SetPosition(worldId, bodyId, x, y, z) }
+func GetPositionX3D(worldId, bodyId string) float64 { return GetPositionX(worldId, bodyId) }
+func GetPositionY3D(worldId, bodyId string) float64 { return GetPositionY(worldId, bodyId) }
+func GetPositionZ3D(worldId, bodyId string) float64 { return GetPositionZ(worldId, bodyId) }
+func SetVelocity3D(worldId, bodyId string, vx, vy, vz float64) { SetVelocity(worldId, bodyId, vx, vy, vz) }
+func GetVelocityX3D(worldId, bodyId string) float64 { return GetVelocityX(worldId, bodyId) }
+func GetVelocityY3D(worldId, bodyId string) float64 { return GetVelocityY(worldId, bodyId) }
+func GetVelocityZ3D(worldId, bodyId string) float64 { return GetVelocityZ(worldId, bodyId) }
+func GetYaw3D(worldId, bodyId string) float64   { return GetRotationY(worldId, bodyId) }
+func GetPitch3D(worldId, bodyId string) float64 { return GetRotationX(worldId, bodyId) }
+func GetRoll3D(worldId, bodyId string) float64  { return GetRotationZ(worldId, bodyId) }
+func SetRotation3D(worldId, bodyId string, rx, ry, rz float64) { SetRotation(worldId, bodyId, rx, ry, rz) }
+func ApplyForce3D(worldId, bodyId string, fx, fy, fz float64) { ApplyForce(worldId, bodyId, fx, fy, fz) }
+func ApplyImpulse3D(worldId, bodyId string, ix, iy, iz float64) { ApplyImpulse(worldId, bodyId, ix, iy, iz) }
+func RayCastFromDir3D(worldId string, sx, sy, sz, dx, dy, dz, maxDist float64) int {
+	return RayCast(worldId, sx, sy, sz, dx, dy, dz, maxDist)
+}
+func RayHitX3D() float64    { return GetRayCastHitX() }
+func RayHitY3D() float64    { return GetRayCastHitY() }
+func RayHitZ3D() float64    { return GetRayCastHitZ() }
+func RayHitBody3D() string  { return GetRayCastHitBody() }
+func RayHitNormalX3D() float64 { return GetRayCastHitNormalX() }
+func RayHitNormalY3D() float64 { return GetRayCastHitNormalY() }
+func RayHitNormalZ3D() float64 { return GetRayCastHitNormalZ() }

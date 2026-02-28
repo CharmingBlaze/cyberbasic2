@@ -260,13 +260,13 @@ See [docs/3D_GRAPHICS_GUIDE.md](docs/3D_GRAPHICS_GUIDE.md) and [API_REFERENCE.md
 
 ## 9. Physics 2D (Box2D)
 
-Use **BOX2D.*** namespace: `BOX2D.CreateWorld`, `BOX2D.Step`, `BOX2D.CreateBody`, `BOX2D.CreateBox`, `BOX2D.CreateCircle`, `BOX2D.GetPositionX`, `BOX2D.GetPositionY`, `BOX2D.SetLinearVelocity`, `BOX2D.ApplyForce`, etc. Legacy names without prefix (CreateWorld2D, Step2D, CreateBox2D, …) also available. See [docs/GAME_DEVELOPMENT_GUIDE.md](docs/GAME_DEVELOPMENT_GUIDE.md) and [API_REFERENCE.md](API_REFERENCE.md).
+Use **flat names** for 2D physics: `CreateWorld2D`, `Step2D`, `CreateBody2D`, `CreateBox2D`, `CreateCircle2D`, `GetPositionX2D`, `GetPositionY2D`, `SetVelocity2D`, `ApplyForce2D`, etc. See [docs/GAME_DEVELOPMENT_GUIDE.md](docs/GAME_DEVELOPMENT_GUIDE.md) and [API_REFERENCE.md](API_REFERENCE.md).
 
 ---
 
 ## 10. Physics 3D (Bullet)
 
-Use **BULLET.*** namespace: `BULLET.CreateWorld`, `BULLET.Step`, `BULLET.CreateSphere`, `BULLET.CreateBox`, `BULLET.GetPositionX`, `BULLET.GetPositionY`, `BULLET.GetPositionZ`, `BULLET.SetVelocity`, `BULLET.ApplyForce`, etc. Legacy names (CreateWorld3D, Step3D, …) also available. See [docs/GAME_DEVELOPMENT_GUIDE.md](docs/GAME_DEVELOPMENT_GUIDE.md) and [API_REFERENCE.md](API_REFERENCE.md).
+Use **flat names** for 3D physics: `CreateWorld3D`, `Step3D`, `CreateSphere3D`, `CreateBox3D`, `GetPositionX3D`, `GetPositionY3D`, `GetPositionZ3D`, `SetVelocity3D`, `ApplyForce3D`, etc. See [docs/GAME_DEVELOPMENT_GUIDE.md](docs/GAME_DEVELOPMENT_GUIDE.md) and [API_REFERENCE.md](API_REFERENCE.md).
 
 ---
 
@@ -294,7 +294,7 @@ WHILE NOT WindowShouldClose()
     VAR dt = DeltaTime()
     IF dt > 0.05 THEN LET dt = 0.016
     // Input and logic...
-    // BOX2D.Step("w", dt, 8, 3)
+    // Step2D("w", dt, 8, 3)
     ClearBackground(20, 20, 30, 255)
     DrawRectangle(playerX, playerY, 32, 32, 255, 255, 255, 255)
 WEND
@@ -308,7 +308,7 @@ CloseWindow()
 
 - **Case-insensitive:** Keywords, identifiers, and built-in/foreign names. `MyVar` and `myvar` are the same.
 - **Dynamic typing:** Variables hold values; `AS Type` is an optional hint. No static type checking.
-- **Namespaces:** Call raylib as `InitWindow(...)` or `RL.InitWindow(...)`; physics as `BOX2D.*`, `BULLET.*`; game helpers as `GAME.*`; ECS as `ECS.*`.
+- **Namespaces:** Call raylib as `InitWindow(...)` or `RL.InitWindow(...)`; physics as flat names (CreateWorld2D, Step3D, …); game helpers as `GAME.*`; ECS as `ECS.*`.
 - **Bytecode constant limit:** A program may use at most 256 constants (e.g. string/number literals, global names); compiled bytecode uses a single byte for constant indices.
 
 For the full API see [API_REFERENCE.md](API_REFERENCE.md). For doc index see [docs/DOCUMENTATION_INDEX.md](docs/DOCUMENTATION_INDEX.md).

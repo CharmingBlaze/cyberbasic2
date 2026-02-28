@@ -228,7 +228,7 @@ Use this checklist to confirm your program is a valid 2D game:
 
 Optional for 2D games:
 
-- **Physics:** `BOX2D.CreateWorld`, `BOX2D.CreateBody`, `BOX2D.Step`, etc. See [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) and [API_REFERENCE.md](../API_REFERENCE.md).
+- **Physics:** `CreateWorld2D`, `CreateBody2D`, `Step2D`, etc. See [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) and [API_REFERENCE.md](../API_REFERENCE.md).
 - **Camera follow:** `GAME.SetCamera2DFollow`, `GAME.UpdateCamera2D` with a Box2D body.
 
 ---

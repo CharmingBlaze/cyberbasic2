@@ -348,15 +348,15 @@ InitWindow(1024, 768, "3D Physics Demo")
 SetTargetFPS(60)
 
 // Create physics world
-BULLET.CreateWorld("world", 0, -9.81, 0)  // Earth gravity
+CreateWorld3D("world", 0, -9.81, 0)  // Earth gravity
 
 // Create static ground
-BULLET.CreateBox("world", "ground", 0, -1, 0, 10, 0.5, 10, 0)
+CreateBox3D("world", "ground", 0, -1, 0, 10, 0.5, 10, 0)
 
 // Create dynamic objects
-BULLET.CreateBox("world", "box1", 0, 5, 0, 1, 1, 1, 1)
-BULLET.CreateSphere("world", "sphere1", 2, 8, 0, 0.5, 1)
-BULLET.CreateBox("world", "box2", -2, 6, 1, 0.5, 2, 0.5, 1)
+CreateBox3D("world", "box1", 0, 5, 0, 1, 1, 1, 1)
+CreateSphere3D("world", "sphere1", 2, 8, 0, 0.5, 1)
+CreateBox3D("world", "box2", -2, 6, 1, 0.5, 2, 0.5, 1)
 
 // Camera
 SetCamera3D(10, 8, 10, 0, 0, 0, 0, 1, 0)
@@ -365,7 +365,7 @@ WHILE NOT WindowShouldClose()
     VAR dt = GetFrameTime()
     
     // Step physics simulation
-    BULLET.Step("world", dt)
+    Step3D("world", dt)
     
     BeginMode3D()
     ClearBackground(135, 206, 235, 255)
@@ -375,21 +375,21 @@ WHILE NOT WindowShouldClose()
     
     // Draw physics objects at their current positions
     // Box1
-    VAR bx1 = BULLET.GetPositionX("world", "box1")
-    VAR by1 = BULLET.GetPositionY("world", "box1")
-    VAR bz1 = BULLET.GetPositionZ("world", "box1")
+    VAR bx1 = GetPositionX3D("world", "box1")
+    VAR by1 = GetPositionY3D("world", "box1")
+    VAR bz1 = GetPositionZ3D("world", "box1")
     DrawCube(bx1, by1, bz1, 2, 2, 2, 255, 100, 100, 255)
     
     // Sphere1
-    VAR sx1 = BULLET.GetPositionX("world", "sphere1")
-    VAR sy1 = BULLET.GetPositionY("world", "sphere1")
-    VAR sz1 = BULLET.GetPositionZ("world", "sphere1")
+    VAR sx1 = GetPositionX3D("world", "sphere1")
+    VAR sy1 = GetPositionY3D("world", "sphere1")
+    VAR sz1 = GetPositionZ3D("world", "sphere1")
     DrawSphere(sx1, sy1, sz1, 0.5, 100, 100, 255, 255)
     
     // Box2
-    VAR bx2 = BULLET.GetPositionX("world", "box2")
-    VAR by2 = BULLET.GetPositionY("world", "box2")
-    VAR bz2 = BULLET.GetPositionZ("world", "box2")
+    VAR bx2 = GetPositionX3D("world", "box2")
+    VAR by2 = GetPositionY3D("world", "box2")
+    VAR bz2 = GetPositionZ3D("world", "box2")
     DrawCube(bx2, by2, bz2, 1, 4, 1, 100, 255, 100, 255)
     
     DrawGrid(20, 1.0)
@@ -415,15 +415,15 @@ WHILE NOT WindowShouldClose()
         VAR objName = "dynamic" + STR(GetRandomValue(1000, 9999))
         
         SELECT CASE shapeType
-            CASE 0: BULLET.CreateBox("world", objName, spawnX, spawnY, spawnZ, 0.5, 0.5, 0.5, 1)
-            CASE 1: BULLET.CreateSphere("world", objName, spawnX, spawnY, spawnZ, 0.5, 1)
-            CASE 2: BULLET.CreateBox("world", objName, spawnX, spawnY, spawnZ, 0.3, 1.0, 0.3, 1)
+            CASE 0: CreateBox3D("world", objName, spawnX, spawnY, spawnZ, 0.5, 0.5, 0.5, 1)
+            CASE 1: CreateSphere3D("world", objName, spawnX, spawnY, spawnZ, 0.5, 1)
+            CASE 2: CreateBox3D("world", objName, spawnX, spawnY, spawnZ, 0.3, 1.0, 0.3, 1)
         END SELECT
     ENDIF
 WEND
 
 // Cleanup
-BULLET.DestroyWorld("world")
+DestroyWorld3D("world")
 CloseWindow()
 ```
 
@@ -436,18 +436,18 @@ SetTargetFPS(60)
 DisableCursor()
 
 // Physics world
-BULLET.CreateWorld("world", 0, -9.81, 0)
+CreateWorld3D("world", 0, -9.81, 0)
 
 // Ground
-BULLET.CreateBox("world", "ground", 0, -1, 0, 20, 0.5, 20, 0)
+CreateBox3D("world", "ground", 0, -1, 0, 20, 0.5, 20, 0)
 
 // Platforms
-BULLET.CreateBox("world", "platform1", 5, 2, 0, 3, 0.5, 3, 0)
-BULLET.CreateBox("world", "platform2", -5, 3, -3, 2, 0.5, 2, 0)
-BULLET.CreateBox("world", "platform3", 0, 4, 5, 2.5, 0.5, 2.5, 0)
+CreateBox3D("world", "platform1", 5, 2, 0, 3, 0.5, 3, 0)
+CreateBox3D("world", "platform2", -5, 3, -3, 2, 0.5, 2, 0)
+CreateBox3D("world", "platform3", 0, 4, 5, 2.5, 0.5, 2.5, 0)
 
 // Player physics body
-BULLET.CreateBox("world", "player", 0, 2, 0, 0.5, 1, 0.5, 1)
+CreateBox3D("world", "player", 0, 2, 0, 0.5, 1, 0.5, 1)
 
 // Camera state
 VAR camYaw = 0.0
@@ -481,22 +481,22 @@ WHILE NOT WindowShouldClose()
     
     // Apply movement to player
     IF moveX <> 0 OR moveZ <> 0 THEN
-        BULLET.SetVelocity("world", "player", moveX * moveSpeed, 0, moveZ * moveSpeed)
+        SetVelocity3D("world", "player", moveX * moveSpeed, 0, moveZ * moveSpeed)
     ENDIF
     
     // Jump
     IF IsKeyPressed(KEY_SPACE) THEN
-        VAR currentY = BULLET.GetPositionY("world", "player")
+        VAR currentY = GetPositionY3D("world", "player")
         // Simple ground check
         IF currentY < 3.0 THEN
-            BULLET.SetVelocity("world", "player", 0, jumpPower, 0)
+            SetVelocity3D("world", "player", 0, jumpPower, 0)
         ENDIF
     ENDIF
     
     // Get player position for camera
-    VAR playerX = BULLET.GetPositionX("world", "player")
-    VAR playerY = BULLET.GetPositionY("world", "player")
-    VAR playerZ = BULLET.GetPositionZ("world", "player")
+    VAR playerX = GetPositionX3D("world", "player")
+    VAR playerY = GetPositionY3D("world", "player")
+    VAR playerZ = GetPositionZ3D("world", "player")
     
     // Calculate camera look position
     VAR lookX = playerX + Cos(camPitch) * Sin(camYaw)
@@ -507,7 +507,7 @@ WHILE NOT WindowShouldClose()
     SetCamera3D(playerX, playerY + 0.8, playerZ, lookX, lookY, lookZ, 0, 1, 0)
     
     // Physics step
-    BULLET.Step("world", dt)
+    Step3D("world", dt)
     
     // Rendering
     BeginMode3D()
@@ -533,7 +533,7 @@ WHILE NOT WindowShouldClose()
     DrawText("Position: (" + STR(Int(playerX)) + ", " + STR(Int(playerY)) + ", " + STR(Int(playerZ)) + ")", 10, 55, 16, 200, 200, 200, 255)
 WEND
 
-BULLET.DestroyWorld("world")
+DestroyWorld3D("world")
 CloseWindow()
 ```
 
@@ -626,13 +626,13 @@ VAR collectiblesFound = 0
 VAR totalCollectibles = 5
 
 // Physics world
-BULLET.CreateWorld("world", 0, -9.81, 0)
+CreateWorld3D("world", 0, -9.81, 0)
 
 // Ground
-BULLET.CreateBox("world", "ground", 0, -1, 0, 50, 0.5, 50, 0)
+CreateBox3D("world", "ground", 0, -1, 0, 50, 0.5, 50, 0)
 
 // Player physics body
-BULLET.CreateBox("world", "player", 0, 2, 0, 0.5, 1.5, 0.5, 1)
+CreateBox3D("world", "player", 0, 2, 0, 0.5, 1.5, 0.5, 1)
 
 // Collectibles (orbs)
 VAR collectibleX[5] = [5, -8, 3, -5, 0]
@@ -643,14 +643,14 @@ VAR collectibleCollected[5] = [0, 0, 0, 0, 0]
 // Create physics bodies for collectibles
 FOR i = 0 TO 4
     VAR orbName = "orb" + STR(i)
-    BULLET.CreateSphere("world", orbName, collectibleX[i], collectibleY[i], collectibleZ[i], 0.5, 0.1)
+    CreateSphere3D("world", orbName, collectibleX[i], collectibleY[i], collectibleZ[i], 0.5, 0.1)
 NEXT i
 
 // Obstacles
-BULLET.CreateBox("world", "wall1", 10, 2, 0, 1, 4, 10, 0)
-BULLET.CreateBox("world", "wall2", -10, 2, 0, 1, 4, 10, 0)
-BULLET.CreateBox("world", "wall3", 0, 2, 10, 10, 4, 1, 0)
-BULLET.CreateBox("world", "wall4", 0, 2, -10, 10, 4, 1, 0)
+CreateBox3D("world", "wall1", 10, 2, 0, 1, 4, 10, 0)
+CreateBox3D("world", "wall2", -10, 2, 0, 1, 4, 10, 0)
+CreateBox3D("world", "wall3", 0, 2, 10, 10, 4, 1, 0)
+CreateBox3D("world", "wall4", 0, 2, -10, 10, 4, 1, 0)
 
 // Camera
 VAR camYaw = 0.0
@@ -685,29 +685,29 @@ WHILE NOT WindowShouldClose() AND gameState = "playing"
     IF moveX <> 0 OR moveZ <> 0 THEN
         VAR velX = moveX * moveSpeed
         VAR velZ = moveZ * moveSpeed
-        BULLET.SetVelocity("world", "player", velX, 0, velZ)
+        SetVelocity3D("world", "player", velX, 0, velZ)
     ENDIF
     
     // Jump
     IF IsKeyPressed(KEY_SPACE) THEN
-        VAR currentY = BULLET.GetPositionY("world", "player")
+        VAR currentY = GetPositionY3D("world", "player")
         IF currentY < 5.0 THEN
-            BULLET.SetVelocity("world", "player", 0, jumpPower, 0)
+            SetVelocity3D("world", "player", 0, jumpPower, 0)
         ENDIF
     ENDIF
     
     // Get player position
-    VAR playerX = BULLET.GetPositionX("world", "player")
-    VAR playerY = BULLET.GetPositionY("world", "player")
-    VAR playerZ = BULLET.GetPositionZ("world", "player")
+    VAR playerX = GetPositionX3D("world", "player")
+    VAR playerY = GetPositionY3D("world", "player")
+    VAR playerZ = GetPositionZ3D("world", "player")
     
     // Check collectible collection
     FOR i = 0 TO 4
         IF collectibleCollected[i] = 0 THEN
             VAR orbName = "orb" + STR(i)
-            VAR orbX = BULLET.GetPositionX("world", orbName)
-            VAR orbY = BULLET.GetPositionY("world", orbName)
-            VAR orbZ = BULLET.GetPositionZ("world", orbName)
+            VAR orbX = GetPositionX3D("world", orbName)
+            VAR orbY = GetPositionY3D("world", orbName)
+            VAR orbZ = GetPositionZ3D("world", orbName)
             
             VAR dx = playerX - orbX
             VAR dy = playerY - orbY
@@ -719,7 +719,7 @@ WHILE NOT WindowShouldClose() AND gameState = "playing"
                 collectiblesFound = collectiblesFound + 1
                 score = score + 100
                 // Remove the orb from physics world
-                BULLET.DestroyBody("world", orbName)
+                DestroyBody3D("world", orbName)
             ENDIF
         ENDIF
     NEXT i
@@ -736,7 +736,7 @@ WHILE NOT WindowShouldClose() AND gameState = "playing"
     SetCamera3D(playerX, playerY + 1.2, playerZ, lookX, lookY, lookZ, 0, 1, 0)
     
     // Physics step
-    BULLET.Step("world", dt)
+    Step3D("world", dt)
     
     // Rendering
     BeginMode3D()
@@ -756,9 +756,9 @@ WHILE NOT WindowShouldClose() AND gameState = "playing"
     FOR i = 0 TO 4
         IF collectibleCollected[i] = 0 THEN
             VAR orbName = "orb" + STR(i)
-            VAR orbX = BULLET.GetPositionX("world", orbName)
-            VAR orbY = BULLET.GetPositionY("world", orbName)
-            VAR orbZ = BULLET.GetPositionZ("world", orbName)
+            VAR orbX = GetPositionX3D("world", orbName)
+            VAR orbY = GetPositionY3D("world", orbName)
+            VAR orbZ = GetPositionZ3D("world", orbName)
             
             // Animated floating effect
             VAR floatOffset = Sin(GetTime() * 2.0 + i) * 0.2
@@ -795,7 +795,7 @@ IF gameState = "win" THEN
 ENDIF
 
 // Cleanup
-BULLET.DestroyWorld("world")
+DestroyWorld3D("world")
 CloseWindow()
 ```
 

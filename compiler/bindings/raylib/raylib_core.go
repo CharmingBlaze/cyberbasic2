@@ -9,11 +9,20 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
+// pendingConfigFlags: if set by SetConfigFlags before InitWindow, those flags are used; else InitWindow uses VSync by default.
+var pendingConfigFlags uint32
+var configFlagsSetBeforeInit bool
+
 func registerCore(v *vm.VM) {
 	v.RegisterForeign("InitWindow", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {
 			return nil, fmt.Errorf("InitWindow requires (width, height, title)")
 		}
+		flags := uint32(rl.FlagVsyncHint)
+		if configFlagsSetBeforeInit {
+			flags = pendingConfigFlags
+		}
+		rl.SetConfigFlags(flags)
 		rl.InitWindow(toInt32(args[0]), toInt32(args[1]), toString(args[2]))
 		return nil, nil
 	})
@@ -388,7 +397,9 @@ func registerCore(v *vm.VM) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("SetConfigFlags requires (flags)")
 		}
-		rl.SetConfigFlags(uint32(toInt32(args[0])))
+		configFlagsSetBeforeInit = true
+		pendingConfigFlags = uint32(toInt32(args[0]))
+		rl.SetConfigFlags(pendingConfigFlags)
 		return nil, nil
 	})
 	v.RegisterForeign("SwapScreenBuffer", func(args []interface{}) (interface{}, error) {

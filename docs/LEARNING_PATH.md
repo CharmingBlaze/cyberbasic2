@@ -660,15 +660,15 @@ InitWindow(800, 600, "2D Physics Demo")
 SetTargetFPS(60)
 
 // Create physics world with gravity
-BOX2D.CreateWorld("world", 0, -10)  // Gravity pointing down
+CreateWorld2D("world", 0, -10)  // Gravity pointing down
 
 // Create ground (static body)
-BOX2D.CreateBody("world", "ground", 0, 0, 0, 0, 1, 50, 0.5)
+CreateBody2D("world", "ground", 0, 0, 0, 0, 1, 50, 0.5)
 
 // Create some dynamic boxes
-BOX2D.CreateBody("world", "box1", 2, 0, 5, 0, 1, 0.5, 0.5)  // Dynamic box
-BOX2D.CreateBody("world", "box2", 2, 2, 8, 0, 1, 0.5, 0.5)  // Another box
-BOX2D.CreateBody("world", "ball1", 2, -2, 7, 0, 1, 0.5)     // Circle
+CreateBody2D("world", "box1", 2, 0, 5, 0, 1, 0.5, 0.5)  // Dynamic box
+CreateBody2D("world", "box2", 2, 2, 8, 0, 1, 0.5, 0.5)  // Another box
+CreateBody2D("world", "ball1", 2, -2, 7, 0, 1, 0.5)     // Circle
 
 // Physics to screen conversion
 VAR scale = 50  // 1 physics unit = 50 pixels
@@ -677,7 +677,7 @@ VAR offsetY = 500
 
 WHILE NOT WindowShouldClose()
     // Step physics simulation
-    BOX2D.Step("world", 0.016, 8, 3)  // 16ms timestep, 8 velocity iterations, 3 position iterations
+    Step2D("world", 0.016, 8, 3)  // 16ms timestep, 8 velocity iterations, 3 position iterations
     
     // Get physics positions and draw
     ClearBackground(40, 44, 52, 255)
@@ -686,22 +686,22 @@ WHILE NOT WindowShouldClose()
     DrawRectangle(50, 475, 700, 50, 128, 128, 128, 255)
     
     // Draw box1
-    VAR x1 = BOX2D.GetPositionX("world", "box1")
-    VAR y1 = BOX2D.GetPositionY("world", "box1")
+    VAR x1 = GetPositionX2D("world", "box1")
+    VAR y1 = GetPositionY2D("world", "box1")
     VAR screenX1 = offsetX + x1 * scale
     VAR screenY1 = offsetY - y1 * scale
     DrawRectangle(screenX1 - 25, screenY1 - 25, 50, 50, 255, 100, 100, 255)
     
     // Draw box2
-    VAR x2 = BOX2D.GetPositionX("world", "box2")
-    VAR y2 = BOX2D.GetPositionY("world", "box2")
+    VAR x2 = GetPositionX2D("world", "box2")
+    VAR y2 = GetPositionY2D("world", "box2")
     VAR screenX2 = offsetX + x2 * scale
     VAR screenY2 = offsetY - y2 * scale
     DrawRectangle(screenX2 - 25, screenY2 - 25, 50, 50, 100, 255, 100, 255)
     
     // Draw ball
-    VAR xb = BOX2D.GetPositionX("world", "ball1")
-    VAR yb = BOX2D.GetPositionY("world", "ball1")
+    VAR xb = GetPositionX2D("world", "ball1")
+    VAR yb = GetPositionY2D("world", "ball1")
     VAR screenXb = offsetX + xb * scale
     VAR screenYb = offsetY - yb * scale
     DrawCircle(screenXb, screenYb, 25, 100, 100, 255, 255)
@@ -712,7 +712,7 @@ WHILE NOT WindowShouldClose()
 WEND
 
 // Clean up
-BOX2D.DestroyWorld("world")
+DestroyWorld2D("world")
 CloseWindow()
 ```
 
@@ -731,22 +731,22 @@ InitWindow(1024, 768, "3D Physics Demo")
 SetTargetFPS(60)
 
 // Create 3D physics world
-BULLET.CreateWorld("world", 0, -9.81, 0)  // Earth gravity
+CreateWorld3D("world", 0, -9.81, 0)  // Earth gravity
 
 // Create ground (static)
-BULLET.CreateBox("world", "ground", 0, -1, 0, 10, 0.5, 10, 0)
+CreateBox3D("world", "ground", 0, -1, 0, 10, 0.5, 10, 0)
 
 // Create falling objects
-BULLET.CreateBox("world", "box1", 0, 5, 0, 1, 1, 1, 1)
-BULLET.CreateSphere("world", "sphere1", 2, 8, 0, 0.5, 1)
-BULLET.CreateBox("world", "box2", -2, 6, 1, 0.5, 2, 0.5, 1)
+CreateBox3D("world", "box1", 0, 5, 0, 1, 1, 1, 1)
+CreateSphere3D("world", "sphere1", 2, 8, 0, 0.5, 1)
+CreateBox3D("world", "box2", -2, 6, 1, 0.5, 2, 0.5, 1)
 
 // Camera
 SetCamera3D(10, 8, 10, 0, 0, 0, 0, 1, 0)
 
 WHILE NOT WindowShouldClose()
     // Step physics
-    BULLET.Step("world", 0.016)
+    Step3D("world", 0.016)
     
     // 3D Drawing
     BeginMode3D()
@@ -757,21 +757,21 @@ WHILE NOT WindowShouldClose()
     
     // Draw physics objects at their current positions
     // Box1
-    VAR bx1 = BULLET.GetPositionX("world", "box1")
-    VAR by1 = BULLET.GetPositionY("world", "box1")
-    VAR bz1 = BULLET.GetPositionZ("world", "box1")
+    VAR bx1 = GetPositionX3D("world", "box1")
+    VAR by1 = GetPositionY3D("world", "box1")
+    VAR bz1 = GetPositionZ3D("world", "box1")
     DrawCube(bx1, by1, bz1, 2, 2, 2, 255, 100, 100, 255)
     
     // Sphere1
-    VAR sx1 = BULLET.GetPositionX("world", "sphere1")
-    VAR sy1 = BULLET.GetPositionY("world", "sphere1")
-    VAR sz1 = BULLET.GetPositionZ("world", "sphere1")
+    VAR sx1 = GetPositionX3D("world", "sphere1")
+    VAR sy1 = GetPositionY3D("world", "sphere1")
+    VAR sz1 = GetPositionZ3D("world", "sphere1")
     DrawSphere(sx1, sy1, sz1, 0.5, 100, 100, 255, 255)
     
     // Box2
-    VAR bx2 = BULLET.GetPositionX("world", "box2")
-    VAR by2 = BULLET.GetPositionY("world", "box2")
-    VAR bz2 = BULLET.GetPositionZ("world", "box2")
+    VAR bx2 = GetPositionX3D("world", "box2")
+    VAR by2 = GetPositionY3D("world", "box2")
+    VAR bz2 = GetPositionZ3D("world", "box2")
     DrawCube(bx2, by2, bz2, 1, 4, 1, 100, 255, 100, 255)
     
     DrawGrid(20, 1.0)
@@ -783,7 +783,7 @@ WHILE NOT WindowShouldClose()
 WEND
 
 // Clean up
-BULLET.DestroyWorld("world")
+DestroyWorld3D("world")
 CloseWindow()
 ```
 

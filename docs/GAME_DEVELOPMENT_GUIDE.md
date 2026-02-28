@@ -37,7 +37,7 @@ WHILE NOT WindowShouldClose()
     // ...
 
     // 3. Physics step (if using Box2D or Bullet)
-    // BOX2D.Step(...) or BULLET.Step(...)
+    // Step2D(...) or Step3D(...)
 
     // 4. Draw
     ClearBackground(20, 20, 30, 255)
@@ -117,11 +117,11 @@ These functions simplify camera and movement in 2D and 3D games.
 
 ### 2D camera follow
 
-Set a target Box2D body; the 2D camera follows it each frame. In the loop, after BOX2D.Step call **GAME.UpdateCamera2D()**. Example:
+Set a target Box2D body; the 2D camera follows it each frame. In the loop, after Step2D call **GAME.UpdateCamera2D()**. Example:
 
 ```basic
 GAME.SetCamera2DFollow(worldId, bodyId, xOffset, yOffset)
-// In the loop, after BOX2D.Step:
+// In the loop, after Step2D:
 GAME.UpdateCamera2D()
 ```
 
@@ -131,7 +131,7 @@ GAME.UpdateCamera2D()
 
 ### 3D WASD + jump (Bullet)
 
-**GAME.MoveWASD(worldId, bodyId, angleRad, speed, jumpVel, dt)** applies horizontal force from WASD (relative to `angleRad`) and jump on Space when near the ground. Use with **BULLET.Step** and **GAME.CameraOrbit** for a full 3D character controller. See [templates/3d_game.bas](../templates/3d_game.bas).
+**GAME.MoveWASD(worldId, bodyId, angleRad, speed, jumpVel, dt)** applies horizontal force from WASD (relative to `angleRad`) and jump on Space when near the ground. Use with **Step3D** and **GAME.CameraOrbit** for a full 3D character controller. See [templates/3d_game.bas](../templates/3d_game.bas).
 
 ### Other helpers
 
@@ -148,26 +148,25 @@ GAME.UpdateCamera2D()
 Create a world, add bodies, step each frame, read positions for drawing.
 
 ```basic
-BOX2D.CreateWorld("w", 0, -10)   // gravity x, y
-BOX2D.CreateBody("w", "player", 1)   // dynamic body
-BOX2D.CreateBox2D("w", "player", 400, 300, 32, 32)   // box shape
-BOX2D.CreateBox("w", "ground", 400, 550, 800, 20)   // static ground
+CreateWorld2D("w", 0, -10)   // gravity x, y
+CreateBox2D("w", "player", 400, 300, 32, 32, 1, 1)   // dynamic box
+CreateBox2D("w", "ground", 400, 550, 800, 20, 0, 0)   // static ground
 
 WHILE NOT WindowShouldClose()
     VAR dt = GetFrameTime()
-    BOX2D.Step("w", dt, 8, 3)   // velocity iters, position iters
+    Step2D("w", dt, 8, 3)   // velocity iters, position iters
 
-    VAR px = BOX2D.GetPositionX("w", "player")
-    VAR py = BOX2D.GetPositionY("w", "player")
+    VAR px = GetPositionX2D("w", "player")
+    VAR py = GetPositionY2D("w", "player")
 
     ClearBackground(30, 30, 50, 255)
     DrawRectangle(px - 16, py - 16, 32, 32, 255, 100, 100, 255)
 WEND
 
-BOX2D.DestroyWorld("w")
+DestroyWorld2D("w")
 ```
 
-See [examples/box2d_demo.bas](../examples/box2d_demo.bas) and [API_REFERENCE.md](../API_REFERENCE.md) for all BOX2D.* functions.
+See [examples/box2d_demo.bas](../examples/box2d_demo.bas) and [API_REFERENCE.md](../API_REFERENCE.md) for all 2D physics (flat) functions.
 
 ---
 
@@ -176,9 +175,9 @@ See [examples/box2d_demo.bas](../examples/box2d_demo.bas) and [API_REFERENCE.md]
 Create a world, add bodies (sphere, box, etc.), step each frame, read positions for drawing and for **GAME.CameraOrbit** / **GAME.MoveWASD**.
 
 ```basic
-BULLET.CreateWorld("w", 0, -18, 0)   // gravity x, y, z
-BULLET.CreateSphere("w", "player", 0, 0.5, 0, 0.5, 1)   // pos x,y,z, radius, mass
-BULLET.CreateBox("w", "ground", 0, -0.5, 0, 12.5, 0.5, 12.5, 0)   // static
+CreateWorld3D("w", 0, -18, 0)   // gravity x, y, z
+CreateSphere3D("w", "player", 0, 0.5, 0, 0.5, 1)   // pos x,y,z, radius, mass
+CreateBox3D("w", "ground", 0, -0.5, 0, 12.5, 0.5, 12.5, 0)   // static
 
 WHILE NOT WindowShouldClose()
     VAR dt = GetFrameTime()
@@ -186,9 +185,9 @@ WHILE NOT WindowShouldClose()
     BULLET.Step("w", dt)
     GAME.MoveWASD("w", "player", camAngle, 120, 9, dt)
 
-    VAR px = BULLET.GetPositionX("w", "player")
-    VAR py = BULLET.GetPositionY("w", "player")
-    VAR pz = BULLET.GetPositionZ("w", "player")
+    VAR px = GetPositionX3D("w", "player")
+    VAR py = GetPositionY3D("w", "player")
+    VAR pz = GetPositionZ3D("w", "player")
     GAME.CameraOrbit(px, py + 1.5, pz, camAngle, 0.2, 10)
 
     ClearBackground(50, 50, 60, 255)
@@ -196,7 +195,7 @@ WHILE NOT WindowShouldClose()
     DrawSphere(px, py, pz, 0.5, 255, 0, 0, 255)
 WEND
 
-BULLET.DestroyWorld("w")
+DestroyWorld3D("w")
 ```
 
 See [templates/3d_game.bas](../templates/3d_game.bas), [examples/run_3d_physics_demo.bas](../examples/run_3d_physics_demo.bas), and [API_REFERENCE.md](../API_REFERENCE.md).
@@ -209,7 +208,7 @@ When a Box2D body collides, you can call a BASIC sub by name:
 
 ```basic
 GAME.SetCollisionHandler(bodyId, "OnHit")
-// After BOX2D.Step("w", dt, 8, 3):
+// After Step2D("w", dt, 8, 3):
 GAME.ProcessCollisions2D("w")
 
 SUB OnHit(otherBodyId)
@@ -307,7 +306,7 @@ See [API_REFERENCE.md](../API_REFERENCE.md) and [2D Physics Guide](2D_PHYSICS_GU
 | Draw | `ClearBackground`, draw calls (`DrawRectangle`, `DrawCircle`, `DrawTexture`, `DrawText`). |
 | Input | `GetAxisX`, `GetAxisY`, `IsKeyDown` |
 | Distance | `Distance2D(x1, y1, x2, y2)` |
-| Physics (optional) | `BOX2D.CreateWorld`, `BOX2D.Step`, `GAME.MoveHorizontal2D`, `GAME.Jump2D` |
+| Physics (optional) | `CreateWorld2D`, `Step2D`, `GAME.MoveHorizontal2D`, `GAME.Jump2D` |
 
 Full list: [2D Graphics Guide – Full 2D command reference](2D_GRAPHICS_GUIDE.md#full-2d-command-reference).
 
@@ -321,7 +320,7 @@ Full list: [2D Graphics Guide – Full 2D command reference](2D_GRAPHICS_GUIDE.m
 | Draw | `ClearBackground`, `DrawCube`, `DrawSphere`, `DrawModel`, fog if needed |
 | Movement | `GAME.MoveWASD`, `GAME.SnapToGround3D` |
 | Distance | `Distance3D(x1, y1, z1, x2, y2, z2)` |
-| Physics (optional) | `BULLET.CreateWorld`, `BULLET.Step`, `BULLET.GetPositionX/Y/Z` |
+| Physics (optional) | `CreateWorld3D`, `Step3D`, `GetPositionX3D` / `GetPositionY3D` / `GetPositionZ3D` |
 
 Full list: [3D Graphics Guide – Full 3D command reference](3D_GRAPHICS_GUIDE.md#full-3d-command-reference).
 

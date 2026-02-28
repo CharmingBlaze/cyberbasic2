@@ -31,7 +31,7 @@ Conventions for CyberBasic documentation so all docs feel consistent.
 
 - **Game loop:** Use "game loop" when referring to `WHILE NOT WindowShouldClose() ... WEND` or `REPEAT ... UNTIL WindowShouldClose()`.
 - **Delta time:** Use "delta time" for frame elapsed time; refer to **DeltaTime()** or **GetFrameTime()**.
-- **Flat API:** Prefer flat names in examples: **InitWindow**, **ClearBackground**, **DrawCircle** (not `RL.InitWindow`). Use namespaced forms only when documenting that API (e.g. **BOX2D.***, **GAME.***).
+- **Flat API:** Prefer flat names in examples: **InitWindow**, **ClearBackground**, **DrawCircle** (not `RL.InitWindow`). Use namespaced forms only when documenting that API (e.g. **GAME.***). Physics uses flat names (CreateWorld2D, Step3D, …).
 
 ## API reference
 

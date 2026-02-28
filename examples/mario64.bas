@@ -11,12 +11,12 @@ RL.SetTargetFPS(60)
 RL.DisableCursor()
 
 REM Physics: ground top at y=0, player sphere radius 0.5 (center 0.5 on ground)
-BULLET.CreateWorld("w", 0, -18, 0)
-BULLET.CreateSphere("w", "player", 0, 0.5, 0, 0.5, 1)
-BULLET.CreateBox("w", "ground", 0, -0.5, 0, 12.5, 0.5, 12.5, 0)
-BULLET.CreateBox("w", "plat1", 4, 0.5, 0, 2, 1, 2, 0)
-BULLET.CreateBox("w", "plat2", -3, 0.5, 2, 1.5, 1, 1.5, 0)
-BULLET.CreateBox("w", "plat3", 0, 0.5, -4, 3, 1, 2, 0)
+CreateWorld3D("w", 0, -18, 0)
+CreateSphere3D("w", "player", 0, 0.5, 0, 0.5, 1)
+CreateBox3D("w", "ground", 0, -0.5, 0, 12.5, 0.5, 12.5, 0)
+CreateBox3D("w", "plat1", 4, 0.5, 0, 2, 1, 2, 0)
+CreateBox3D("w", "plat2", -3, 0.5, 2, 1.5, 1, 1.5, 0)
+CreateBox3D("w", "plat3", 0, 0.5, -4, 3, 1, 2, 0)
 
 DIM camAngle AS Float
 LET camAngle = 0
@@ -42,11 +42,11 @@ REPEAT
   LET dx = delta.x
   LET camAngle = camAngle - dx * mouseSens
 
-  BULLET.Step("w", dt)
+  Step3D("w", dt)
 
-  LET px = BULLET.GetPositionX("w", "player")
-  LET py = BULLET.GetPositionY("w", "player")
-  LET pz = BULLET.GetPositionZ("w", "player")
+  LET px = GetPositionX3D("w", "player")
+  LET py = GetPositionY3D("w", "player")
+  LET pz = GetPositionZ3D("w", "player")
 
   REM Snap to platform tops when over them
   IF px > 3 AND px < 5 AND pz > -1 AND pz < 1 THEN
@@ -63,9 +63,9 @@ REPEAT
   GAME.MoveWASD("w", "player", camAngle, moveForce, jumpVel, dt)
 
   REM Orbit camera around player (re-read position after snaps)
-  LET px = BULLET.GetPositionX("w", "player")
-  LET py = BULLET.GetPositionY("w", "player")
-  LET pz = BULLET.GetPositionZ("w", "player")
+  LET px = GetPositionX3D("w", "player")
+  LET py = GetPositionY3D("w", "player")
+  LET pz = GetPositionZ3D("w", "player")
   GAME.CameraOrbit(px, py + 1.5, pz, camAngle, 0.2, camDist)
 
   RL.BeginDrawing()
@@ -75,9 +75,9 @@ REPEAT
   RL.DrawCube(4, 0.5, 0, 2, 1, 2, RL.Gray)
   RL.DrawCube(-3, 0.5, 2, 1.5, 1, 1.5, RL.Brown)
   RL.DrawCube(0, 0.5, -4, 3, 1, 2, RL.Gold)
-  LET px2 = BULLET.GetPositionX("w", "player")
-  LET py2 = BULLET.GetPositionY("w", "player")
-  LET pz2 = BULLET.GetPositionZ("w", "player")
+  LET px2 = GetPositionX3D("w", "player")
+  LET py2 = GetPositionY3D("w", "player")
+  LET pz2 = GetPositionZ3D("w", "player")
   RL.DrawSphere(px2, py2, pz2, 0.5, RL.Red)
   RL.EndMode3D()
   RL.DrawText("WASD move, Mouse look, Space jump", 10, 10, 20, RL.White)

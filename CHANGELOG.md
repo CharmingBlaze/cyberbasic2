@@ -6,6 +6,16 @@ All notable changes to CyberBasic are documented here. The project follows a sin
 
 ## [Unreleased] – release preparation
 
+### Physics API: flat names only (namespace removal)
+
+- **Physics API simplified:** 2D and 3D physics now use **flat names** only: **CreateWorld2D**, **Step2D**, **CreateBody2D**, **GetPositionX2D** / **GetPositionY2D**, etc., and **CreateWorld3D**, **Step3D**, **CreateBox3D**, **GetPositionX3D**, etc. The **BOX2D.*** and **BULLET.*** namespaces are no longer registered in the VM.
+- **Backward compatibility:** The compiler rewrites legacy `BOX2D.*` and `BULLET.*` calls to the corresponding flat names at compile time, so existing scripts continue to work.
+- **Box2D flat API:** Added **CreateBody2D**, **DestroyBody2D**, **GetBodyCount2D**, **GetBodyId2D**, **CreateBodyAtScreen2D** to the flat API; removed all BOX2D.* VM registrations.
+- **Bullet flat API:** Added **SetWorldGravity3D**, **DestroyBody3D**, **RayCastFromDir3D**; removed all BULLET.* VM registrations. **3D constraint joints** (CreateHingeJoint3D, etc.) remain stubbed in the pure-Go engine and are documented as not implemented.
+- **Gogen:** Generated Go code now emits flat-style physics calls (e.g. `box2d.CreateWorld2D`, `bullet.Step3D`) instead of namespaced names.
+- **Documentation:** API_REFERENCE, COMMAND_REFERENCE, 2D_PHYSICS_GUIDE, 3D_PHYSICS_GUIDE, FAQ, GAME_DEVELOPMENT_GUIDE, and related docs updated to use flat names only; one-line deprecation note for BOX2D/BULLET namespaces.
+- **Examples and templates:** All BOX2D.* and BULLET.* usage in examples and templates replaced with flat names.
+
 ### Physics, UI, and audio (full implementation)
 
 - **Box2D:** All joint types implemented (Revolute, Prismatic, Weld, Rope, Pulley, Gear, Wheel); joint ID storage; **SetJointLimits2D**, **SetJointMotor2D**, **DestroyJoint2D**. Distance joint returns jointId.

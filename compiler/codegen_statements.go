@@ -319,7 +319,7 @@ func (c *Compiler) compileRepeatStatement(r *parser.RepeatStatement, chunk *vm.C
 	hybridMode := wrapFrame && (c.userFuncs["update"] || c.userFuncs["draw"])
 	if hybridMode {
 		wrapFrame = false
-	} else if wrapFrame && r.Body != nil && c.bodyCallsUserSub(r.Body.Statements) {
+	} else if wrapFrame && r.Body != nil && (c.bodyCallsUserSub(r.Body.Statements) || bodyContainsFrameBoundaries(r.Body.Statements)) {
 		wrapFrame = false
 	}
 	use3D := wrapFrame && r.Body != nil && bodyContains3DDraw(r.Body.Statements)
@@ -559,6 +559,27 @@ func bodyContains3DDraw(nodes []parser.Node) bool {
 	return WalkStatements(nodes, predicate3DDraw)
 }
 
+// frameBoundaryNames are call names that start/end a frame; if the loop body contains these, do not inject extra BeginDrawing/EndDrawing (avoids double wrap and flicker).
+var frameBoundaryNames = map[string]bool{
+	"begindrawing": true, "enddrawing": true, "beginframe": true, "endframe": true,
+}
+
+// bodyContainsFrameBoundaries returns true if the body contains BeginDrawing, EndDrawing, BeginFrame, or EndFrame.
+// When true, the compiler must not inject its own frame wrap around the loop body.
+func bodyContainsFrameBoundaries(nodes []parser.Node) bool {
+	return WalkStatements(nodes, func(n parser.Node) bool {
+		call, ok := n.(*parser.Call)
+		if !ok {
+			return false
+		}
+		name := strings.ToLower(call.Name)
+		if strings.HasPrefix(name, "rl.") {
+			name = name[3:]
+		}
+		return frameBoundaryNames[name]
+	})
+}
+
 // emitFrameWrap emits a no-arg foreign call (BeginDrawing, EndDrawing, BeginMode2D, EndMode2D). Used for automatic frame wrapping.
 func (c *Compiler) emitFrameWrap(chunk *vm.Chunk, name string) {
 	idx := chunk.WriteConstant(strings.ToLower(name))
@@ -617,8 +638,8 @@ func (c *Compiler) compileWhileStatement(whileStmt *parser.WhileStatement, chunk
 	hybridMode := wrapFrame && (c.userFuncs["update"] || c.userFuncs["draw"])
 	if hybridMode {
 		wrapFrame = false
-	} else if wrapFrame && whileStmt.Body != nil && c.bodyCallsUserSub(whileStmt.Body.Statements) {
-		wrapFrame = false // user does their own BeginDrawing/EndDrawing (e.g. in Draw()), avoid double wrap and flicker
+	} else if wrapFrame && whileStmt.Body != nil && (c.bodyCallsUserSub(whileStmt.Body.Statements) || bodyContainsFrameBoundaries(whileStmt.Body.Statements)) {
+		wrapFrame = false // user does their own BeginDrawing/EndDrawing (or calls Draw()), avoid double wrap and flicker
 	}
 	use3D := wrapFrame && whileStmt.Body != nil && bodyContains3DDraw(whileStmt.Body.Statements)
 

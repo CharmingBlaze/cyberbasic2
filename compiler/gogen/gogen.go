@@ -142,13 +142,27 @@ func emitAssignment(a *parser.Assignment) (string, error) {
 	return fmt.Sprintf("%s = %s", a.Variable, rhs), nil
 }
 
-// bulletGoName maps BASIC BULLET.* (canonical lowercase) to Go export name (PascalCase).
+// box2dGoName maps BASIC BOX2D.* method (lowercase) to flat Go export (no namespace in generated code).
+var box2dGoName = map[string]string{
+	"createworld": "CreateWorld2D", "destroyworld": "DestroyWorld2D", "step": "Step2D",
+	"createbody": "CreateBody2D", "destroybody": "DestroyBody2D",
+	"getbodycount": "GetBodyCount2D", "getbodyid": "GetBodyId2D", "createbodyatscreen": "CreateBodyAtScreen2D",
+	"getpositionx": "GetPositionX2D", "getpositiony": "GetPositionY2D", "getangle": "GetAngle2D",
+	"setlinearvelocity": "SetVelocity2D", "settransform": "SetTransform2D", "applyforce": "ApplyForce2D",
+}
+
+// bulletGoName maps BASIC BULLET.* method (lowercase) to flat Go export (no namespace in generated code).
 var bulletGoName = map[string]string{
-	"createworld": "CreateWorld", "setgravity": "SetGravity", "step": "Step",
-	"createbox": "CreateBox", "createsphere": "CreateSphere", "destroybody": "DestroyBody",
-	"setposition": "SetPosition", "getpositionx": "GetPositionX", "getpositiony": "GetPositionY", "getpositionz": "GetPositionZ",
-	"setvelocity": "SetVelocity", "applyforce": "ApplyForce", "applycentralforce": "ApplyCentralForce",
-	"raycast": "RayCast", "getraycasthitx": "GetRayCastHitX", "getraycasthity": "GetRayCastHitY", "getraycasthitz": "GetRayCastHitZ",
+	"createworld": "CreateWorld3D", "destroyworld": "DestroyWorld3D", "setgravity": "SetWorldGravity3D", "step": "Step3D",
+	"createbox": "CreateBox3D", "createsphere": "CreateSphere3D", "destroybody": "DestroyBody3D",
+	"setposition": "SetPosition3D", "getpositionx": "GetPositionX3D", "getpositiony": "GetPositionY3D", "getpositionz": "GetPositionZ3D",
+	"setvelocity": "SetVelocity3D", "getvelocityx": "GetVelocityX3D", "getvelocityy": "GetVelocityY3D", "getvelocityz": "GetVelocityZ3D",
+	"getrotationx": "GetYaw3D", "getrotationy": "GetPitch3D", "getrotationz": "GetRoll3D", "setrotation": "SetRotation3D",
+	"applyforce": "ApplyForce3D", "applycentralforce": "ApplyForce3D", "applyimpulse": "ApplyImpulse3D",
+	"raycast": "RayCastFromDir3D",
+	"getraycasthitx": "RayHitX3D", "getraycasthity": "RayHitY3D", "getraycasthitz": "RayHitZ3D",
+	"getraycasthitbody": "RayHitBody3D",
+	"getraycasthitnormalx": "RayHitNormalX3D", "getraycasthitnormaly": "RayHitNormalY3D", "getraycasthitnormalz": "RayHitNormalZ3D",
 }
 
 // rlGoName maps BASIC RL.* (canonical lowercase) to raylib-go export (PascalCase).
@@ -178,14 +192,22 @@ func emitCall(c *parser.Call) (string, error) {
 			if err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("bullet.%s(%s)", fn, strings.Join(args, ", ")), nil
+			goName := bulletGoName[strings.ToLower(fn)]
+			if goName == "" {
+				goName = fn
+			}
+			return fmt.Sprintf("bullet.%s(%s)", goName, strings.Join(args, ", ")), nil
 		}
 		if strings.EqualFold(lib, "box2d") {
 			args, err := emitExprList(c.Arguments)
 			if err != nil {
 				return "", err
 			}
-			return fmt.Sprintf("box2d.%s(%s)", fn, strings.Join(args, ", ")), nil
+			goName := box2dGoName[strings.ToLower(fn)]
+			if goName == "" {
+				goName = fn
+			}
+			return fmt.Sprintf("box2d.%s(%s)", goName, strings.Join(args, ", ")), nil
 		}
 		if strings.EqualFold(lib, "audio") {
 			args, err := emitExprList(c.Arguments)
@@ -456,7 +478,19 @@ func emitExpr(expr parser.Node) (string, error) {
 			}
 			if strings.EqualFold(parts[0], "bullet") {
 				args, _ := emitExprList(node.Arguments)
-				return "bullet." + parts[1] + "(" + strings.Join(args, ", ") + ")", nil
+				goName := bulletGoName[strings.ToLower(parts[1])]
+				if goName == "" {
+					goName = parts[1]
+				}
+				return "bullet." + goName + "(" + strings.Join(args, ", ") + ")", nil
+			}
+			if strings.EqualFold(parts[0], "box2d") {
+				args, _ := emitExprList(node.Arguments)
+				goName := box2dGoName[strings.ToLower(parts[1])]
+				if goName == "" {
+					goName = parts[1]
+				}
+				return "box2d." + goName + "(" + strings.Join(args, ", ") + ")", nil
 			}
 		}
 		args, _ := emitExprList(node.Arguments)

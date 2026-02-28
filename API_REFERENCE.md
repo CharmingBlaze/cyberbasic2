@@ -1,6 +1,6 @@
 # CyberBasic API Reference – All Bindings
 
-All functions callable from BASIC. Names are **case-insensitive**. You can call with or without namespace (e.g. `InitWindow(...)` or `RL.InitWindow(...)` for raylib; use `BOX2D.*` and `BULLET.*` for physics).
+All functions callable from BASIC. Names are **case-insensitive**. Use flat names for physics: **CreateWorld2D**, **Step2D**, **CreateWorld3D**, **Step3D**, etc. (The compiler rewrites legacy `BOX2D.*` and `BULLET.*` calls to these flat names.)
 
 [COMMAND_REFERENCE.md](docs/COMMAND_REFERENCE.md) groups commands by feature (Window, Input, Math, Camera, 2D, 3D, etc.) for task-based lookup. This document lists **all bindings by source file**. Each section below uses a table for quick lookup.
 
@@ -516,6 +516,7 @@ Other image commands: ImageFromImage, ImageFromChannel, ImageText, ImageTextEx, 
 | Command | Arguments | Returns | Description |
 |---------|-----------|---------|-------------|
 | **CameraOrbit** | (targetX, targetY, targetZ, angleRad, pitchRad, distance) | — | Orbit camera; updates state |
+| **OrbitCamera** | (targetX, targetY, targetZ) | — | Orbit around target; mouse drag = rotate, wheel = zoom; one call per frame; initial view and limits built-in |
 | **CameraZoom** | (amount) | — | Adjust orbit distance (e.g. GetMouseWheelMove()) |
 | **CameraRotate** | (deltaX, deltaY) | — | Mouse-delta rotation (2 args) |
 | **CameraRotate** | (pitchRad, yawRad, rollRad) | — | Absolute rotation (3 args) |
@@ -820,7 +821,7 @@ Other Vector2/Vector3/Matrix/Quaternion helpers: Vector2AddValue, Vector2Subtrac
 | **GAME.SetCamera3DOrbit** | (worldId, bodyId, distance, heightOffset) | — | 3D orbit preset |
 | **GAME.UpdateCamera3D** | (angleRad, pitchRad) | — | Update 3D camera |
 | **GAME.SetCollisionHandler** | (bodyId, subName) | — | When bodyId collides, call Sub subName(otherBodyId) |
-| **GAME.ProcessCollisions2D** | (worldId) | — | Invoke handlers; call after BOX2D.Step |
+| **GAME.ProcessCollisions2D** | (worldId) | — | Invoke handlers; call after Step2D |
 | **GAME.AssetPath** | (filename) | string | "assets/" + filename |
 | **GAME.ClampDelta** | (maxDt) | float | min(GetFrameTime(), maxDt) |
 | **GAME.ShowDebug** | () | — | Draw FPS |
@@ -846,26 +847,24 @@ Other Vector2/Vector3/Matrix/Quaternion helpers: Vector2AddValue, Vector2Subtrac
 
 ## 14. Box2D – `box2d.go`
 
-Use **BOX2D.*** prefix or legacy flat names.
+Use flat names only (no namespace). Legacy `BOX2D.*` in source is rewritten at compile time.
 
 | Command | Arguments | Returns | Description |
 |---------|-----------|---------|-------------|
-| **BOX2D.CreateWorld** | () | worldId | Create 2D world |
-| **BOX2D.Step** | (worldId, dt) | — | Step simulation |
-| **BOX2D.DestroyWorld** | (worldId) | — | Destroy world |
-| **BOX2D.CreateBody** | (worldId, x, y, type) | bodyId | Create body |
-| **BOX2D.DestroyBody** | (worldId, bodyId) | — | Destroy body |
-| **BOX2D.GetBodyCount** | (worldId) | int | Body count |
-| **BOX2D.GetBodyId** | (worldId, index) | bodyId | Body at index |
-| **BOX2D.CreateBodyAtScreen** | (worldId, screenX, screenY, …) | bodyId | Create at screen pos |
-| **BOX2D.GetPosition** | (worldId, bodyId) | x, y | Body position |
-| **BOX2D.GetPositionX** | (worldId, bodyId) | float | Position X |
-| **BOX2D.GetPositionY** | (worldId, bodyId) | float | Position Y |
-| **BOX2D.GetAngle** | (worldId, bodyId) | float | Body angle (rad) |
-| **BOX2D.SetLinearVelocity** | (worldId, bodyId, vx, vy) | — | Set velocity |
-| **BOX2D.GetLinearVelocity** | (worldId, bodyId) | vx, vy | Get velocity |
-| **BOX2D.SetTransform** | (worldId, bodyId, x, y, angle) | — | Set position and angle |
-| **BOX2D.ApplyForce** | (worldId, bodyId, fx, fy, x, y) | — | Apply force |
+| **CreateWorld2D** | (worldId, gx, gy) | — | Create 2D world |
+| **Step2D** | (worldId, dt [, velIters, posIters]) | — | Step simulation |
+| **DestroyWorld2D** | (worldId) | — | Destroy world |
+| **CreateBody2D** | (worldId, bodyId, type, shape, x, y, density, …) | bodyId | Create body (type 0/1/2, shape 0=box 1=circle) |
+| **DestroyBody2D** | (worldId, bodyId) | — | Destroy body |
+| **GetBodyCount2D** | (worldId) | int | Body count |
+| **GetBodyId2D** | (worldId, index) | bodyId | Body at index |
+| **CreateBodyAtScreen2D** | (worldId, screenX, screenY, scale [, ox, oy]) | — | Create dynamic box at screen pos |
+| **GetPositionX2D** | (worldId, bodyId) | float | Position X |
+| **GetPositionY2D** | (worldId, bodyId) | float | Position Y |
+| **GetAngle2D** | (worldId, bodyId) | float | Body angle (rad) |
+| **SetVelocity2D** | (worldId, bodyId, vx, vy) | — | Set linear velocity |
+| **SetTransform2D** | (worldId, bodyId, x, y, angle) | — | Set position and angle |
+| **ApplyForce2D** | (worldId, bodyId, fx, fy) | — | Apply force |
 | **CreateWorld2D** | (worldName$, gravityX, gravityY) | — | Create 2D world |
 | **Physics2DCreateWorld** | (gravityX, gravityY) | — | Create world named "default" |
 | **DestroyWorld2D** | (worldId) | — | Destroy world |
@@ -910,48 +909,32 @@ Other: SetSensor2D, ApplyTorque2D, SetAngularVelocity2D, GetAngularVelocity2D, S
 
 ## 15. Bullet (3D physics) – `bullet.go`
 
-Use **BULLET.*** prefix or legacy flat names.
+Use flat names only (no namespace). Legacy `BULLET.*` in source is rewritten at compile time. **3D constraint joints** (CreateHingeJoint3D, etc.) are not implemented in the pure-Go engine.
 
 | Command | Arguments | Returns | Description |
 |---------|-----------|---------|-------------|
-| **BULLET.CreateWorld** | () | worldId | Create 3D world |
-| **BULLET.SetGravity** | (worldId, x, y, z) | — | Set gravity |
-| **BULLET.Step** | (worldId, dt) | — | Step simulation |
-| **BULLET.DestroyWorld** | (worldId) | — | Destroy world |
-| **BULLET.CreateBox** | (worldId, x, y, z, w, h, d, mass) | bodyId | Create box body |
-| **BULLET.CreateSphere** | (worldId, x, y, z, radius, mass) | bodyId | Create sphere body |
-| **BULLET.DestroyBody** | (worldId, bodyId) | — | Destroy body |
-| **BULLET.SetPosition** | (worldId, bodyId, x, y, z) | — | Set position |
-| **BULLET.GetPositionX/Y/Z** | (worldId, bodyId) | float | Position |
-| **BULLET.SetVelocity** | (worldId, bodyId, vx, vy, vz) | — | Set velocity |
-| **BULLET.GetVelocityX/Y/Z** | (worldId, bodyId) | float | Velocity |
-| **BULLET.GetRotationX/Y/Z** | (worldId, bodyId) | float | Rotation (euler) |
-| **BULLET.SetRotation** | (worldId, bodyId, x, y, z) | — | Set rotation |
-| **BULLET.ApplyForce** | (worldId, bodyId, fx, fy, fz, x, y, z) | — | Apply force |
-| **BULLET.ApplyCentralForce** | (worldId, bodyId, fx, fy, fz) | — | Apply central force |
-| **BULLET.ApplyImpulse** | (worldId, bodyId, ix, iy, iz, x, y, z) | — | Apply impulse |
-| **BULLET.RayCast** | (worldId, ox, oy, oz, dx, dy, dz) | bool | Ray cast |
-| **BULLET.GetRayCastHitX/Y/Z** | () | float | Hit point |
-| **BULLET.GetRayCastHitBody** | () | bodyId | Hit body |
-| **CreateWorld3D** | () | worldId | Legacy: create world |
-| **DestroyWorld3D** | (worldId) | — | Legacy: destroy |
-| **Step3D** | (worldId, dt) | — | Legacy: step |
-| **CreateSphere3D** | (worldId, x, y, z, radius, mass) | bodyId | Create sphere |
-| **CreateBox3D** | (worldId, x, y, z, w, h, d, mass) | bodyId | Create box |
-| **GetPositionX3D/Y3D/Z3D** | (worldId, bodyId) | float | Position |
+| **CreateWorld3D** | (worldId, gx, gy, gz) | — | Create 3D world |
+| **SetWorldGravity3D** | (worldId, gx, gy, gz) | — | Set world gravity |
+| **Step3D** | (worldId, dt) | — | Step simulation |
+| **DestroyWorld3D** | (worldId) | — | Destroy world |
+| **CreateBox3D** | (worldId, bodyId, x, y, z, hx, hy, hz, mass) | — | Create box body |
+| **CreateSphere3D** | (worldId, bodyId, x, y, z, radius, mass) | — | Create sphere body |
+| **DestroyBody3D** | (worldId, bodyId) | — | Destroy body |
 | **SetPosition3D** | (worldId, bodyId, x, y, z) | — | Set position |
-| **GetYaw3D** | (worldId, bodyId) | float | Yaw |
-| **GetPitch3D** | (worldId, bodyId) | float | Pitch |
-| **GetRoll3D** | (worldId, bodyId) | float | Roll |
-| **SetRotation3D** | (worldId, bodyId, yaw, pitch, roll) | — | Set rotation |
+| **GetPositionX3D** / **GetPositionY3D** / **GetPositionZ3D** | (worldId, bodyId) | float | Position |
 | **SetVelocity3D** | (worldId, bodyId, vx, vy, vz) | — | Set velocity |
-| **ApplyForce3D** | (worldId, bodyId, fx, fy, fz, …) | — | Apply force |
-| **ApplyImpulse3D** | (…) | — | Apply impulse |
-| **RayCast3D** | (worldId, ox, oy, oz, dx, dy, dz) | bool | Ray cast |
-| **RayHitX3D/Y3D/Z3D** | () | float | Hit point |
-| **RayHitBody3D** | () | bodyId | Hit body |
-| **GetCollisionCount3D** | (worldId) | int | Collision count |
-| **GetCollisionOther3D** | (index) | bodyId | Other body |
+| **GetVelocityX3D** / **GetVelocityY3D** / **GetVelocityZ3D** | (worldId, bodyId) | float | Velocity |
+| **GetYaw3D** / **GetPitch3D** / **GetRoll3D** | (worldId, bodyId) | float | Rotation (euler) |
+| **SetRotation3D** | (worldId, bodyId, rx, ry, rz) | — | Set rotation |
+| **ApplyForce3D** | (worldId, bodyId, fx, fy, fz) | — | Apply force |
+| **ApplyImpulse3D** | (worldId, bodyId, ix, iy, iz) | — | Apply impulse |
+| **RayCastFromDir3D** | (worldId, sx, sy, sz, dx, dy, dz, maxDist) | 1=hit 0=miss | Ray cast (dir + maxDist) |
+| **RayCast3D** | (worldId, fromX, fromY, fromZ, toX, toY, toZ) | 1=hit 0=miss | Ray cast (from–to) |
+| **RayHitX3D** / **RayHitY3D** / **RayHitZ3D** | () | float | Last hit point |
+| **RayHitBody3D** | () | bodyId | Last hit body |
+| **RayHitNormalX3D** / **Y** / **Z** | () | float | Last hit normal |
+| **GetCollisionCount3D** | (worldId, bodyId) | int | Collision count |
+| **GetCollisionOther3D** | (worldId, bodyId, index) | bodyId | Other body |
 
 Other legacy: CreateCapsule3D, CreateStaticMesh3D, CreateCylinder3D, CreateCone3D, CreateHeightmap3D, CreateCompound3D, AddShapeToCompound3D, SetScale3D, GetVelocityX3D/Y3D/Z3D, SetAngularVelocity3D, GetAngularVelocityX3D/Y3D/Z3D, ApplyTorque3D, ApplyTorqueImpulse3D, SetMass3D. **Body properties (implemented):** SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, SetGravity3D (per-body gravity scale), SetLinearFactor3D, SetAngularFactor3D, SetCCD3D (stored). **3D joints (stubs):** CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, CreatePointToPointJoint3D, CreateFixedJoint3D, SetJointLimits3D, SetJointMotor3D — not implemented in the pure-Go engine; use a full Bullet CGO build for constraint joints.
 

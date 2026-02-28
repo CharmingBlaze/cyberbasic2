@@ -243,7 +243,9 @@ func (c *Compiler) compileIdentifier(ident *parser.Identifier, chunk *vm.Chunk) 
 	nameLower := strings.ToLower(ident.Name)
 	if strings.HasPrefix(nameLower, "rl.") || strings.HasPrefix(nameLower, "box2d.") || strings.HasPrefix(nameLower, "bullet.") || strings.HasPrefix(nameLower, "game.") {
 		nameConst := nameLower
-		if strings.HasPrefix(nameConst, "rl.") {
+		if flat := PhysicsNamespaceToFlat(nameConst); flat != "" {
+			nameConst = flat
+		} else if strings.HasPrefix(nameConst, "rl.") {
 			nameConst = nameConst[3:]
 		} else if strings.HasPrefix(nameConst, "box2d.") {
 			nameConst = nameConst[6:]

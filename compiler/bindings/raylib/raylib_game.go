@@ -63,6 +63,7 @@ func registerGame(v *vm.VM) {
 		orbitStateMu.Lock()
 		orbitTargetX, orbitTargetY, orbitTargetZ = tx, ty, tz
 		orbitAngle, orbitPitch, orbitDistance = angle, pitch, dist
+		orbitInitialized = true
 		orbitStateMu.Unlock()
 		return nil, nil
 	})
@@ -92,6 +93,7 @@ func registerGame(v *vm.VM) {
 		orbitStateMu.Lock()
 		orbitTargetX, orbitTargetY, orbitTargetZ = tx, ty, tz
 		orbitAngle, orbitPitch, orbitDistance = angle, pitch, dist
+		orbitInitialized = true
 		orbitStateMu.Unlock()
 		return nil, nil
 	})
@@ -192,6 +194,64 @@ func registerGame(v *vm.VM) {
 		camera3D.Position = rl.Vector3{X: ex, Y: ey, Z: ez}
 		camera3D.Target = rl.Vector3{X: tx, Y: ty, Z: tz}
 		camera3D.Up = rl.Vector3{X: 0, Y: 1, Z: 0}
+		return nil, nil
+	})
+	// OrbitCamera(targetX, targetY, targetZ): orbit when right-mouse is held (drag = rotate), wheel = zoom anytime. Left click stays free for dropping etc.
+	v.RegisterForeign("OrbitCamera", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("OrbitCamera requires (targetX, targetY, targetZ)")
+		}
+		tx := toFloat32(args[0])
+		ty := toFloat32(args[1])
+		tz := toFloat32(args[2])
+		rightDown := rl.IsMouseButtonDown(rl.MouseButtonRight)
+		dx := float32(rl.GetMouseDelta().X)
+		dy := float32(rl.GetMouseDelta().Y)
+		wheel := float32(rl.GetMouseWheelMove())
+		const sens = float32(0.003)
+		const zoomMul = float32(1.2)
+		const pitchMax = float32(1.4)
+		const distMin, distMax = float32(4), float32(35)
+		orbitStateMu.Lock()
+		orbitTargetX, orbitTargetY, orbitTargetZ = tx, ty, tz
+		if !orbitInitialized {
+			orbitAngle = 0
+			orbitPitch = 0.25
+			orbitDistance = 14
+			orbitInitialized = true
+		}
+		if rightDown {
+			orbitAngle -= dx * sens
+			orbitPitch += dy * sens
+			if orbitPitch > pitchMax {
+				orbitPitch = pitchMax
+			}
+			if orbitPitch < -pitchMax {
+				orbitPitch = -pitchMax
+			}
+		}
+		orbitDistance -= wheel * zoomMul
+		if orbitDistance < distMin {
+			orbitDistance = distMin
+		}
+		if orbitDistance > distMax {
+			orbitDistance = distMax
+		}
+		tx, ty, tz = orbitTargetX, orbitTargetY, orbitTargetZ
+		angle, pitch, dist := orbitAngle, orbitPitch, orbitDistance
+		orbitStateMu.Unlock()
+		cp := float32(math.Cos(float64(pitch)))
+		sp := float32(math.Sin(float64(pitch)))
+		ca := float32(math.Cos(float64(angle)))
+		sa := float32(math.Sin(float64(angle)))
+		ex := tx + dist*cp*sa
+		ey := ty + dist*sp
+		ez := tz + dist*cp*ca
+		camera3D.Position = rl.Vector3{X: ex, Y: ey, Z: ez}
+		camera3D.Target = rl.Vector3{X: tx, Y: ty, Z: tz}
+		camera3D.Up = rl.Vector3{X: 0, Y: 1, Z: 0}
+		camera3D.Fovy = 60.0
+		camera3D.Projection = rl.CameraPerspective
 		return nil, nil
 	})
 	// MouseLook(): FPS-style camera; rotate view from mouse delta (uses camera position as eye, updates target)

@@ -5,7 +5,7 @@ Complete guide to 2D physics in CyberBasic using Box2D: worlds, bodies, shapes, 
 ## Table of Contents
 
 1. [Quick start](#quick-start)
-2. [BOX2D.* vs legacy names](#box2d-vs-legacy-names)
+2. [API style (flat names)](#api-style-flat-names)
 3. [Worlds and bodies](#worlds-and-bodies)
 4. [Body shapes](#body-shapes)
 5. [Joints](#joints)
@@ -48,14 +48,13 @@ DestroyWorld2D("w")
 CloseWindow()
 ```
 
-You can use **BOX2D.*** prefixed names instead: **BOX2D.CreateWorld**(worldId, gravityX, gravityY), **BOX2D.Step**(worldId, dt, velocityIters, positionIters), **BOX2D.GetPositionX**(worldId, bodyId), etc. See [API Reference](../API_REFERENCE.md) section 14 for full signatures.
+The API uses **flat names** only (no namespace). Legacy **BOX2D.*** in source is rewritten at compile time. See [API Reference](../API_REFERENCE.md) section 14 for full signatures.
 
 ---
 
-## BOX2D.* vs legacy names
+## API style (flat names)
 
-- **Prefixed (BOX2D.\*):** **BOX2D.CreateWorld**(worldId, gravityX, gravityY), **BOX2D.Step**(worldId, dt [, velIters, posIters]), **BOX2D.CreateBody**, **BOX2D.GetPositionX/Y**, **BOX2D.SetLinearVelocity**, **BOX2D.ApplyForce**, etc. Use when you want an explicit namespace.
-- **Legacy (flat):** **CreateWorld2D**(worldId, gravityX, gravityY), **Step2D**(worldId, dt), **CreateBox2D**, **CreateCircle2D**, **GetPositionX2D** / **GetPositionY2D**, **SetVelocity2D**, **ApplyForce2D**, **ApplyImpulse2D**, etc. Same behavior; no prefix.
+- **Flat names:** **CreateWorld2D**, **Step2D**, **CreateBody2D**, **CreateBox2D**, **GetPositionX2D** / **GetPositionY2D**, **SetVelocity2D**, **ApplyForce2D**, etc. Use these in all new code.
 
 All commands are **case-insensitive**. For the complete list see [API Reference](../API_REFERENCE.md) section 14.
 
@@ -63,9 +62,9 @@ All commands are **case-insensitive**. For the complete list see [API Reference]
 
 ## Worlds and bodies
 
-- **Create a world:** **CreateWorld2D**(worldId, gravityX, gravityY) or **BOX2D.CreateWorld**(worldId, gravityX, gravityY). Gravity is in m/s² (e.g. 0, -10 for downward).
-- **Step the simulation:** **Step2D**(worldId, dt) or **BOX2D.Step**(worldId, dt, velocityIters, positionIters). Call once per frame with delta time (e.g. GetFrameTime()). Clamp dt (e.g. max 0.05) for stability.
-- **Destroy:** **DestroyWorld2D**(worldId) / **BOX2D.DestroyWorld**(worldId). **DestroyBody** / **BOX2D.DestroyBody**(worldId, bodyId) to remove a body.
+- **Create a world:** **CreateWorld2D**(worldId, gravityX, gravityY). Gravity is in m/s² (e.g. 0, -10 for downward).
+- **Step the simulation:** **Step2D**(worldId, dt [, velocityIters, positionIters]). Call once per frame with delta time (e.g. GetFrameTime()). Clamp dt (e.g. max 0.05) for stability.
+- **Destroy:** **DestroyWorld2D**(worldId). **DestroyBody2D**(worldId, bodyId) to remove a body.
 - **Body IDs:** You pass a string bodyId when creating shapes (e.g. "player", "ground"); use the same id for GetPositionX2D, SetVelocity2D, etc.
 
 ---
@@ -111,7 +110,7 @@ See [API Reference](../API_REFERENCE.md) section 14 for full signatures.
 
 ## Collision
 
-After **Step2D** (or **BOX2D.Step**), you can query contacts:
+After **Step2D**, you can query contacts:
 
 - **GetCollisionCount2D**(worldId) — number of contact pairs this step.
 - **GetCollisionOther2D**(index) — the "other" body id in the pair (0-based index).
@@ -128,7 +127,7 @@ See [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md#collision-callbacks-2d).
 
 ## Hybrid loop (StepAllPhysics2D)
 
-When you define **update(dt)** and **draw()** and use a game loop (WHILE NOT WindowShouldClose()), the compiler injects an automatic pipeline. Part of that pipeline is **StepAllPhysics2D(dt)** — all registered Box2D worlds are stepped with the same dt. You do **not** need to call **Step2D** or **BOX2D.Step** per world yourself.
+When you define **update(dt)** and **draw()** and use a game loop (WHILE NOT WindowShouldClose()), the compiler injects an automatic pipeline. Part of that pipeline is **StepAllPhysics2D(dt)** — all registered Box2D worlds are stepped with the same dt. You do **not** need to call **Step2D** per world yourself.
 
 See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
 
@@ -148,14 +147,14 @@ See [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md#game-helpers).
 
 | Command | Arguments | Returns | Description |
 |---------|-----------|---------|-------------|
-| **BOX2D.CreateWorld** | (worldId, gravityX, gravityY) | — | Create world |
-| **BOX2D.Step** | (worldId, dt [, velIters, posIters]) | — | Step simulation |
-| **BOX2D.DestroyWorld** | (worldId) | — | Destroy world |
-| **BOX2D.CreateBody** | (worldId, bodyId, type, shape, x, y, …) | bodyId | Create body (see binding) |
-| **BOX2D.GetPositionX/Y** | (worldId, bodyId) | float | Position |
-| **BOX2D.GetAngle** | (worldId, bodyId) | float | Angle (radians) |
-| **BOX2D.SetLinearVelocity** | (worldId, bodyId, vx, vy) | — | Set velocity |
-| **BOX2D.ApplyForce** | (worldId, bodyId, fx, fy, x, y) | — | Apply force at point |
+| **CreateWorld2D** | (worldId, gravityX, gravityY) | — | Create world |
+| **Step2D** | (worldId, dt [, velIters, posIters]) | — | Step simulation |
+| **DestroyWorld2D** | (worldId) | — | Destroy world |
+| **CreateBody2D** | (worldId, bodyId, type, shape, x, y, density, …) | bodyId | Create body (see API Reference) |
+| **GetPositionX2D** / **GetPositionY2D** | (worldId, bodyId) | float | Position |
+| **GetAngle2D** | (worldId, bodyId) | float | Angle (radians) |
+| **SetVelocity2D** | (worldId, bodyId, vx, vy) | — | Set velocity |
+| **ApplyForce2D** | (worldId, bodyId, fx, fy) | — | Apply force at center |
 | **CreateWorld2D** | (worldId, gravityX, gravityY) | — | Legacy: create world |
 | **Step2D** | (worldId, dt) | — | Legacy: step |
 | **CreateBox2D** | (worldId, bodyId, x, y, w, h, mass, isDynamic) | — | Box shape |

@@ -45,7 +45,9 @@ func (c *Compiler) compileCall(call *parser.Call, chunk *vm.Chunk) error {
 			chunk.Write(byte(len(call.Arguments)))
 			return nil
 		}
-		if strings.HasPrefix(nameConst, "rl.") {
+		if flat := PhysicsNamespaceToFlat(nameConst); flat != "" {
+			nameConst = flat
+		} else if strings.HasPrefix(nameConst, "rl.") {
 			nameConst = nameConst[3:]
 		}
 		idx := chunk.WriteConstant(nameConst)

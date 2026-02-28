@@ -93,6 +93,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | Command | Description |
 |--------|-------------|
 | **CameraOrbit**(cx, cy, cz, angle, pitch, distance) | Orbit camera around target; updates internal state |
+| **OrbitCamera**(targetX, targetY, targetZ) | Orbit around target, mouse = rotate, wheel = zoom; one call per frame (no manual state) |
 | **CameraZoom**(amount) | Adjust orbit distance (e.g. GetMouseWheelMove()) |
 | **CameraRotate**(dx, dy) | Rotate from mouse delta (2 args) |
 | **SetCameraPosition**(x, y, z) | Set global camera position (3 args) |
@@ -521,7 +522,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **DestroyJoint2D**(worldId, jointId) | Destroy joint |
 | **SetCollisionHandler**(bodyId, subName) | When bodyId collides, call Sub subName(otherBodyId) |
 | **ProcessCollisions2D**(worldId) | Dispatch collision callbacks (call after Step2D) |
-| **BOX2D.CreateWorld** **BOX2D.Step** **BOX2D.CreateBody** etc. | Same API with BOX2D. prefix |
+*Use flat names above. Legacy `BOX2D.*` in source is rewritten at compile time.* |
 
 ### 3D physics (Bullet)
 
@@ -536,7 +537,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **SetBodyVelocity**(bodyId, vx, vy, vz) **GetBodyVelocity**(bodyId) | Linear velocity |
 | **CheckCollision3D**(bodyIdA, bodyIdB) | → true if AABBs overlap |
 | **SetFriction3D** **SetRestitution3D** **SetDamping3D** **SetKinematic3D** **SetGravity3D** **SetLinearFactor3D** **SetAngularFactor3D** **SetCCD3D** | Body properties (implemented) |
-| **BULLET.CreateWorld** **BULLET.Step** **BULLET.CreateBox** **BULLET.RayCast** etc. | Same API with BULLET. prefix. 3D constraint joints (CreateHingeJoint3D, etc.) are stubs in pure-Go engine. |
+*Use flat names (CreateWorld3D, Step3D, CreateBox3D, RayCastFromDir3D, etc.). Legacy `BULLET.*` is rewritten at compile time. 3D constraint joints (CreateHingeJoint3D, etc.) are not implemented in the pure-Go engine.* |
 
 ---
 
@@ -883,7 +884,7 @@ Load JSON: `{ "nodeId": { "text": "...", "next": "otherId", "choices": [{"text":
 
 ## Physics joints & ragdolls
 
-**2D joints:** Use Box2D commands (CreateRevoluteJoint2D, CreatePrismaticJoint2D, SetJointLimits2D, SetJointMotor2D, etc.); see [2D physics (Box2D)](#2d-physics-box2d). **3D joints:** Stubs; use **BULLET.*** for 3D physics; constraint joints (CreateHingeJoint3D, etc.) are not implemented in the pure-Go engine.
+**2D joints:** Use Box2D commands (CreateRevoluteJoint2D, CreatePrismaticJoint2D, SetJointLimits2D, SetJointMotor2D, etc.); see [2D physics (Box2D)](#2d-physics-box2d). **3D joints:** Stubs; use flat 3D commands (CreateWorld3D, Step3D, etc.); constraint joints (CreateHingeJoint3D, etc.) are not implemented in the pure-Go engine.
 
 | Command | Description |
 |--------|-------------|

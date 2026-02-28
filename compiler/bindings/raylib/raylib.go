@@ -111,14 +111,15 @@ var (
 	lastTextSplit   []string
 	lastTextSplitMu sync.Mutex
 
-	// Orbit camera state (used by CameraZoom, CameraRotate(dx,dy), UpdateCamera, MouseOrbitCamera)
-	orbitTargetX   float32
-	orbitTargetY   float32
-	orbitTargetZ   float32
-	orbitAngle     float32
-	orbitPitch     float32
-	orbitDistance  float32
-	orbitStateMu   sync.Mutex
+	// Orbit camera state (used by CameraZoom, CameraRotate(dx,dy), UpdateCamera, MouseOrbitCamera, OrbitCamera)
+	orbitTargetX     float32
+	orbitTargetY     float32
+	orbitTargetZ     float32
+	orbitAngle       float32
+	orbitPitch       float32
+	orbitDistance    float32
+	orbitInitialized bool
+	orbitStateMu     sync.Mutex
 
 	// FPS MouseLook state (yaw, pitch in radians)
 	mouseLookYaw   float32

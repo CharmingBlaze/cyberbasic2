@@ -137,376 +137,10 @@ func bodyIdFromBody(worldId string, body *box2d.B2Body) string {
 	return ""
 }
 
-// RegisterBox2D registers Box2D 2D physics functions with the VM (BOX2D.*).
+// RegisterBox2D registers Box2D 2D physics with the VM as flat names only (CreateWorld2D, Step2D, etc.).
+// The compiler rewrites BOX2D.* calls to these flat names for backward compatibility.
 func RegisterBox2D(v *vm.VM) {
-	// World
-	v.RegisterForeign("BOX2D.CreateWorld", func(args []interface{}) (interface{}, error) {
-		if len(args) < 3 {
-			return nil, fmt.Errorf("CreateWorld requires (worldId, gravityX, gravityY)")
-		}
-		worldId := toString(args[0])
-		gx, gy := toFloat64(args[1]), toFloat64(args[2])
-		gravity := box2d.MakeB2Vec2(gx, gy)
-		w := new(box2d.B2World)
-		*w = box2d.MakeB2World(gravity)
-		w.SetContactListener(contactListener{})
-		worldMu.Lock()
-		worlds[worldId] = w
-		worldIdByPtr[w] = worldId
-		worldMu.Unlock()
-		return nil, nil
-	})
-	v.RegisterForeign("BOX2D.Step", func(args []interface{}) (interface{}, error) {
-		if len(args) < 4 {
-			return nil, fmt.Errorf("Step requires (worldId, timeStep, velocityIters, positionIters)")
-		}
-		worldId := toString(args[0])
-		dt := toFloat64(args[1])
-		velIters := toInt(args[2])
-		posIters := toInt(args[3])
-		if velIters <= 0 {
-			velIters = 8
-		}
-		if posIters <= 0 {
-			posIters = 3
-		}
-		worldMu.RLock()
-		w := worlds[worldId]
-		worldMu.RUnlock()
-		if w == nil {
-			return nil, fmt.Errorf("world not found: %s", worldId)
-		}
-		collisionBuffer2DMu.Lock()
-		for k := range collisionBuffer2D {
-			if strings.HasPrefix(k, worldId+"\x00") {
-				delete(collisionBuffer2D, k)
-			}
-		}
-		collisionBuffer2DMu.Unlock()
-		w.Step(dt, velIters, posIters)
-		return nil, nil
-	})
-	v.RegisterForeign("BOX2D.DestroyWorld", func(args []interface{}) (interface{}, error) {
-		if len(args) < 1 {
-			return nil, fmt.Errorf("DestroyWorld requires (worldId)")
-		}
-		worldId := toString(args[0])
-		worldMu.Lock()
-		w := worlds[worldId]
-		if w != nil {
-			delete(worldIdByPtr, w)
-		}
-		delete(worlds, worldId)
-		worldMu.Unlock()
-		jointsMu.Lock()
-		prefix := worldId + "\x00"
-		for k, j := range joints {
-			if len(k) > len(prefix) && k[:len(prefix)] == prefix {
-				if w != nil {
-					w.DestroyJoint(j)
-				}
-				delete(joints, k)
-			}
-		}
-		jointsMu.Unlock()
-		bodyOrderMu.Lock()
-		delete(bodyOrder, worldId)
-		bodyOrderMu.Unlock()
-		bodiesMu.Lock()
-		for k := range bodies {
-			if len(k) > len(worldId) && k[:len(worldId)] == worldId && k[len(worldId)] == '\x00' {
-				delete(bodies, k)
-			}
-		}
-		bodiesMu.Unlock()
-		return nil, nil
-	})
-
-	// Body: type 0=static, 1=kinematic, 2=dynamic; shape 0=box, 1=circle
-	v.RegisterForeign("BOX2D.CreateBody", func(args []interface{}) (interface{}, error) {
-		if len(args) < 7 {
-			return nil, fmt.Errorf("CreateBody requires (worldId, bodyId, type, shape, x, y, ...)")
-		}
-		worldId := toString(args[0])
-		bodyId := toString(args[1])
-		bodyType := toInt(args[2]) // 0 static, 1 kinematic, 2 dynamic
-		shapeKind := toInt(args[3])
-		x, y := toFloat64(args[4]), toFloat64(args[5])
-		density := toFloat64(args[6])
-		if density <= 0 {
-			density = 1
-		}
-		worldMu.RLock()
-		w := worlds[worldId]
-		worldMu.RUnlock()
-		if w == nil {
-			return nil, fmt.Errorf("world not found: %s", worldId)
-		}
-		def := box2d.NewB2BodyDef()
-		def.Position = box2d.MakeB2Vec2(x, y)
-		switch bodyType {
-		case 0:
-			def.Type = box2d.B2BodyType.B2_staticBody
-		case 1:
-			def.Type = box2d.B2BodyType.B2_kinematicBody
-		default:
-			def.Type = box2d.B2BodyType.B2_dynamicBody
-		}
-		body := w.CreateBody(def)
-		if body == nil {
-			return nil, fmt.Errorf("CreateBody failed")
-		}
-		// Static bodies must use density 0 so mass is zero
-		fixtureDensity := density
-		if bodyType == 0 {
-			fixtureDensity = 0
-		}
-		var shape box2d.B2ShapeInterface
-		if shapeKind == 1 {
-			// circle: args can be radius as 7th or we use 1
-			radius := 1.0
-			if len(args) >= 8 {
-				radius = toFloat64(args[7])
-			}
-			circle := box2d.NewB2CircleShape()
-			circle.SetRadius(radius)
-			shape = circle
-		} else {
-			// box: half-width, half-height
-			hx, hy := 0.5, 0.5
-			if len(args) >= 9 {
-				hx = toFloat64(args[7])
-				hy = toFloat64(args[8])
-			}
-			poly := box2d.NewB2PolygonShape()
-			poly.SetAsBox(hx, hy)
-			shape = poly
-		}
-		body.CreateFixture(shape, fixtureDensity)
-		bodiesMu.Lock()
-		bodies[bodyKey(worldId, bodyId)] = body
-		bodiesMu.Unlock()
-		bodyOrderMu.Lock()
-		bodyOrder[worldId] = append(bodyOrder[worldId], bodyId)
-		bodyOrderMu.Unlock()
-		return bodyId, nil
-	})
-	v.RegisterForeign("BOX2D.DestroyBody", func(args []interface{}) (interface{}, error) {
-		if len(args) < 2 {
-			return nil, fmt.Errorf("DestroyBody requires (worldId, bodyId)")
-		}
-		worldId := toString(args[0])
-		bodyId := toString(args[1])
-		worldMu.RLock()
-		w := worlds[worldId]
-		worldMu.RUnlock()
-		if w == nil {
-			return nil, nil
-		}
-		bodiesMu.Lock()
-		b := bodies[bodyKey(worldId, bodyId)]
-		delete(bodies, bodyKey(worldId, bodyId))
-		bodiesMu.Unlock()
-		bodyOrderMu.Lock()
-		for i, id := range bodyOrder[worldId] {
-			if id == bodyId {
-				bodyOrder[worldId] = append(bodyOrder[worldId][:i], bodyOrder[worldId][i+1:]...)
-				break
-			}
-		}
-		bodyOrderMu.Unlock()
-		if b != nil {
-			w.DestroyBody(b)
-		}
-		return nil, nil
-	})
-
-	v.RegisterForeign("BOX2D.GetBodyCount", func(args []interface{}) (interface{}, error) {
-		if len(args) < 1 {
-			return nil, fmt.Errorf("GetBodyCount requires (worldId)")
-		}
-		worldId := toString(args[0])
-		bodyOrderMu.RLock()
-		n := len(bodyOrder[worldId])
-		bodyOrderMu.RUnlock()
-		return n, nil
-	})
-	v.RegisterForeign("BOX2D.GetBodyId", func(args []interface{}) (interface{}, error) {
-		if len(args) < 2 {
-			return nil, fmt.Errorf("GetBodyId requires (worldId, index)")
-		}
-		worldId := toString(args[0])
-		idx := toInt(args[1])
-		bodyOrderMu.RLock()
-		order := bodyOrder[worldId]
-		bodyOrderMu.RUnlock()
-		if idx < 0 || idx >= len(order) {
-			return "", nil
-		}
-		return order[idx], nil
-	})
-
-	// CreateBodyAtScreen: create dynamic box at screen (pixel) position; body ID is auto-generated
-	v.RegisterForeign("BOX2D.CreateBodyAtScreen", func(args []interface{}) (interface{}, error) {
-		if len(args) < 4 {
-			return nil, fmt.Errorf("CreateBodyAtScreen requires (worldId, screenX, screenY, scale)")
-		}
-		worldId := toString(args[0])
-		screenX := toFloat64(args[1])
-		screenY := toFloat64(args[2])
-		scale := toFloat64(args[3])
-		if scale <= 0 {
-			scale = 50
-		}
-		ox, oy := 400.0, 350.0
-		if len(args) >= 6 {
-			ox, oy = toFloat64(args[4]), toFloat64(args[5])
-		}
-		wx := (screenX - ox) / scale
-		wy := (oy - screenY) / scale
-		bodyOrderMu.Lock()
-		n := len(bodyOrder[worldId])
-		bodyOrderMu.Unlock()
-		bodyId := fmt.Sprintf("box%d", n)
-		worldMu.RLock()
-		w := worlds[worldId]
-		worldMu.RUnlock()
-		if w == nil {
-			return nil, fmt.Errorf("world not found: %s", worldId)
-		}
-		def := box2d.NewB2BodyDef()
-		def.Position = box2d.MakeB2Vec2(wx, wy)
-		def.Type = box2d.B2BodyType.B2_dynamicBody
-		body := w.CreateBody(def)
-		if body == nil {
-			return nil, fmt.Errorf("CreateBody failed")
-		}
-		poly := box2d.NewB2PolygonShape()
-		poly.SetAsBox(0.5, 0.5)
-		body.CreateFixture(poly, 1)
-		bodiesMu.Lock()
-		bodies[bodyKey(worldId, bodyId)] = body
-		bodiesMu.Unlock()
-		bodyOrderMu.Lock()
-		bodyOrder[worldId] = append(bodyOrder[worldId], bodyId)
-		bodyOrderMu.Unlock()
-		return nil, nil
-	})
-
-	// Position / velocity
-	v.RegisterForeign("BOX2D.GetPosition", func(args []interface{}) (interface{}, error) {
-		if len(args) < 2 {
-			return nil, fmt.Errorf("GetPosition requires (worldId, bodyId)")
-		}
-		bodiesMu.RLock()
-		b := bodies[bodyKey(toString(args[0]), toString(args[1]))]
-		bodiesMu.RUnlock()
-		if b == nil {
-			return nil, fmt.Errorf("body not found")
-		}
-		p := b.GetPosition()
-		return []interface{}{p.X, p.Y}, nil
-	})
-	v.RegisterForeign("BOX2D.GetPositionX", func(args []interface{}) (interface{}, error) {
-		if len(args) < 2 {
-			return nil, fmt.Errorf("GetPositionX requires (worldId, bodyId)")
-		}
-		bodiesMu.RLock()
-		b := bodies[bodyKey(toString(args[0]), toString(args[1]))]
-		bodiesMu.RUnlock()
-		if b == nil {
-			return nil, fmt.Errorf("body not found")
-		}
-		return b.GetPosition().X, nil
-	})
-	v.RegisterForeign("BOX2D.GetPositionY", func(args []interface{}) (interface{}, error) {
-		if len(args) < 2 {
-			return nil, fmt.Errorf("GetPositionY requires (worldId, bodyId)")
-		}
-		bodiesMu.RLock()
-		b := bodies[bodyKey(toString(args[0]), toString(args[1]))]
-		bodiesMu.RUnlock()
-		if b == nil {
-			return nil, fmt.Errorf("body not found")
-		}
-		return b.GetPosition().Y, nil
-	})
-	v.RegisterForeign("BOX2D.GetAngle", func(args []interface{}) (interface{}, error) {
-		if len(args) < 2 {
-			return nil, fmt.Errorf("GetAngle requires (worldId, bodyId)")
-		}
-		bodiesMu.RLock()
-		b := bodies[bodyKey(toString(args[0]), toString(args[1]))]
-		bodiesMu.RUnlock()
-		if b == nil {
-			return nil, fmt.Errorf("body not found")
-		}
-		return b.GetAngle(), nil
-	})
-	v.RegisterForeign("BOX2D.SetLinearVelocity", func(args []interface{}) (interface{}, error) {
-		if len(args) < 4 {
-			return nil, fmt.Errorf("SetLinearVelocity requires (worldId, bodyId, vx, vy)")
-		}
-		bodiesMu.RLock()
-		b := bodies[bodyKey(toString(args[0]), toString(args[1]))]
-		bodiesMu.RUnlock()
-		if b == nil {
-			return nil, fmt.Errorf("body not found")
-		}
-		vx, vy := toFloat64(args[2]), toFloat64(args[3])
-		b.SetLinearVelocity(box2d.MakeB2Vec2(vx, vy))
-		return nil, nil
-	})
-	v.RegisterForeign("BOX2D.GetLinearVelocity", func(args []interface{}) (interface{}, error) {
-		if len(args) < 2 {
-			return nil, fmt.Errorf("GetLinearVelocity requires (worldId, bodyId)")
-		}
-		bodiesMu.RLock()
-		b := bodies[bodyKey(toString(args[0]), toString(args[1]))]
-		bodiesMu.RUnlock()
-		if b == nil {
-			return nil, fmt.Errorf("body not found")
-		}
-		v := b.GetLinearVelocity()
-		return []interface{}{v.X, v.Y}, nil
-	})
-	v.RegisterForeign("BOX2D.SetTransform", func(args []interface{}) (interface{}, error) {
-		if len(args) < 4 {
-			return nil, fmt.Errorf("SetTransform requires (worldId, bodyId, x, y, angle)")
-		}
-		bodiesMu.RLock()
-		b := bodies[bodyKey(toString(args[0]), toString(args[1]))]
-		bodiesMu.RUnlock()
-		if b == nil {
-			return nil, fmt.Errorf("body not found")
-		}
-		x, y := toFloat64(args[2]), toFloat64(args[3])
-		angle := 0.0
-		if len(args) >= 5 {
-			angle = toFloat64(args[4])
-		}
-		b.SetTransform(box2d.MakeB2Vec2(x, y), angle)
-		return nil, nil
-	})
-	v.RegisterForeign("BOX2D.ApplyForce", func(args []interface{}) (interface{}, error) {
-		if len(args) < 4 {
-			return nil, fmt.Errorf("ApplyForce requires (worldId, bodyId, fx, fy)")
-		}
-		bodiesMu.RLock()
-		b := bodies[bodyKey(toString(args[0]), toString(args[1]))]
-		bodiesMu.RUnlock()
-		if b == nil {
-			return nil, fmt.Errorf("body not found")
-		}
-		fx, fy := toFloat64(args[2]), toFloat64(args[3])
-		b.ApplyForceToCenter(box2d.MakeB2Vec2(fx, fy), true)
-		return nil, nil
-	})
-
-	// --- Flat 2D commands (no namespace, case-insensitive via VM) ---
 	registerFlat2D(v)
-
-	// Entity property getters: when an entity has "body" and "world" (2D), entity.x / entity.y / entity.angle come from physics.
 	registerEntityGetters2D(v)
 }
 
@@ -711,6 +345,171 @@ func registerFlat2D(v *vm.VM) {
 				w.Step(dt, 8, 3)
 			}
 		}
+		return nil, nil
+	})
+
+	// CreateBody2D(worldId, bodyId, bodyType, shapeKind, x, y, density, ...): bodyType 0=static, 1=kinematic, 2=dynamic; shapeKind 0=box (optional hx, hy), 1=circle (optional radius).
+	v.RegisterForeign("CreateBody2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 7 {
+			return nil, fmt.Errorf("CreateBody2D requires (worldId, bodyId, bodyType, shapeKind, x, y, density, ...)")
+		}
+		worldId := toString(args[0])
+		bodyId := toString(args[1])
+		bodyType := toInt(args[2])
+		shapeKind := toInt(args[3])
+		x, y := toFloat64(args[4]), toFloat64(args[5])
+		density := toFloat64(args[6])
+		if density <= 0 {
+			density = 1
+		}
+		worldMu.RLock()
+		w := worlds[worldId]
+		worldMu.RUnlock()
+		if w == nil {
+			return nil, fmt.Errorf("world not found: %s", worldId)
+		}
+		def := box2d.NewB2BodyDef()
+		def.Position = box2d.MakeB2Vec2(x, y)
+		switch bodyType {
+		case 0:
+			def.Type = box2d.B2BodyType.B2_staticBody
+		case 1:
+			def.Type = box2d.B2BodyType.B2_kinematicBody
+		default:
+			def.Type = box2d.B2BodyType.B2_dynamicBody
+		}
+		body := w.CreateBody(def)
+		if body == nil {
+			return nil, fmt.Errorf("CreateBody failed")
+		}
+		fixtureDensity := density
+		if bodyType == 0 {
+			fixtureDensity = 0
+		}
+		var shape box2d.B2ShapeInterface
+		if shapeKind == 1 {
+			radius := 1.0
+			if len(args) >= 8 {
+				radius = toFloat64(args[7])
+			}
+			circle := box2d.NewB2CircleShape()
+			circle.SetRadius(radius)
+			shape = circle
+		} else {
+			hx, hy := 0.5, 0.5
+			if len(args) >= 9 {
+				hx = toFloat64(args[7])
+				hy = toFloat64(args[8])
+			}
+			poly := box2d.NewB2PolygonShape()
+			poly.SetAsBox(hx, hy)
+			shape = poly
+		}
+		body.CreateFixture(shape, fixtureDensity)
+		bodiesMu.Lock()
+		bodies[bodyKey(worldId, bodyId)] = body
+		bodiesMu.Unlock()
+		bodyOrderMu.Lock()
+		bodyOrder[worldId] = append(bodyOrder[worldId], bodyId)
+		bodyOrderMu.Unlock()
+		return bodyId, nil
+	})
+	v.RegisterForeign("DestroyBody2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("DestroyBody2D requires (worldId, bodyId)")
+		}
+		worldId := toString(args[0])
+		bodyId := toString(args[1])
+		worldMu.RLock()
+		w := worlds[worldId]
+		worldMu.RUnlock()
+		if w == nil {
+			return nil, nil
+		}
+		bodiesMu.Lock()
+		b := bodies[bodyKey(worldId, bodyId)]
+		delete(bodies, bodyKey(worldId, bodyId))
+		bodiesMu.Unlock()
+		bodyOrderMu.Lock()
+		for i, id := range bodyOrder[worldId] {
+			if id == bodyId {
+				bodyOrder[worldId] = append(bodyOrder[worldId][:i], bodyOrder[worldId][i+1:]...)
+				break
+			}
+		}
+		bodyOrderMu.Unlock()
+		if b != nil {
+			w.DestroyBody(b)
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("GetBodyCount2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("GetBodyCount2D requires (worldId)")
+		}
+		worldId := toString(args[0])
+		bodyOrderMu.RLock()
+		n := len(bodyOrder[worldId])
+		bodyOrderMu.RUnlock()
+		return n, nil
+	})
+	v.RegisterForeign("GetBodyId2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("GetBodyId2D requires (worldId, index)")
+		}
+		worldId := toString(args[0])
+		idx := toInt(args[1])
+		bodyOrderMu.RLock()
+		order := bodyOrder[worldId]
+		bodyOrderMu.RUnlock()
+		if idx < 0 || idx >= len(order) {
+			return "", nil
+		}
+		return order[idx], nil
+	})
+	v.RegisterForeign("CreateBodyAtScreen2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("CreateBodyAtScreen2D requires (worldId, screenX, screenY, scale)")
+		}
+		worldId := toString(args[0])
+		screenX := toFloat64(args[1])
+		screenY := toFloat64(args[2])
+		scale := toFloat64(args[3])
+		if scale <= 0 {
+			scale = 50
+		}
+		ox, oy := 400.0, 350.0
+		if len(args) >= 6 {
+			ox, oy = toFloat64(args[4]), toFloat64(args[5])
+		}
+		wx := (screenX - ox) / scale
+		wy := (oy - screenY) / scale
+		bodyOrderMu.Lock()
+		n := len(bodyOrder[worldId])
+		bodyOrderMu.Unlock()
+		bodyId := fmt.Sprintf("box%d", n)
+		worldMu.RLock()
+		w := worlds[worldId]
+		worldMu.RUnlock()
+		if w == nil {
+			return nil, fmt.Errorf("world not found: %s", worldId)
+		}
+		def := box2d.NewB2BodyDef()
+		def.Position = box2d.MakeB2Vec2(wx, wy)
+		def.Type = box2d.B2BodyType.B2_dynamicBody
+		body := w.CreateBody(def)
+		if body == nil {
+			return nil, fmt.Errorf("CreateBody failed")
+		}
+		poly := box2d.NewB2PolygonShape()
+		poly.SetAsBox(0.5, 0.5)
+		body.CreateFixture(poly, 1)
+		bodiesMu.Lock()
+		bodies[bodyKey(worldId, bodyId)] = body
+		bodiesMu.Unlock()
+		bodyOrderMu.Lock()
+		bodyOrder[worldId] = append(bodyOrder[worldId], bodyId)
+		bodyOrderMu.Unlock()
 		return nil, nil
 	})
 
@@ -1858,4 +1657,85 @@ func GetCollisionOtherForBody(worldId, bodyId string, index int) string {
 		return ""
 	}
 	return hits[index].otherId
+}
+
+// Flat-name exports for --gen-go (no namespace in generated code).
+func CreateWorld2D(worldId string, gx, gy float64) { CreateWorld(worldId, gx, gy) }
+func DestroyWorld2D(worldId string)               { DestroyWorld(worldId) }
+func Step2D(worldId string, dt float64, velIters, posIters int) {
+	Step(worldId, dt, velIters, posIters)
+}
+func CreateBody2D(worldId, bodyId string, bodyType, shapeKind int, x, y, density float64, extra ...float64) {
+	CreateBody(worldId, bodyId, bodyType, shapeKind, x, y, density, extra...)
+}
+func DestroyBody2D(worldId, bodyId string) { DestroyBody(worldId, bodyId) }
+func GetBodyCount2D(worldId string) int {
+	bodyOrderMu.RLock()
+	n := len(bodyOrder[worldId])
+	bodyOrderMu.RUnlock()
+	return n
+}
+func GetBodyId2D(worldId string, index int) string {
+	bodyOrderMu.RLock()
+	order := bodyOrder[worldId]
+	bodyOrderMu.RUnlock()
+	if index < 0 || index >= len(order) {
+		return ""
+	}
+	return order[index]
+}
+func GetPositionX2D(worldId, bodyId string) float64 { return GetPositionX(worldId, bodyId) }
+func GetPositionY2D(worldId, bodyId string) float64 { return GetPositionY(worldId, bodyId) }
+func GetAngle2D(worldId, bodyId string) float64    { return GetAngle(worldId, bodyId) }
+func SetVelocity2D(worldId, bodyId string, vx, vy float64) {
+	SetLinearVelocity(worldId, bodyId, vx, vy)
+}
+func SetTransform2D(worldId, bodyId string, x, y, angle float64) {
+	SetTransform(worldId, bodyId, x, y, angle)
+}
+func ApplyForce2D(worldId, bodyId string, fx, fy float64) {
+	bodiesMu.RLock()
+	b := bodies[bodyKey(worldId, bodyId)]
+	bodiesMu.RUnlock()
+	if b != nil {
+		b.ApplyForceToCenter(box2d.MakeB2Vec2(fx, fy), true)
+	}
+}
+
+// CreateBodyAtScreen2D creates a dynamic box at screen (pixel) position; body ID is auto-generated.
+func CreateBodyAtScreen2D(worldId string, screenX, screenY, scale, originX, originY float64) {
+	if scale <= 0 {
+		scale = 50
+	}
+	if originX == 0 && originY == 0 {
+		originX, originY = 400, 350
+	}
+	wx := (screenX - originX) / scale
+	wy := (originY - screenY) / scale
+	bodyOrderMu.Lock()
+	n := len(bodyOrder[worldId])
+	bodyOrderMu.Unlock()
+	bodyId := fmt.Sprintf("box%d", n)
+	worldMu.RLock()
+	w := worlds[worldId]
+	worldMu.RUnlock()
+	if w == nil {
+		return
+	}
+	def := box2d.NewB2BodyDef()
+	def.Position = box2d.MakeB2Vec2(wx, wy)
+	def.Type = box2d.B2BodyType.B2_dynamicBody
+	body := w.CreateBody(def)
+	if body == nil {
+		return
+	}
+	poly := box2d.NewB2PolygonShape()
+	poly.SetAsBox(0.5, 0.5)
+	body.CreateFixture(poly, 1)
+	bodiesMu.Lock()
+	bodies[bodyKey(worldId, bodyId)] = body
+	bodiesMu.Unlock()
+	bodyOrderMu.Lock()
+	bodyOrder[worldId] = append(bodyOrder[worldId], bodyId)
+	bodyOrderMu.Unlock()
 }

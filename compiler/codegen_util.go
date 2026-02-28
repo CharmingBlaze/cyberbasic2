@@ -3,7 +3,69 @@ package compiler
 import (
 	"cyberbasic/compiler/parser"
 	"fmt"
+	"strings"
 )
+
+// physicsNamespaceToFlat maps BOX2D.* and BULLET.* dotted names (lowercase) to flat VM names.
+// Returns the flat name if mapped, otherwise empty string. Used so scripts can use either style;
+// only flat names are registered in the VM after namespace removal.
+func PhysicsNamespaceToFlat(name string) string {
+	name = strings.ToLower(name)
+	if flat, ok := physicsNamespaceFlatMap[name]; ok {
+		return flat
+	}
+	return ""
+}
+
+var physicsNamespaceFlatMap = map[string]string{
+	// Box2D
+	"box2d.createworld":        "createworld2d",
+	"box2d.destroyworld":        "destroyworld2d",
+	"box2d.step":               "step2d",
+	"box2d.createbody":         "createbody2d",
+	"box2d.destroybody":        "destroybody2d",
+	"box2d.getbodycount":       "getbodycount2d",
+	"box2d.getbodyid":          "getbodyid2d",
+	"box2d.createbodyatscreen": "createbodyatscreen2d",
+	"box2d.getpositionx":       "getpositionx2d",
+	"box2d.getpositiony":       "getpositiony2d",
+	"box2d.getangle":           "getangle2d",
+	"box2d.setlinearvelocity":  "setvelocity2d",
+	"box2d.settransform":       "settransform2d",
+	"box2d.applyforce":         "applyforce2d",
+	// Box2D GetPosition/GetLinearVelocity have no single flat equivalent; use GetPositionX2D/GetPositionY2D and GetVelocityX2D/GetVelocityY2D.
+	// Bullet
+	"bullet.createworld":           "createworld3d",
+	"bullet.destroyworld":          "destroyworld3d",
+	"bullet.setgravity":            "setworldgravity3d",
+	"bullet.step":                  "step3d",
+	"bullet.createbox":             "createbox3d",
+	"bullet.createsphere":          "createsphere3d",
+	"bullet.destroybody":           "destroybody3d",
+	"bullet.setposition":          "setposition3d",
+	"bullet.getpositionx":         "getpositionx3d",
+	"bullet.getpositiony":         "getpositiony3d",
+	"bullet.getpositionz":         "getpositionz3d",
+	"bullet.setvelocity":          "setvelocity3d",
+	"bullet.getvelocityx":         "getvelocityx3d",
+	"bullet.getvelocityy":         "getvelocityy3d",
+	"bullet.getvelocityz":         "getvelocityz3d",
+	"bullet.getrotationx":         "getyaw3d",
+	"bullet.getrotationy":         "getpitch3d",
+	"bullet.getrotationz":         "getroll3d",
+	"bullet.setrotation":          "setrotation3d",
+	"bullet.applyforce":           "applyforce3d",
+	"bullet.applycentralforce":    "applyforce3d",
+	"bullet.applyimpulse":         "applyimpulse3d",
+	"bullet.raycast":              "raycastfromdir3d",
+	"bullet.getraycasthitx":       "rayhitx3d",
+	"bullet.getraycasthity":       "rayhity3d",
+	"bullet.getraycasthitz":       "rayhitz3d",
+	"bullet.getraycasthitbody":    "rayhitbody3d",
+	"bullet.getraycasthitnormalx": "rayhitnormalx3d",
+	"bullet.getraycasthitnormaly": "rayhitnormaly3d",
+	"bullet.getraycasthitnormalz": "rayhitnormalz3d",
+}
 
 // MaxConstIndex is the maximum constant index (0-255) that fits in a single byte in the chunk.
 // Chunk constant indices are 1-byte; programs with more than 256 constants will fail at codegen
