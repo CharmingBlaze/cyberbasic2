@@ -38,3 +38,12 @@ generated/
 engine/*.o
 engine/*.a
 engine/test_engine
+
+# Local test outputs and ad-hoc files (root)
+out.txt
+e2.txt
+err.txt
+o1.txt
+o2.txt
+e1.txt
+*.log
