@@ -1183,6 +1183,7 @@ Logical windows (viewports) in one process; ID 0 = main screen. See [docs/MULTI_
 ## Notes
 
 - **Conventions:** All names are case-insensitive. Flat names (e.g. InitWindow) and optional namespaces (e.g. RL.InitWindow, BOX2D.*) are supported.
+- **Constant limit:** Bytecode uses 1-byte constant indices; each chunk supports at most 256 constants. Programs that exceed this (e.g. very large literals or many distinct identifiers) will fail at compile time with "too many constants".
 - **Resource IDs:** Load* functions (LoadImage, LoadTexture, LoadSound, LoadMusicStream, LoadWave, LoadFont, LoadModel, LoadMesh, LoadShader, LoadRenderTexture, LoadAudioStream, etc.) return string IDs (e.g. `img_1`, `sound_1`). Pass these IDs to the matching Unload* and other APIs.
 - **Vectors/Matrix/Quaternion:** Pass as flat numbers: Vector2 (x,y), Vector3 (x,y,z), Matrix (16 floats row-major), Quaternion (x,y,z,w). Functions that return vectors/matrices return a list (e.g. [x,y] or 16 values).
 - **Colors:** Pass as (r,g,b,a) or use constants (White, Red, etc. – return packed int). NewColor(r,g,b,a) returns packed int.

@@ -11,7 +11,7 @@ import (
 
 // useLibsResult holds which libraries are used in the program.
 type useLibsResult struct {
-	useRL, useBullet, useBox2D, useAudio, useUI, useTile, useNet, useAssimp, usePath, useECS bool
+	useRL, useBullet, useBox2D, useNet, useECS bool
 }
 
 // usesLibs scans the program and returns which libraries are used.
@@ -27,18 +27,8 @@ func usesLibs(program *parser.Program) useLibsResult {
 				r.useBullet = true
 			case "box2d":
 				r.useBox2D = true
-			case "audio":
-				r.useAudio = true
-			case "ui":
-				r.useUI = true
-			case "tile":
-				r.useTile = true
 			case "net":
 				r.useNet = true
-			case "assimp":
-				r.useAssimp = true
-			case "path":
-				r.usePath = true
 			case "ecs":
 				r.useECS = true
 			}
@@ -55,7 +45,7 @@ func usesLibs(program *parser.Program) useLibsResult {
 func Generate(program *parser.Program) (string, error) {
 	used := usesLibs(program)
 	var b strings.Builder
-	b.WriteString("package main\n\n")
+	b.WriteString("//go:build ignore\n\npackage main\n\n")
 	b.WriteString("import (\n")
 	b.WriteString("\t\"fmt\"\n")
 	if used.useBullet {
@@ -64,23 +54,8 @@ func Generate(program *parser.Program) (string, error) {
 	if used.useBox2D {
 		b.WriteString("\t\"cyberbasic/compiler/bindings/box2d\"\n")
 	}
-	if used.useAudio {
-		b.WriteString("\t\"cyberbasic/compiler/bindings/audio\"\n")
-	}
-	if used.useUI {
-		b.WriteString("\t\"cyberbasic/compiler/bindings/ui\"\n")
-	}
-	if used.useTile {
-		b.WriteString("\t\"cyberbasic/compiler/bindings/tile\"\n")
-	}
 	if used.useNet {
 		b.WriteString("\t\"cyberbasic/compiler/bindings/net\"\n")
-	}
-	if used.useAssimp {
-		b.WriteString("\t\"cyberbasic/compiler/bindings/assimp\"\n")
-	}
-	if used.usePath {
-		b.WriteString("\t\"cyberbasic/compiler/bindings/path\"\n")
 	}
 	if used.useECS {
 		b.WriteString("\t\"cyberbasic/compiler/bindings/ecs\"\n")

@@ -17,6 +17,7 @@ import (
 	"time"
 	"sync"
 
+	"cyberbasic/compiler/valueutil"
 	"cyberbasic/compiler/vm"
 	"github.com/google/uuid"
 )
@@ -26,24 +27,6 @@ func toString(v interface{}) string {
 		return ""
 	}
 	return fmt.Sprint(v)
-}
-
-func isTruthy(v interface{}) bool {
-	if v == nil {
-		return false
-	}
-	switch x := v.(type) {
-	case bool:
-		return x
-	case int:
-		return x != 0
-	case float64:
-		return x != 0
-	case string:
-		return x != ""
-	default:
-		return true
-	}
 }
 
 var (
@@ -523,7 +506,7 @@ func RegisterStd(v *vm.VM) {
 		if len(args) < 1 {
 			return nil, nil
 		}
-		if !isTruthy(args[0]) {
+		if !valueutil.IsTruthy(args[0]) {
 			msg := "assertion failed"
 			if len(args) >= 2 {
 				msg = toString(args[1])
@@ -1186,37 +1169,5 @@ func RegisterStd(v *vm.VM) {
 
 // helpCommandLine returns a one-line help string for a command name, or "" if unknown.
 func helpCommandLine(cmd string) string {
-	helpMap := map[string]string{
-		"initwindow":       "InitWindow(width, height, title) – open game window",
-		"closewindow":      "CloseWindow() – close window and exit",
-		"settargetfps":     "SetTargetFPS(fps) – target frame rate",
-		"getframetime":     "GetFrameTime() – delta time since last frame (seconds)",
-		"windowshouldclose": "WindowShouldClose() – true when user requested close",
-		"drawrectangle":   "DrawRectangle(x, y, w, h, r, g, b, a) – filled rectangle. Alias: rect(...)",
-		"rect":             "rect(x, y, w, h, color...) – alias of DrawRectangle",
-		"drawcircle":       "DrawCircle(x, y, radius, r, g, b, a) – filled circle. Alias: circle(...)",
-		"circle":           "circle(x, y, radius, color...) – alias of DrawCircle",
-		"drawtext":         "DrawText(text, x, y, size, r, g, b, a) – draw text",
-		"drawtexture":      "DrawTexture(id, x, y [, tint]) – draw texture. Alias: sprite(...)",
-		"sprite":           "sprite(id, x, y [, tint]) – alias of DrawTexture",
-		"clearbackground":  "ClearBackground(r, g, b, a) – clear screen",
-		"drawcube":         "DrawCube(x, y, z, w, h, d, color) – 3D cube. Alias: cube(...)",
-		"cube":             "cube(x, y, z, w, h, d, color) – alias of DrawCube",
-		"guibutton":        "GuiButton(x, y, w, h, text) – button; returns 1 if clicked. Alias: button(...)",
-		"button":           "button(x, y, w, h, text) – alias of GuiButton",
-		"keydown":          "KeyDown(key) – true while key held (e.g. KEY_W, KEY_ESCAPE)",
-		"keypressed":      "KeyPressed(key) – true once when key pressed",
-		"getmousex":        "GetMouseX() – mouse X",
-		"getmousey":        "GetMouseY() – mouse Y",
-		"createworld2d":    "CreateWorld2D() – create 2D physics world; returns world id",
-		"createbox2d":      "CreateBox2D(worldId, bodyId, x, y, w, h, density) – box body",
-		"stepallphysics2d": "StepAllPhysics2D(dt) – step all 2D worlds (called automatically in hybrid loop)",
-		"createworld3d":    "CreateWorld3D() – create 3D physics world",
-		"createbox3d":      "CreateBox3D(worldId, bodyId, x, y, z, w, h, d, mass) – 3D box body",
-		"stepallphysics3d": "StepAllPhysics3D(dt) – step all 3D worlds (called automatically in hybrid loop)",
-		"print":            "Print(value) – print to console",
-		"str":              "Str(value) – convert to string",
-		"int":              "Int(value) – convert to integer",
-	}
 	return helpMap[cmd]
 }

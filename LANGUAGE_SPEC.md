@@ -309,5 +309,6 @@ CloseWindow()
 - **Case-insensitive:** Keywords, identifiers, and built-in/foreign names. `MyVar` and `myvar` are the same.
 - **Dynamic typing:** Variables hold values; `AS Type` is an optional hint. No static type checking.
 - **Namespaces:** Call raylib as `InitWindow(...)` or `RL.InitWindow(...)`; physics as `BOX2D.*`, `BULLET.*`; game helpers as `GAME.*`; ECS as `ECS.*`.
+- **Bytecode constant limit:** A program may use at most 256 constants (e.g. string/number literals, global names); compiled bytecode uses a single byte for constant indices.
 
 For the full API see [API_REFERENCE.md](API_REFERENCE.md). For doc index see [docs/DOCUMENTATION_INDEX.md](docs/DOCUMENTATION_INDEX.md).
