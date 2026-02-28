@@ -98,7 +98,7 @@ main()
 
 ## Hybrid update/draw loop
 
-**When to use:** Prefer the hybrid loop for new games when you want automatic physics stepping and a clear split between update and draw. Use the manual loop when you need full control over the order of operations or legacy code.
+**When to use:** Prefer the hybrid loop for new games when you want automatic physics stepping and a clear split between update and draw. Use the manual loop when you need full control over the order of operations or legacy code. See **[Rendering and the game loop](RENDERING_AND_GAME_LOOP.md)** for the full pipeline and rules for `draw()`.
 
 If you define **`update(dt)`** and/or **`draw()`** (as Sub or Function) and use a game loop (`WHILE NOT WindowShouldClose()` or `REPEAT ... UNTIL WindowShouldClose()`), the compiler replaces the loop body with an automatic pipeline:
 
@@ -130,6 +130,7 @@ See **examples/hybrid_update_draw_demo.bas**. Scripts that do not define `update
 
 ## See also
 
+- [Rendering and the game loop](RENDERING_AND_GAME_LOOP.md) — Pipeline, manual vs hybrid, rule for draw()
 - [Documentation Index](DOCUMENTATION_INDEX.md)
 - [Getting Started](GETTING_STARTED.md)
 - [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)

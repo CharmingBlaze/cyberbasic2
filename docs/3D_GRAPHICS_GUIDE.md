@@ -20,7 +20,7 @@ Complete guide to 3D graphics in CyberBasic using the raylib API.
 
 ### Basic 3D setup
 
-Every 3D program needs a window, a 3D camera, and a loop with your draw calls. The compiler does not inject any frame or mode calls (DBPro-style). When you use the **hybrid loop** (define **update(dt)** and **draw()**), 3D draw calls in **draw()** are queued and flushed in order (2D then 3D then GUI). See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
+Every 3D program needs a window, a 3D camera, and a loop with your draw calls. The compiler does not inject any frame or mode calls (DBPro-style). When you use the **hybrid loop** (define **update(dt)** and **draw()**), 3D draw calls in **draw()** are queued and flushed in order (2D then 3D then GUI). See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop) and [Rendering and the game loop](RENDERING_AND_GAME_LOOP.md).
 
 ```basic
 InitWindow(800, 600, "My 3D Game")

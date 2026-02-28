@@ -1,19 +1,109 @@
-# CyberBasic2 – A BASIC-like language with Raylib + Bullet physics
+# CyberBasic
 
-**CyberBasic2** is a modern BASIC-inspired language with full 2D/3D game development capabilities.  
-Repository: **[github.com/CharmingBlaze/cyberbasic2](https://github.com/CharmingBlaze/cyberbasic2)** · Report issues and contribute there.
+[![Go 1.22+](https://img.shields.io/badge/Go-1.22+-00ADD8?logo=go)](https://go.dev/)
 
-### Why CyberBasic?
+A modern BASIC-inspired language and game engine with full 2D/3D graphics, physics, networking, and tooling. The runtime is written in **Go** and ships as a single binary: no C++ build step, no external engine DLL. Script your game in a readable, familiar dialect; the engine handles rendering, physics, audio, and multiplayer behind a consistent API.
 
-BASIC is approachable and readable; Go gives a single binary and fast compile; raylib provides cross-platform graphics and input without a heavy engine. CyberBasic combines them so you can script games and tools in a familiar dialect while keeping the runtime small and portable.
+**Repository:** [github.com/CharmingBlaze/cyberbasic2](https://github.com/CharmingBlaze/cyberbasic2) — report issues and contribute there.
 
-### Hello World
+---
+
+## Why Go: From C++ to a Single-Binary Runtime
+
+CyberBasic’s core was reimplemented in Go to improve the entire development and distribution story.
+
+- **Maintainability:** Go’s straightforward syntax and standard tooling (gofmt, go test, go build) make the compiler, VM, and bindings easy to navigate and refactor. New contributors can follow data flow without fighting template or macro expansion.
+- **Readability:** A single language from CLI to VM to bindings reduces context switching. Package boundaries (lexer, parser, codegen, vm, bindings) keep responsibilities clear.
+- **Build speed:** `go build` produces one executable. No C++ compile cycles, no linking against engine libs for the default flow. CI and local iteration stay fast.
+- **Contributor experience:** Clone, `go build -o cyberbasic .`, run. Dependencies are Go modules; no Raylib or Bullet build required for the default path (raylib-go and Go wrappers for Box2D/Bullet are used). An optional C layer in `engine/` exists for custom builds; the recommended path is pure Go.
+
+The result is a stable, feature-rich engine that is pleasant to work on and easy to ship.
+
+---
+
+## Technical Identity
+
+CyberBasic is a **bytecode-compiled**, **single-process** engine: source is parsed and compiled to a custom bytecode, then executed by a small VM. All graphics, input, audio, and physics are exposed as foreign functions (Go) called from bytecode. The design favors clarity and predictability: one main thread, explicit update/draw phases, and a hybrid loop that can run physics and render queues for you when you define `update(dt)` and `draw()`.
+
+---
+
+## Core Systems (Integrated and Available)
+
+The engine ships with full integrations for the following. Scripts call into them via a uniform, case-insensitive BASIC API.
+
+| Domain | Technology | Capabilities |
+|--------|------------|--------------|
+| **Graphics** | Raylib (raylib-go) | 2D/3D primitives, textures, text, fonts, images, shaders, render textures, skybox, blend modes, scissor, multiple 2D/3D cameras |
+| **2D engine** | Raylib + custom | Layers, parallax, z-order, backgrounds (static/scrolling/tiled), tilemaps (create/load/save/fill), sprites (transform, animation, batching), 2D particle emitters, texture atlas, 2D culling |
+| **3D** | Raylib | Models, meshes (procedural and from file), materials, model animation, DrawMesh with matrix, full camera (position/target/up/FOV, move/rotate/roll), raycasting, collision helpers |
+| **2D physics** | Box2D | Worlds, bodies, shapes, joints, raycast, collision callbacks, layer-based collision matrix, gravity |
+| **3D physics** | Bullet | Worlds, rigid bodies, collision shapes, raycast, terrain heightfield, water buoyancy hooks, step integration |
+| **Multiplayer** | TCP (net) | Host, Accept, Connect, Send, Receive, Disconnect; event callbacks; optional multi-window (spawn processes, connect to parent) |
+| **Events** | VM + bindings | On KeyDown/KeyPressed, OnWindowUpdate/Draw/Resize/Close/Message, collision handlers, configurable event loop |
+| **GUI** | Raylib + raygui | BeginUI/EndUI, Label, Button, Slider, Checkbox, TextBox, ProgressBar, WindowBox, GroupBox; raygui widgets for immediate-mode UI |
+| **Game helpers** | game | Tilemaps, particle systems, 2D camera center/follow, high-level game loop helpers |
+| **Scene** | scene | CreateScene, LoadScene, SaveScene, AddToScene/RemoveFromScene; 2D scene save/load (layers, backgrounds, sprites, tilemaps, particles, camera) |
+| **Terrain** | terrain | Heightmap load/generate, terrain mesh, create/update/draw, sculpt/paint, TerrainGetHeight/GetNormal/Raycast, collision, friction/bounce |
+| **Water** | water | WaterCreate, DrawWater, wave params, WaterGetHeight, buoyancy/density/drag hooks |
+| **Vegetation** | vegetation | Tree types and placement, grass patches, wind, LOD/instancing, collision radius |
+| **Objects** | objects | Object placement, scatter, paint/erase, raycast, get-at |
+| **World** | world | WorldSave/WorldLoad, export/import JSON, chunk save/load, streaming (load/unload by radius) |
+| **Navigation** | navigation | NavGrid (A*), NavMesh from terrain, obstacles, NavAgent (speed, radius, destination, waypoints) |
+| **Indoor** | indoor | Rooms, portals, doors, levers, switches, buttons, triggers (enter/exit/stay), interactables, pickups, light zones, nav by room, save/load indoor state |
+| **Procedural** | procedural | Noise (Perlin, fractal, Simplex), scatter (trees, grass, objects), biomes |
+| **Standard library** | std | File I/O, JSON, HTTP, strings, math, HELP; valueutil (e.g. truthiness) |
+| **Data** | sql | SQLite: OpenDatabase, Exec, Query, parameterized statements, transactions |
+| **ECS** | ecs | Entity-component system: world, entities, components, queries |
+
+The compiler supports modules, user subs/functions, event handlers, and coroutines (StartCoroutine, Yield, WaitSeconds). A **hybrid loop** is available: define `update(dt)` and `draw()`, use a game loop with an empty body, and the compiler injects physics step, render queue clear, draw call, and flush so you never call BeginDrawing/EndDrawing or BeginMode2D/EndMode3D yourself. See [Rendering and the game loop](docs/RENDERING_AND_GAME_LOOP.md).
+
+---
+
+## Architecture
+
+```
+CyberBasic/
+├── compiler/          # Go compiler and VM
+│   ├── lexer/         # Tokenizer
+│   ├── parser/        # AST
+│   ├── vm/            # Bytecode VM, render queues, fibers
+│   ├── runtime/       # Game loop, StepFrame
+│   └── bindings/      # Foreign API (all subsystems above)
+│       ├── raylib/    # Graphics, window, input, audio, fonts, math, 2D layers/camera/backgrounds, 3D, hybrid flush
+│       ├── box2d/     # 2D physics
+│       ├── bullet/    # 3D physics
+│       ├── game/      # Tilemaps, particles, game helpers
+│       ├── scene/     # Scenes, 2D save/load
+│       ├── net/       # TCP multiplayer
+│       ├── ecs/       # Entity-component system
+│       ├── terrain/   # Heightmap, terrain mesh, edit, query
+│       ├── water/     # Water mesh, shader, buoyancy
+│       ├── vegetation/# Trees, grass
+│       ├── objects/   # Object placement
+│       ├── world/     # Save/load, streaming
+│       ├── navigation/# NavGrid, NavMesh, agents
+│       ├── indoor/    # Rooms, doors, triggers, interactables
+│       ├── procedural/# Noise, scatter, biomes
+│       ├── std/       # File, JSON, HTTP, HELP
+│       └── sql/       # SQLite
+├── engine/            # Optional C wrapper (custom builds)
+├── examples/         # BASIC examples
+└── main.go            # CLI: compile + run .bas
+```
+
+No circular dependencies; the compiler does not depend on gogen. The VM exposes a small set of primitives (stack, globals, foreign calls, fibers, render queues); each binding package registers its commands and participates in the same runtime.
+
+---
+
+## Hello World and First Game
+
+Minimal runnable program:
 
 ```bas
 PRINT "Hello, CyberBasic!"
 ```
 
-Or run the **first game** (window + WASD circle) with one command after building (see [Quick start](#quick-start) below):
+Window and input (build first; see [Building](#building)):
 
 ```bas
 InitWindow(800, 600, "My Game")
@@ -32,90 +122,65 @@ WEND
 CloseWindow()
 ```
 
-## Architecture
-
-- **Compiler/Interpreter**: Go-based lexer, parser, and bytecode VM
-- **Runtime**: Go bindings for **raylib-go** (graphics, window, input, audio), **Box2D** (2D physics), and **Bullet** (3D physics). No C engine required for normal run.
-- **Optional**: An `engine/` C layer exists for custom builds; the default flow uses only Go.
-
-## Project Structure
-
-```
-CyberBasic/
-├── compiler/          # Go compiler components
-│   ├── lexer/        # Tokenizer
-│   ├── parser/       # AST builder
-│   ├── vm/           # Bytecode VM
-│   ├── runtime/      # BASIC runtime (window, game loop)
-│   └── bindings/     # Foreign API: raylib, box2d, bullet
-│       ├── raylib/   # Window, shapes, text, textures, images, 3D, audio, fonts, math
-│       ├── box2d/    # 2D physics
-│       ├── bullet/   # 3D physics
-│       ├── ecs/      # Entity-component system
-│       ├── net/      # TCP multiplayer (Connect, Send, Receive, Host, Accept)
-│       └── std/      # File, JSON, HTTP, IsNull, HELP
-├── engine/           # Optional C wrapper (raylib_wrapper.c, bullet_wrapper.c)
-├── examples/         # BASIC example programs
-└── main.go           # CLI: compile + run .bas
-```
-
-## BASIC Language Features
-
-- Classic BASIC syntax: IF...THEN, FOR...NEXT, WHILE...WEND, REPEAT...UNTIL, SELECT CASE
-- Types: DIM, TYPE...END TYPE, ENUM, CONST; dot notation
-- **User functions and subs** with parameters and Return; call by name.
-- **Modules:** Module Name … End Module (body is Function/Sub only); call as ModuleName.FunctionName(...).
-- **Event handlers:** On KeyDown("KEY") … End On, On KeyPressed("KEY") … End On; run when PollInputEvents() is called.
-- **Coroutines:** StartCoroutine SubName(), Yield, WaitSeconds(seconds); fibers share the same chunk (WaitSeconds currently blocks the whole VM).
-- Raylib-style API (unprefixed or `RL.`): InitWindow, ClearBackground, DrawCircle, LoadImage, LoadSound, PlayMusic, etc.
-- **Hybrid loop:** Define **update(dt)** and **draw()** for automatic physics step and render queue; empty game loop body. See [Program Structure](docs/PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
-- **In-process multi-window:** WindowCreate, WindowClose, Channel/State, OnWindowUpdate/Draw, WindowDrawAllToScreen. See [In-process multi-window](docs/MULTI_WINDOW_INPROCESS.md).
-- Export to C code: **ExportImageAsCode**, **ExportFontAsCode**, **ExportWaveAsCode** (write .h with pixel/sample data)
-- Physics: BOX2D.* (2D), BULLET.* (3D)
-
-## Limitations
-
-- **UI:** Full immediate-mode GUI: BeginUI, EndUI, Label, Button, Slider, Checkbox, TextBox, Dropdown, ProgressBar, WindowBox, GroupBox (see [docs/GUI_GUIDE.md](docs/GUI_GUIDE.md)).
-- **WaitSeconds** is non-blocking: the current fiber yields until the delay elapses; other fibers keep running (scheduler in VM).
-- **Audio callbacks** (SetAudioStreamCallback, AttachAudioStreamProcessor, AttachAudioMixedProcessor) are not supported from BASIC because they require a function pointer; use **UpdateAudioStream**(streamId, ...samples) to push PCM instead.
-- **Physics stubs:** Box2D joint APIs (CreateRevoluteJoint2D, etc.) and Bullet joint/body-property APIs (CreateHingeJoint3D, SetFriction3D, etc.) are no-op stubs; see API_REFERENCE.md for the full list.
-
-**Full feature set:** Full 2D and 3D graphics, full 2D physics (Box2D), full 3D physics (Bullet), full ECS, full GUI (widgets above), and multiplayer (TCP Connect/Send/Receive, Host/Accept). See **[docs/DOCUMENTATION_INDEX.md](docs/DOCUMENTATION_INDEX.md)** for the full doc index. **First 2D game:** [CHEATSHEET.md](CHEATSHEET.md) and [docs/2D_GRAPHICS_GUIDE.md](docs/2D_GRAPHICS_GUIDE.md). **First 3D game:** [CHEATSHEET.md](CHEATSHEET.md) and [docs/3D_GRAPHICS_GUIDE.md](docs/3D_GRAPHICS_GUIDE.md). **Examples:** [examples/README.md](examples/README.md).
-
-## Quick start
-
-After building (see [Building](#building)), run the demo with one command:
+Run the first-game demo in one command:
 
 ```bash
 ./cyberbasic examples/first_game.bas
 ```
 
-On Windows: `.\cyberbasic.exe examples\first_game.bas`. Or use the helper scripts: `./run_demo.sh` (Unix) or `.\run_demo.ps1` (PowerShell)—they build and run the demo.
+On Windows: `.\cyberbasic.exe examples\first_game.bas`. Helper scripts: `./run_demo.sh` (Unix) or `.\run_demo.ps1` (PowerShell) build and run the demo.
+
+---
 
 ## Documentation
 
-- **[Documentation Index](docs/DOCUMENTATION_INDEX.md)** – Master index of all guides
-- **[Roadmap](ROADMAP.md)** – Planned features and priorities
-- **[Getting Started](docs/GETTING_STARTED.md)** – Build, run first program
-- **[Quick Reference](docs/QUICK_REFERENCE.md)** – One-page syntax
-- **[Language Spec](LANGUAGE_SPEC.md)** – Full language reference
-- **First 2D game:** [Cheatsheet](CHEATSHEET.md) + [2D Graphics Guide](docs/2D_GRAPHICS_GUIDE.md)
-- **First 3D game:** [Cheatsheet](CHEATSHEET.md) + [3D Graphics Guide](docs/3D_GRAPHICS_GUIDE.md)
-- **[Game Development Guide](docs/GAME_DEVELOPMENT_GUIDE.md)** – Game loop, input, physics, ECS
-- **[GUI Guide](docs/GUI_GUIDE.md)** – Immediate-mode UI (Button, Slider, Checkbox, TextBox, etc.)
-- **[Multiplayer](docs/MULTIPLAYER.md)** – TCP client/server (Connect, Send, Receive, Host, Accept)
-- **[In-process multi-window](docs/MULTI_WINDOW_INPROCESS.md)** – Multiple viewports in one process
-- **[API Reference](API_REFERENCE.md)** – All bindings
+| Resource | Description |
+|----------|-------------|
+| [Documentation Index](docs/DOCUMENTATION_INDEX.md) | Master index of all guides |
+| [Rendering and the game loop](docs/RENDERING_AND_GAME_LOOP.md) | Pipeline, hybrid vs manual loop, rule for `draw()` |
+| [Roadmap](ROADMAP.md) | Priorities and planned work |
+| [Getting Started](docs/GETTING_STARTED.md) | Build, run, first program |
+| [Quick Reference](docs/QUICK_REFERENCE.md) | One-page syntax |
+| [Language Spec](LANGUAGE_SPEC.md) | Full language reference |
+| [2D Graphics](docs/2D_GRAPHICS_GUIDE.md) | 2D rendering, layers, camera |
+| [3D Graphics](docs/3D_GRAPHICS_GUIDE.md) | 3D rendering, camera, models |
+| [Game Development](docs/GAME_DEVELOPMENT_GUIDE.md) | Game loop, input, physics, ECS |
+| [GUI Guide](docs/GUI_GUIDE.md) | Immediate-mode UI |
+| [Multiplayer](docs/MULTIPLAYER.md) | TCP client/server |
+| [In-process multi-window](docs/MULTI_WINDOW_INPROCESS.md) | Multiple viewports in one process |
+| [API Reference](API_REFERENCE.md) | All bindings |
+| [Changelog](CHANGELOG.md) | Version history and release notes |
+
+---
 
 ## Building
 
+Default build (no C dependencies for normal run):
+
 ```bash
-# Build (uses raylib-go; no C build needed)
 go build -o cyberbasic .
-
-# Run a BASIC file (e.g. the first-game demo)
 ./cyberbasic examples/first_game.bas
+```
 
-# Optional: build the C engine (requires Raylib and Bullet)
+Optional C engine (Raylib + Bullet):
+
+```bash
 cd engine && make
 ```
+
+---
+
+## Limitations and Roadmap
+
+- **Physics:** Some Box2D/Bullet joint and body-property APIs are stubbed; see API_REFERENCE for the full list. Core worlds, bodies, shapes, raycast, and collision are implemented.
+- **UI:** Full widget set (Label, Button, Slider, Checkbox, TextBox, etc.) is available; some advanced layout or theme options may be extended.
+- **Audio:** Stream callbacks that require C function pointers are not exposed from BASIC; use UpdateAudioStream and similar push APIs.
+- **Roadmap:** Working debugger, more complete physics joints, REPL, VSCode extension, and CI are on the roadmap. See [ROADMAP.md](ROADMAP.md).
+
+---
+
+## Contributing
+
+The project is open to contributions. The codebase is structured so that bindings stay in `compiler/bindings/<package>`, the VM and compiler are in `compiler/`, and documentation lives in `docs/` and the root. If you add a command, register it in the appropriate binding package and add an entry to [docs/COMMAND_REFERENCE.md](docs/COMMAND_REFERENCE.md) and [API_REFERENCE.md](API_REFERENCE.md). Run `go build ./...` and the compiler tests before submitting a PR.
+
+CyberBasic is an ambitious, evolving engine: stable in its core systems and actively improving in tooling, physics completeness, and developer experience. We aim to keep the architecture clean, the docs accurate, and the project welcoming to new contributors.

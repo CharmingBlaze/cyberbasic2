@@ -16,7 +16,7 @@ Install, build, and run your first CyberBasic program.
 ## Prerequisites
 
 - **Go 1.19+** – [golang.org/dl](https://golang.org/dl/)
-- No C compiler required for normal use (raylib is used via raylib-go). An optional **C engine** lives in `engine/` for custom builds; the default flow uses only Go.
+- No C compiler required for normal use. The runtime is written in Go and uses raylib-go, so you get a single binary. An optional **C engine** in `engine/` exists for custom builds; the recommended path is the pure-Go build. See the main [README](../README.md) for the rationale behind the Go-based architecture.
 
 ## Build the compiler
 

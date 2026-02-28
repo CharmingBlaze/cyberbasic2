@@ -102,8 +102,8 @@ The compiler does not inject frame or mode calls; your code compiles as written.
 | **BeginFrame** | () | — | Start frame (alias BeginDrawing) |
 | **EndFrame** | () | — | End frame (alias EndDrawing) |
 | **SetCamera2D** | (camera2D) | — | Set 2D camera |
-| **BeginMode2D** | (camera2D) | — | Begin 2D mode |
-| **EndMode2D** | () | — | End 2D mode |
+| **BeginMode2D** | (camera2D) | — | Begin 2D mode. In the hybrid loop (when using update/draw), the engine wraps 2D automatically; calling these in draw() has no effect. |
+| **EndMode2D** | () | — | End 2D mode. In the hybrid loop, calling in draw() has no effect. |
 | **Camera2DCreate** | () | cameraID | Create 2D camera by ID |
 | **Camera2DSetPosition** | (cameraID, x, y) | — | Set camera target |
 | **Camera2DSetZoom** | (cameraID, zoom) | — | Set zoom |
@@ -445,8 +445,8 @@ Other image commands: ImageFromImage, ImageFromChannel, ImageText, ImageTextEx, 
 | Command | Arguments | Returns | Description |
 |---------|-----------|---------|-------------|
 | **SetCamera3D** | (camera) | — | Set 3D camera |
-| **BeginMode3D** | (camera) | — | Begin 3D mode |
-| **EndMode3D** | () | — | End 3D mode |
+| **BeginMode3D** | (camera) | — | Begin 3D mode. In the hybrid loop (when using update/draw), the engine wraps 3D automatically; calling these in draw() has no effect. |
+| **EndMode3D** | () | — | End 3D mode. In the hybrid loop, calling in draw() has no effect. |
 | **DrawCube** | (posX, posY, posZ, width, height, length, color) | — | Filled 3D cube |
 | **DrawCubeV** | (position, size, color) | — | Filled cube (vectors) |
 | **DrawCubeWires** | (posX, posY, posZ, width, height, length, color) | — | Cube outline |

@@ -22,7 +22,7 @@ Structured command set for window, input, math, camera, 3D, 2D, audio, file, gam
 
 ## Game loop (hybrid)
 
-When you define **update(dt)** and **draw()** (Sub or Function) and use a game loop (`WHILE NOT WindowShouldClose()` or `REPEAT ... UNTIL WindowShouldClose()`), the compiler injects an automatic pipeline. You do not call BeginDrawing/EndDrawing yourself.
+When you define **update(dt)** and **draw()** (Sub or Function) and use a game loop (`WHILE NOT WindowShouldClose()` or `REPEAT ... UNTIL WindowShouldClose()`), the compiler injects an automatic pipeline. You do not call BeginDrawing/EndDrawing yourself. See [Rendering and the game loop](RENDERING_AND_GAME_LOOP.md) for the full pipeline and rules for draw().
 
 | Command | Description |
 |--------|-------------|
@@ -110,14 +110,14 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **Camera3DRotateYaw**(angleRad) | Rotate position around target on Y axis |
 | **Camera3DRotatePitch**(angleRad) | Tilt camera up/down (clamped) |
 | **Camera3DRotateRoll**(angleRad) | Rotate camera up vector around forward axis |
-| **BeginCamera2D**(cameraID) **EndCamera2D**() | Set active 2D camera by ID; use default if no ID |
+| **BeginCamera2D**(cameraID) **EndCamera2D**() | Set active 2D camera by ID; use default if no ID. In the hybrid loop (when using update/draw), the engine wraps 2D automatically; calling BeginMode2D/EndMode2D in draw() has no effect. |
 | **Camera2DCreate**() | Create 2D camera → cameraID |
 | **Camera2DSetPosition**(cameraID, x, y) | Set camera target (world position) |
 | **Camera2DSetZoom**(cameraID, zoom) | Set zoom level |
 | **Camera2DSetRotation**(cameraID, angle) | Set rotation (radians) |
 | **Camera2DMove**(cameraID, dx, dy) | Move camera target by offset |
 | **Camera2DSmoothFollow**(cameraID, targetX, targetY, speed) | Smooth follow; update each frame |
-| **BeginCamera3D** **EndCamera3D** | Aliases of BeginMode3D, EndMode3D (3D camera) |
+| **BeginCamera3D** **EndCamera3D** | Aliases of BeginMode3D, EndMode3D (3D camera). In the hybrid loop (when using update/draw), the engine wraps 3D automatically; calling these in draw() has no effect. |
 
 ---
 

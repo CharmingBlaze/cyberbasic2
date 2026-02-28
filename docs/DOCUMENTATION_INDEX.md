@@ -6,6 +6,7 @@ Complete guide to all CyberBasic documentation.
 
 - **[Quick Start Guide](QUICK_START_GUIDE.md)** - Get running in 5 minutes
 - **[Roadmap (ROADMAP.md)](../ROADMAP.md)** – Planned features and priorities
+- **[Changelog (CHANGELOG.md)](../CHANGELOG.md)** – Version history and release notes
 - **[Learning Path](LEARNING_PATH.md)** – Complete structured curriculum from beginner to advanced
 - **[Getting Started Guide](GETTING_STARTED.md)** – Installation, building, running your first program
 - **[Quick Reference](QUICK_REFERENCE.md)** – One-page syntax reference for daily use
@@ -27,6 +28,8 @@ Complete guide to all CyberBasic documentation.
 - **[Block Structure Guide](BLOCK_STRUCTURE_GUIDE.md)** – END keywords (ENDIF / END IF, ENDFUNCTION / END FUNCTION, ENDSUB / END SUB, END MODULE, ELSEIF), single-word vs two-word forms, examples and best practices
 
 - **[Program Structure](PROGRAM_STRUCTURE.md)** – Comments (`//`), feature list, block quick reference, example skeleton
+
+- **[Rendering and the game loop](RENDERING_AND_GAME_LOOP.md)** – Pipeline, manual vs hybrid loop, rule for draw(), diagram
 
 - **[Command Reference](COMMAND_REFERENCE.md)** – Structured command set: window, input, math, camera, 3D, 2D, audio, file, game loop, utility; layers, backgrounds, tilemap, particle emitters, scene save/load 2D, physics 2D helpers, terrain/water physics, vegetation, weather, navigation, indoor, streaming, editor, decals
 

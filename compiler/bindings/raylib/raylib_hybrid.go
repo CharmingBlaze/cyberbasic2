@@ -154,7 +154,9 @@ func flushRenderQueues(v *vm.VM) (interface{}, error) {
 		}
 		if in2D {
 			nm := strings.ToLower(sorted[i].item.Name)
-			if nm == "spritebatchend" {
+			if nm == "beginmode2d" || nm == "endmode2d" {
+				// Forgiving: engine already does per-layer Begin/End; ignore user calls in draw()
+			} else if nm == "spritebatchend" {
 				flushSpriteBatch(v)
 			} else if nm == "spritebatchbegin" {
 				spriteBatchActive = true
@@ -173,6 +175,11 @@ func flushRenderQueues(v *vm.VM) (interface{}, error) {
 	}
 	rl.BeginMode3D(camera3D)
 	for _, item := range q3D {
+		nm := strings.ToLower(item.Name)
+		if nm == "beginmode3d" || nm == "endmode3d" {
+			// Forgiving: engine already wraps 3D block; ignore user calls in draw()
+			continue
+		}
 		_, _ = v.CallForeign(item.Name, item.Args)
 	}
 	rl.EndMode3D()

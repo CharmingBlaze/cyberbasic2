@@ -42,7 +42,7 @@ The compiler does not inject any frame or mode calls; your loop compiles exactly
 
 ### Hybrid update/draw loop
 
-When you define **update(dt)** and **draw()** and use a game loop, 2D draw calls inside **draw()** are queued and flushed automatically (2D, then 3D, then GUI). You do not need to call BeginDrawing/EndDrawing yourself. See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
+When you define **update(dt)** and **draw()** and use a game loop, 2D draw calls inside **draw()** are queued and flushed automatically (2D, then 3D, then GUI). You do not need to call BeginDrawing/EndDrawing yourself. See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop) and [Rendering and the game loop](RENDERING_AND_GAME_LOOP.md).
 
 ---
 
