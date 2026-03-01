@@ -4,7 +4,6 @@
 
 A modern BASIC-inspired language and game engine with full 2D/3D graphics, physics, networking, and tooling. The runtime is written in **Go** and ships as a single binary: no C++ build step, no external engine DLL. Script your game in a readable, familiar dialect; the engine handles rendering, physics, audio, and multiplayer behind a consistent API.
 
-**Repository:** [github.com/CharmingBlaze/cyberbasic2](https://github.com/CharmingBlaze/cyberbasic2) — report issues and contribute there.
 
 ---
 
