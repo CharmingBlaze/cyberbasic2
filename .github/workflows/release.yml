@@ -23,7 +23,7 @@ jobs:
 
       - name: Get version
         id: version
-        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $env:GITHUB_OUTPUT
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
         shell: bash
 
       - name: Build Windows amd64
@@ -43,6 +43,9 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install raylib (macOS)
+        run: brew install raylib
 
       - name: Set up Go
         uses: actions/setup-go@v5
@@ -77,6 +80,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Install raylib deps (Linux)
+        run: |
+          sudo apt-get update -y
+          sudo apt-get install -y libxi-dev libxinerama-dev libxcursor-dev libxrandr-dev libgl1-mesa-dev libwayland-dev libxkbcommon-dev
 
       - name: Set up Go
         uses: actions/setup-go@v5
