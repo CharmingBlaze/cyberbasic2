@@ -33,23 +33,7 @@ When using the hybrid loop, each frame runs in this order:
    - GUI (2D overlay)
    - EndDrawing
 
-```mermaid
-flowchart LR
-  subgraph frame [One frame]
-    A[GetFrameTime] --> B[StepAllPhysics2D/3D]
-    B --> C[update(dt)]
-    C --> D[ClearRenderQueues]
-    D --> E[draw()]
-    E --> F[FlushRenderQueues]
-  end
-  subgraph flush [Flush]
-    F --> G[BeginDrawing]
-    G --> H[2D by layer]
-    H --> I[BeginMode3D ... 3D draws ... EndMode3D]
-    I --> J[GUI]
-    J --> K[EndDrawing]
-  end
-```
+
 
 ## Rule for draw()
 
