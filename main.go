@@ -33,11 +33,21 @@ import (
 	"cyberbasic/compiler/vm"
 )
 
+// Version is set at build time via -ldflags "-X main.Version=..."
+var Version string
+
 func main() {
 	fmt.Println("CyberBasic starting...")
 
-	// Check for --help first
+	// Check for --help and --version first
 	for _, arg := range os.Args {
+		if arg == "--version" {
+			if Version == "" {
+				Version = "dev"
+			}
+			fmt.Println("CyberBasic", Version)
+			os.Exit(0)
+		}
 		if arg == "--help" {
 			fmt.Println("CyberBasic - A BASIC-like language with Raylib + Bullet physics")
 			fmt.Println("Usage: cyberbasic <filename.bas> [options]")
@@ -48,6 +58,7 @@ func main() {
 			fmt.Println("  --list-commands   Print built-in command names (2D, 3D, GUI, Physics, Std)")
 			fmt.Println("  --lint            Check program (compile only, no run); same as --compile-only")
 			fmt.Println("  --help            Show this help")
+			fmt.Println("  --version         Print version and exit")
 			fmt.Println("  (Multi-window: --window --parent=host:port --title=... --width=... --height=...)")
 			fmt.Println("Exit codes: 0 = success, 1 = compile/file error, 2 = runtime error")
 			os.Exit(0)

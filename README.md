@@ -4,6 +4,7 @@
 
 A modern BASIC-inspired language and game engine with full 2D/3D graphics, physics, networking, and tooling. The runtime is written in **Go** and ships as a single binary: no C++ build step, no external engine DLL. Script your game in a readable, familiar dialect; the engine handles rendering, physics, audio, and multiplayer behind a consistent API.
 
+**Repository:** [github.com/CharmingBlaze/cyberbasic2](https://github.com/CharmingBlaze/cyberbasic2) — report issues and contribute there. **Downloads:** [GitHub Releases](https://github.com/CharmingBlaze/cyberbasic2/releases) (Windows, macOS, Linux).
 
 ---
 
@@ -166,6 +167,18 @@ Optional C engine (Raylib + Bullet):
 ```bash
 cd engine && make
 ```
+
+---
+
+## Releasing
+
+To cut a new release:
+
+1. Bump the version in the root **`VERSION`** file (e.g. `1.0.0`).
+2. Update [CHANGELOG.md](CHANGELOG.md) (move "Unreleased" entries under the new version).
+3. Commit and push to `main`.
+4. Create and push an annotated tag: `git tag v1.0.0 && git push origin v1.0.0`.
+5. The [Release workflow](.github/workflows/release.yml) runs on tag push: it builds the CLI for Windows (amd64), macOS (amd64 + arm64), and Linux (amd64), then creates a [GitHub Release](https://github.com/CharmingBlaze/cyberbasic2/releases) with the zip artifacts attached.
 
 ---
 
