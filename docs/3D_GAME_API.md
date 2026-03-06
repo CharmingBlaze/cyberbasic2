@@ -152,7 +152,8 @@ LoadObject 4, "character.gltf"
 
 | Command | Args | Description |
 |---------|------|-------------|
-| `LoadLevel` | (id, path) | Load full level (meshes, materials, textures, lights) |
+| `LoadLevel` | (id, path) | Load full level (meshes, materials, textures, and imported light data when present) |
+| `LoadLevelWithHierarchy` | (id, path) | Load level with mesh-node hierarchy preserved through the imported node tree |
 | `DrawLevel` | (id) | Draw all level objects |
 | `UnloadLevel` | (id) | Free level resources |
 | `LoadLevelCollision` | (id) | Create physics colliders from level; returns count |
@@ -161,7 +162,7 @@ LoadObject 4, "character.gltf"
 | `GetLevelObjectCount` | (id) | Object count |
 | `GetLevelObject` | (id, index) | Get object ID at index |
 
-**LoadLevel** loads everything automatically. Call **LoadLevelCollision** after LoadLevel to enable physics. Colliders are detected from GLTF node names (`col_*`, `collision_*`, `Collision*`).
+**LoadLevel** builds meshes, materials, textures, and DBP objects automatically. Call **LoadLevelCollision** after loading to enable physics colliders. Colliders are detected from GLTF node names (`col_*`, `collision_*`, `Collision*`). GLTF `KHR_lights_punctual` import is still not implemented, so do not rely on punctual lights embedded in GLTF files yet.
 
 **Example:**
 ```basic
@@ -221,19 +222,35 @@ z = GetObjectZ 1
 
 ---
 
-## 9. Object Parenting
+## 9. Scene Graph and Object Parenting
+
+Objects form a hierarchy: a child's world transform is its local transform composed with the parent's full position, rotation, and scale. `LoadLevelWithHierarchy` preserves transform-only GLTF nodes when rebuilding mesh-node parenting, so nested offsets and rotations now survive import correctly.
 
 | Command | Args | Description |
 |---------|------|-------------|
 | `ParentObject` | (childID, parentID) | Attach child to parent |
+| `AttachObject` | (childID, parentID) | Alias for ParentObject |
 | `UnparentObject` | (id) | Detach from parent |
+| `DetachObject` | (id) | Alias for UnparentObject |
+| `GetObjectLocalX` | (id) | Local X (before parent composition) |
+| `GetObjectLocalY` | (id) | Local Y |
+| `GetObjectLocalZ` | (id) | Local Z |
+| `GetObjectLocalPitch` | (id) | Local pitch |
+| `GetObjectLocalYaw` | (id) | Local yaw |
+| `GetObjectLocalRoll` | (id) | Local roll |
+| `GetObjectLocalScaleX` | (id) | Local scale X |
+| `GetObjectLocalScaleY` | (id) | Local scale Y |
+| `GetObjectLocalScaleZ` | (id) | Local scale Z |
+| `SetObjectLocalTransform` | (id, x,y,z, pitch,yaw,roll, sx,sy,sz) | Set local position, rotation, scale |
 
-`DrawObject` automatically applies parent transforms: child position, rotation, and scale are composed with the parent's world transform.
+**World vs local:** `GetObjectX/Y/Z` return world position (after parent composition). `GetObjectLocalX/Y/Z` return the object's own position. Use local transforms when editing a child relative to its parent.
 
 **Example:**
 ```basic
 ParentObject 2, 1
 ' Object 2 now follows object 1's transform
+x = GetObjectLocalX 2   ' child's offset from parent
+SetObjectLocalTransform 2, 0, 1, 0, 0, 0, 0, 1, 1, 1  ' 1 unit above parent
 UnparentObject 2
 ```
 
@@ -278,6 +295,10 @@ tag$ = GetObjectTag 1
 | `GetAnimationFrame` | (objectID) | Current frame |
 | `GetAnimationLength` | (animID) or (animID, clipIndex) | Frame count |
 | `GetAnimationName` | (animID) or (animID, clipIndex) | Clip name |
+| `CrossfadeAnimation` | (objectID, animID, clipIndex, duration) | Blend to new clip over duration seconds |
+| `SetAnimationBlend` | (objectID, weight) | Manual blend weight 0–1 |
+
+**CrossfadeAnimation** now blends two skeletal poses over `duration` seconds. `SetAnimationBlend` lets you scrub that same crossfade manually by setting a 0-1 weight.
 
 **Graceful:** LoadAnimation succeeds even when the file has no animations. GetAnimationLength returns 0. PlayAnimation and SetAnimationFrame no-op when anim not found.
 
@@ -343,10 +364,10 @@ Requires object with skeleton (from GLTF skin). Bones identified by name. No-op 
 
 | Command | Args | Description |
 |---------|------|-------------|
-| `Raycast` | (x1,y1,z1, x2,y2,z2) | Ray vs world; use RayHitX/Y/Z, RayHitBody |
-| `Spherecast` | (x,y,z, radius, dx,dy,dz) | Thick ray |
+| `Raycast` | (ox, oy, oz, dx, dy, dz [, maxDist]) | Ray vs world from origin plus direction |
+| `Spherecast` | (ox, oy, oz, dx, dy, dz, radius) | Swept-sphere query against physics body bounds |
 | `ObjectCollides` | (id1, id2) | AABB overlap |
-| `PointInObject` | (x,y,z, id) | Point in AABB |
+| `PointInObject` | (id, x, y, z) | Point in AABB |
 
 ---
 
@@ -423,6 +444,13 @@ dot = Dot3D x1, y1, z1, x2, y2, z2
 | `SetLightColor` | (id, r, g, b) | Set color |
 | `SetLightIntensity` | (id, value) | Set intensity |
 | `SetLightRange` | (id, value) | Set range |
+| `EnableLightShadows` | (id) | Mark light as preferred shadow caster |
+| `DisableLightShadows` | (id) | Disable shadow casting preference for this light |
+| `EnableShadows` | () or (id) | Enable global shadows, or mark a light as the active caster |
+| `DisableShadows` | () or (id) | Disable global shadows, or clear a light's shadow-caster flag |
+| `SetShadowQuality` | (name$) | Apply `low`, `medium`/`mid`, or `high` shadow preset |
+| `SetShadowMapSize` | (width, height) | Override shadow map resolution |
+| `SetShadowBias` | (bias) | Set depth bias for the shadow compare |
 | `DeleteLight` | (id) | Remove |
 | `LightExists` | (id) | Returns 1 if exists, 0 otherwise |
 | `SyncLight` | (id) | Sync for multiplayer |
@@ -433,16 +461,28 @@ dot = Dot3D x1, y1, z1, x2, y2, z2
 | `GetLightColorG` | (id) | Light color G |
 | `GetLightColorB` | (id) | Light color B |
 
+For the easiest setup, create a directional light with `MakeLight(id, 1)`, orient it with `RotateLight`, then call `EnableShadows()`. If you want explicit control over which directional light casts shadows, call `EnableShadows(lightId)` or `EnableLightShadows(lightId)`.
+
+Current scope: the renderer supports one active directional shadow caster in the main pass. `SetShadowQuality("low"|"medium"|"high")` is the easiest way to scale cost for lower-end, mid-range, or higher-end PCs.
+
 ---
 
 ## 20. Materials & Textures
 
+Imported GLTF PBR values are preserved by default. Use **SetObjectRoughness**, **SetObjectMetallic**, **SetObjectNormalmap**, and **SetObjectEmissive** only when you want per-object overrides on top of the imported material.
+
 | Command | Args | Description |
 |---------|------|-------------|
 | `MakeMaterial` | (id) | Create material |
+| `CreatePBRMaterial` | (id) | Create material with PBR defaults (metallic=0, roughness=0.5) |
+| `SetMaterialPBR` | (id, metallic, roughness, normalTextureID) | Set metallic, roughness, normal map |
 | `SetMaterialColor` | (id, r, g, b) | Set color |
 | `SetMaterialTexture` | (id, textureID) | Set texture |
 | `ApplyMaterial` | (id, objectID) | Apply to object |
+| `SetObjectRoughness` | (id, value) | Per-object roughness (0-1) |
+| `SetObjectMetallic` | (id, value) | Per-object metallic (0-1) |
+| `SetObjectNormalmap` | (id, path) or (id, textureID) | Set normal map |
+| `SetObjectEmissive` | (id, r, g, b) | Emissive color (for custom shaders) |
 | `LoadTexture` | (id, path) | Load texture |
 | `DeleteTexture` | (id) | Unload |
 | `TextureExists` | (id) | Returns 1 if exists, 0 otherwise |

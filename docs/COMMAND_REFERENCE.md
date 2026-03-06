@@ -32,8 +32,10 @@ When you define **update(dt)** and **draw()** (Sub or Function) and use a game l
 |--------|-------------|
 | **ClearRenderQueues**() | Clear 2D, 3D, and GUI render queues (called automatically before draw()) |
 | **FlushRenderQueues**() | Execute queued draw commands and present frame (called automatically after draw()) |
-| **StepAllPhysics2D**(dt) | Step all registered Box2D worlds (called automatically with frame delta) |
-| **StepAllPhysics3D**(dt) | Step all registered Bullet worlds (called automatically with frame delta) |
+| **StepAllPhysics2D**(dt) | Step all registered Box2D worlds |
+| **StepAllPhysics3D**(dt) | Step all registered Bullet worlds |
+| **FixedUpdate**(rate) | Set automatic fixed-step rate used by the runtime loop |
+| **OnFixedUpdate**(label$) | Register BASIC callback label invoked on each fixed step |
 
 See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
 
@@ -691,7 +693,11 @@ State is stored for use with custom shaders; raylib has no built-in lighting.
 | **SetLightColor**(lightId, r, g, b) | Set light color (0–255) |
 | **SetLightIntensity**(lightId, amount) | Set intensity |
 | **SetLightDirection**(lightId, x, y, z) | Direction vector |
-| **EnableShadows**() / **DisableShadows**() | Toggle shadow state |
+| **EnableShadows**() / **DisableShadows**() | Toggle the global directional shadow system |
+| **EnableShadows**(lightId) / **DisableShadows**(lightId) | Mark a DBP light as the preferred shadow caster |
+| **SetShadowQuality**(name) | Apply `low`, `medium`/`mid`, or `high` shadow preset |
+| **SetShadowMapSize**(width, height) | Override shadow map resolution |
+| **SetShadowBias**(bias) | Tune shadow compare bias |
 
 ---
 
@@ -753,6 +759,7 @@ State only; actual effects require render-to-texture and shaders.
 | **GuiDropdown**(items, x, y, w) | Dropdown → selected index |
 | **GuiLoadStyle**(filePath) | Load raygui style from .rgs file |
 | **GuiLoadStyleDefault**() | Reset to default theme |
+| **LoadUIStyle**(name) | Apply preset: "default", "dark", "light", "cyber" (CGO) |
 | **GuiSetStyle**(controlId, propertyId, value) | Set one style property (control/property IDs from raygui) |
 | **GuiGetStyle**(controlId, propertyId) | Get style property value |
 | **GuiProgressBar**(x, y, w, value) | Full 9-arg form; **GuiProgressBarSimple**(x, y, w, value) for 0–1 |

@@ -59,6 +59,38 @@ func registerLevel(v *vm.VM) {
 		return nil, nil
 	})
 
+	v.RegisterForeign("LoadLevelWithHierarchy", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("LoadLevelWithHierarchy(id, path) requires 2 arguments")
+		}
+		id := toInt(args[0])
+		path := toString(args[1])
+		m, err := model.Load(path)
+		if err != nil {
+			return nil, fmt.Errorf("LoadLevelWithHierarchy: %w", err)
+		}
+		basePath := filepath.Dir(path)
+		objectIDBase := id * levelObjectIDBase
+		res, err := BuildModelWithHierarchy(m, objectIDBase, basePath)
+		if err != nil {
+			return nil, fmt.Errorf("LoadLevelWithHierarchy build: %w", err)
+		}
+		for _, oid := range res.ObjectIDs {
+			RegisterObjectModel(oid, m)
+		}
+		levelsMu.Lock()
+		levels[id] = &levelRuntime{
+			model:       m,
+			objectIDs:   res.ObjectIDs,
+			textureIDs:  res.TextureIDs,
+			materialIDs: res.MaterialIDs,
+			lightIDs:    res.LightIDs,
+			colliderIDs: nil,
+		}
+		levelsMu.Unlock()
+		return nil, nil
+	})
+
 	v.RegisterForeign("DrawLevel", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("DrawLevel(id) requires 1 argument")

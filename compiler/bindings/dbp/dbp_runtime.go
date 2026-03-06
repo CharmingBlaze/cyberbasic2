@@ -4,15 +4,8 @@
 package dbp
 
 import (
-	"sync"
-
+	"cyberbasic/compiler/runtime"
 	"cyberbasic/compiler/vm"
-)
-
-var (
-	fixedUpdateRate   float64 = 60
-	fixedUpdateLabel  string
-	fixedUpdateLabelMu sync.Mutex
 )
 
 func toFloat64Runtime(v interface{}) float64 {
@@ -45,18 +38,13 @@ func registerRuntime(v *vm.VM) {
 	})
 	v.RegisterForeign("FixedUpdate", func(args []interface{}) (interface{}, error) {
 		if len(args) >= 1 {
-			fixedUpdateRate = toFloat64Runtime(args[0])
-			if fixedUpdateRate <= 0 {
-				fixedUpdateRate = 60
-			}
+			runtime.SetFixedUpdateRate(toFloat64Runtime(args[0]))
 		}
 		return nil, nil
 	})
 	v.RegisterForeign("OnFixedUpdate", func(args []interface{}) (interface{}, error) {
 		if len(args) >= 1 {
-			fixedUpdateLabelMu.Lock()
-			fixedUpdateLabel = toString(args[0])
-			fixedUpdateLabelMu.Unlock()
+			runtime.SetFixedUpdateLabel(toString(args[0]))
 		}
 		return nil, nil
 	})
@@ -64,12 +52,10 @@ func registerRuntime(v *vm.VM) {
 
 // FixedUpdateLabel returns the label set by OnFixedUpdate (for game loop integration).
 func FixedUpdateLabel() string {
-	fixedUpdateLabelMu.Lock()
-	defer fixedUpdateLabelMu.Unlock()
-	return fixedUpdateLabel
+	return runtime.FixedUpdateLabel()
 }
 
 // FixedUpdateRate returns the rate set by FixedUpdate.
 func FixedUpdateRate() float64 {
-	return fixedUpdateRate
+	return runtime.FixedUpdateRate()
 }

@@ -22,10 +22,10 @@ type modelAnimState struct {
 }
 
 type modelTransform struct {
-	Position   rl.Vector3
-	RotAxis    rl.Vector3
-	RotAngle   float32
-	Scale      rl.Vector3
+	Position rl.Vector3
+	RotAxis  rl.Vector3
+	RotAngle float32
+	Scale    rl.Vector3
 }
 
 var (
@@ -1418,11 +1418,11 @@ func register3D(v *vm.VM) {
 		modelAnimStateCtr++
 		stateId := fmt.Sprintf("modelanim_%d", modelAnimStateCtr)
 		modelAnimStates[stateId] = &modelAnimState{
-			ModelId:      modelId,
-			AnimId:       animId,
-			FPS:          fps,
-			Loop:         loop,
-			FrameCount:   frameCount,
+			ModelId:    modelId,
+			AnimId:     animId,
+			FPS:        fps,
+			Loop:       loop,
+			FrameCount: frameCount,
 		}
 		modelAnimStateMu.Unlock()
 		return stateId, nil
@@ -1570,10 +1570,10 @@ func register3D(v *vm.VM) {
 		lightMu.Unlock()
 		lightDataMu.Lock()
 		lightData[id] = &struct {
-			Type      int
-			X, Y, Z   float32
-			R, G, B   uint8
-			Intensity float32
+			Type             int
+			X, Y, Z          float32
+			R, G, B          uint8
+			Intensity        float32
 			DirX, DirY, DirZ float32
 		}{Type: int(lightType), X: x, Y: y, Z: z, R: 255, G: 255, B: 255, Intensity: 1}
 		lightDataMu.Unlock()
@@ -1709,4 +1709,74 @@ func register3D(v *vm.VM) {
 		cullingMargin = toFloat32(args[0])
 		return nil, nil
 	})
+}
+
+// ObjectBoundsShouldCull3D returns true if a bounded 3D object should be culled.
+func ObjectBoundsShouldCull3D(center rl.Vector3, radius float32) bool {
+	cam := GetCamera3D()
+	dist := rl.Vector3Distance(cam.Position, center)
+	if cullingDistance > 0 && dist-radius > cullingDistance {
+		return true
+	}
+	if !frustumCulling {
+		return false
+	}
+	forward := rl.Vector3Subtract(cam.Target, cam.Position)
+	if rl.Vector3Length(forward) <= 1e-6 {
+		return false
+	}
+	forward = rl.Vector3Normalize(forward)
+	up := rl.Vector3Normalize(cam.Up)
+	right := rl.Vector3CrossProduct(forward, up)
+	if rl.Vector3Length(right) <= 1e-6 {
+		right = rl.Vector3{X: 1, Y: 0, Z: 0}
+	} else {
+		right = rl.Vector3Normalize(right)
+	}
+	up = rl.Vector3Normalize(rl.Vector3CrossProduct(right, forward))
+	rel := rl.Vector3Subtract(center, cam.Position)
+	depth := rel.X*forward.X + rel.Y*forward.Y + rel.Z*forward.Z
+	nearPlane := cameraNearZ
+	if nearPlane <= 0 {
+		nearPlane = 0.01
+	}
+	farPlane := cameraFarZ
+	if farPlane <= nearPlane {
+		farPlane = cullingDistance
+		if farPlane <= nearPlane {
+			farPlane = 1000
+		}
+	}
+	if depth+radius < nearPlane || depth-radius > farPlane {
+		return true
+	}
+	side := rel.X*right.X + rel.Y*right.Y + rel.Z*right.Z
+	vertical := rel.X*up.X + rel.Y*up.Y + rel.Z*up.Z
+	screenHeight := float32(rl.GetScreenHeight())
+	if screenHeight <= 0 {
+		screenHeight = 1
+	}
+	aspect := float32(rl.GetScreenWidth()) / screenHeight
+	if aspect <= 0 {
+		aspect = 1
+	}
+	if cam.Projection == rl.CameraOrthographic {
+		halfHeight := cam.Fovy * 0.5
+		if halfHeight <= 0 {
+			halfHeight = 1
+		}
+		halfWidth := halfHeight * aspect
+		return side-radius > halfWidth || side+radius < -halfWidth || vertical-radius > halfHeight || vertical+radius < -halfHeight
+	}
+	if depth <= 0 && radius <= 0 {
+		return true
+	}
+	halfHeight := depth * float32(math.Tan(float64(cam.Fovy)*math.Pi/360))
+	halfWidth := halfHeight * aspect
+	return side-radius > halfWidth || side+radius < -halfWidth || vertical-radius > halfHeight || vertical+radius < -halfHeight
+}
+
+// ObjectShouldCull3D returns true if the point at (x,y,z) should be culled.
+func ObjectShouldCull3D(x, y, z float32) bool {
+	return ObjectBoundsShouldCull3D(rl.Vector3{X: x, Y: y, Z: z}, 0)
 }

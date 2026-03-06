@@ -26,11 +26,19 @@ var (
 	FrameCounter uint64 = 0
 )
 
+const maxFrameDelta float32 = 0.25
+
 // Update advances time state. Call once per frame before physics/update.
 // dt is typically from rl.GetFrameTime().
 func Update(dt float32) {
 	mu.Lock()
 	defer mu.Unlock()
+	if dt < 0 {
+		dt = 0
+	}
+	if dt > maxFrameDelta {
+		dt = maxFrameDelta
+	}
 	deltaTime = dt * TimeScale
 	Accumulator += deltaTime
 	FrameCounter++
@@ -45,7 +53,19 @@ func DeltaTime() float32 {
 
 // GetFixedDeltaTime returns the fixed timestep for physics.
 func GetFixedDeltaTime() float32 {
+	mu.RLock()
+	defer mu.RUnlock()
 	return FixedDeltaTime
+}
+
+// SetFixedDeltaTime sets the fixed timestep used by the runtime loop.
+func SetFixedDeltaTime(value float32) {
+	mu.Lock()
+	defer mu.Unlock()
+	if value <= 0 {
+		value = 1.0 / 60.0
+	}
+	FixedDeltaTime = value
 }
 
 // GetAccumulator returns the current accumulator value.
@@ -62,6 +82,18 @@ func ConsumeAccumulator(fixedStep float32) {
 	Accumulator -= fixedStep
 	if Accumulator < 0 {
 		Accumulator = 0
+	}
+}
+
+// ClampAccumulator caps the stored accumulator to avoid runaway catch-up loops.
+func ClampAccumulator(max float32) {
+	mu.Lock()
+	defer mu.Unlock()
+	if max < 0 {
+		max = 0
+	}
+	if Accumulator > max {
+		Accumulator = max
 	}
 }
 

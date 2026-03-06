@@ -11,7 +11,6 @@ import (
 	"sync"
 )
 
-
 func toFloat64(v interface{}) float64 {
 	switch x := v.(type) {
 	case int:
@@ -60,24 +59,40 @@ type body struct {
 	id              string
 	position        vec3
 	velocity        vec3
-	rotation        vec3   // Euler angles
+	rotation        vec3 // Euler angles
 	angularVelocity vec3
-	scale           vec3   // scale factors (default 1,1,1)
-	halfExt         vec3   // half extents for box/cylinder
+	scale           vec3    // scale factors (default 1,1,1)
+	halfExt         vec3    // half extents for box/cylinder
 	radius          float64 // for sphere (0 = box/cylinder)
 	mass            float64
 	active          bool
 	collisions      []collisionHit // filled each Step, cleared at start
 	// body properties (used in Step and resolveCollisions)
-	friction        float64
-	restitution     float64
-	linearDamping   float64
-	angularDamping  float64
-	kinematic       bool
-	gravityScale    float64
-	linearFactor    vec3
-	angularFactor   vec3
-	ccd             bool
+	friction       float64
+	restitution    float64
+	linearDamping  float64
+	angularDamping float64
+	kinematic      bool
+	gravityScale   float64
+	linearFactor   vec3
+	angularFactor  vec3
+	ccd            bool
+}
+
+func bodyUsesCapsuleBounds(b *body) bool {
+	return b != nil && b.radius > 0 && (b.halfExt.x > b.radius || b.halfExt.y > b.radius || b.halfExt.z > b.radius)
+}
+
+func bodyAABB(b *body) (min, max vec3) {
+	if b == nil {
+		return vec3{}, vec3{}
+	}
+	if bodyUsesCapsuleBounds(b) || b.radius == 0 {
+		return vec3{b.position.x - b.halfExt.x, b.position.y - b.halfExt.y, b.position.z - b.halfExt.z},
+			vec3{b.position.x + b.halfExt.x, b.position.y + b.halfExt.y, b.position.z + b.halfExt.z}
+	}
+	return vec3{b.position.x - b.radius, b.position.y - b.radius, b.position.z - b.radius},
+		vec3{b.position.x + b.radius, b.position.y + b.radius, b.position.z + b.radius}
 }
 
 type world struct {
@@ -89,10 +104,10 @@ type world struct {
 const defaultPhysicsWorld = "default"
 
 var (
-	worlds    = make(map[string]*world)
-	worldMu   sync.RWMutex
+	worlds         = make(map[string]*world)
+	worldMu        sync.RWMutex
 	physicsBodySeq int
-	lastRay  struct {
+	lastRay        struct {
 		hit    bool
 		p      vec3
 		bodyId string
@@ -370,10 +385,15 @@ func registerFlat3D(v *vm.VM) {
 			w = getOrCreateWorld(wid, 0, -9.81, 0)
 		}
 		radius := toFloat64(args[5])
+		height := toFloat64(args[6])
+		if height < radius*2 {
+			height = radius * 2
+		}
 		w.mu.Lock()
 		w.bodies[bid] = &body{
 			id:       bid,
 			position: vec3{toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])},
+			halfExt:  vec3{radius, height / 2, radius},
 			radius:   radius,
 			mass:     toFloat64(args[7]),
 			active:   true,
@@ -755,6 +775,10 @@ func registerFlat3D(v *vm.VM) {
 		return nil, nil
 	})
 
+	// BulletJointsAvailable: 0 = pure-Go (no joints), 1 = CGO Bullet (joints supported)
+	v.RegisterForeign("BulletJointsAvailable", func(args []interface{}) (interface{}, error) {
+		return 0, nil
+	})
 	// 3D joints: stubs (constraint solver not implemented in pure-Go engine; use full Bullet CGO build for joints)
 	v.RegisterForeign("CreateHingeJoint3D", func(args []interface{}) (interface{}, error) { return nil, nil })
 	v.RegisterForeign("CreateSliderJoint3D", func(args []interface{}) (interface{}, error) { return nil, nil })
@@ -797,14 +821,7 @@ func registerFlat3D(v *vm.VM) {
 			if !b.active {
 				continue
 			}
-			var min, max vec3
-			if b.radius > 0 {
-				min = vec3{b.position.x - b.radius, b.position.y - b.radius, b.position.z - b.radius}
-				max = vec3{b.position.x + b.radius, b.position.y + b.radius, b.position.z + b.radius}
-			} else {
-				min = vec3{b.position.x - b.halfExt.x, b.position.y - b.halfExt.y, b.position.z - b.halfExt.z}
-				max = vec3{b.position.x + b.halfExt.x, b.position.y + b.halfExt.y, b.position.z + b.halfExt.z}
-			}
+			min, max := bodyAABB(b)
 			t := rayAABB(fx, fy, fz, dx, dy, dz, min.x, min.y, min.z, max.x, max.y, max.z)
 			if t >= 0 && t < maxDist && t < bestT {
 				bestT = t
@@ -859,14 +876,7 @@ func registerFlat3D(v *vm.VM) {
 			if !b.active {
 				continue
 			}
-			var min, max vec3
-			if b.radius > 0 {
-				min = vec3{b.position.x - b.radius, b.position.y - b.radius, b.position.z - b.radius}
-				max = vec3{b.position.x + b.radius, b.position.y + b.radius, b.position.z + b.radius}
-			} else {
-				min = vec3{b.position.x - b.halfExt.x, b.position.y - b.halfExt.y, b.position.z - b.halfExt.z}
-				max = vec3{b.position.x + b.halfExt.x, b.position.y + b.halfExt.y, b.position.z + b.halfExt.z}
-			}
+			min, max := bodyAABB(b)
 			t := rayAABB(sx, sy, sz, dx, dy, dz, min.x, min.y, min.z, max.x, max.y, max.z)
 			if t >= 0 && t < maxDist && t < bestT {
 				bestT = t
@@ -1258,6 +1268,20 @@ func resolveCollisions(w *world) {
 
 // overlapBodies returns contact normal (from a toward b) and penetration depth. Depth > 0 means overlap. Caller holds world lock.
 func overlapBodies(a, b *body) (nx, ny, nz, depth float64) {
+	if bodyUsesCapsuleBounds(a) {
+		aSphere := a.radius
+		a.radius = 0
+		nx, ny, nz, depth = overlapBodies(a, b)
+		a.radius = aSphere
+		return nx, ny, nz, depth
+	}
+	if bodyUsesCapsuleBounds(b) {
+		bSphere := b.radius
+		b.radius = 0
+		nx, ny, nz, depth = overlapBodies(a, b)
+		b.radius = bSphere
+		return nx, ny, nz, depth
+	}
 	if a.radius > 0 && b.radius > 0 {
 		return overlapSphereSphere(a.position.x, a.position.y, a.position.z, a.radius, b.position.x, b.position.y, b.position.z, b.radius)
 	}
@@ -1302,12 +1326,12 @@ func overlapSphereBox(sx, sy, sz, sr, bx, by, bz, hx, hy, hz float64) (nx, ny, n
 	}
 	if distSq < 1e-18 {
 		// Sphere center inside box: push out along the axis of minimum penetration (depth = distance to push sphere center so surface touches face)
-		penR := (bx+hx) - sx - sr
-		penL := sx - (bx-hx) - sr
-		penU := (by+hy) - sy - sr
-		penD := sy - (by-hy) - sr
-		penF := (bz+hz) - sz - sr
-		penB := sz - (bz-hz) - sr
+		penR := (bx + hx) - sx - sr
+		penL := sx - (bx - hx) - sr
+		penU := (by + hy) - sy - sr
+		penD := sy - (by - hy) - sr
+		penF := (bz + hz) - sz - sr
+		penB := sz - (bz - hz) - sr
 		best := penR
 		nx, ny, nz = 1, 0, 0
 		if penL < best {
@@ -1634,14 +1658,7 @@ func RayCast(worldId string, startX, startY, startZ, dirX, dirY, dirZ, maxDist f
 		if !b.active {
 			continue
 		}
-		var min, max vec3
-		if b.radius > 0 {
-			min = vec3{b.position.x - b.radius, b.position.y - b.radius, b.position.z - b.radius}
-			max = vec3{b.position.x + b.radius, b.position.y + b.radius, b.position.z + b.radius}
-		} else {
-			min = vec3{b.position.x - b.halfExt.x, b.position.y - b.halfExt.y, b.position.z - b.halfExt.z}
-			max = vec3{b.position.x + b.halfExt.x, b.position.y + b.halfExt.y, b.position.z + b.halfExt.z}
-		}
+		min, max := bodyAABB(b)
 		t := rayAABB(startX, startY, startZ, dx, dy, dz, min.x, min.y, min.z, max.x, max.y, max.z)
 		if t >= 0 && t < maxDist && t < bestT {
 			bestT = t
@@ -1711,37 +1728,102 @@ func GetRayCastHitNormalZ() float64 {
 }
 
 // Flat-name exports for --gen-go (no namespace in generated code).
-func CreateWorld3D(worldId string, gx, gy, gz float64) { CreateWorld(worldId, gx, gy, gz) }
+func CreateWorld3D(worldId string, gx, gy, gz float64)     { CreateWorld(worldId, gx, gy, gz) }
 func SetWorldGravity3D(worldId string, gx, gy, gz float64) { SetGravity(worldId, gx, gy, gz) }
-func Step3D(worldId string, dt float64)                  { Step(worldId, dt) }
+func Step3D(worldId string, dt float64)                    { Step(worldId, dt) }
 func CreateBox3D(worldId, bodyId string, x, y, z, hx, hy, hz, mass float64) {
 	CreateBox(worldId, bodyId, x, y, z, hx, hy, hz, mass)
 }
 func CreateSphere3D(worldId, bodyId string, x, y, z, radius, mass float64) {
 	CreateSphere(worldId, bodyId, x, y, z, radius, mass)
 }
-func DestroyBody3D(worldId, bodyId string)       { DestroyBody(worldId, bodyId) }
+func DestroyBody3D(worldId, bodyId string)                  { DestroyBody(worldId, bodyId) }
 func SetPosition3D(worldId, bodyId string, x, y, z float64) { SetPosition(worldId, bodyId, x, y, z) }
-func GetPositionX3D(worldId, bodyId string) float64 { return GetPositionX(worldId, bodyId) }
-func GetPositionY3D(worldId, bodyId string) float64 { return GetPositionY(worldId, bodyId) }
-func GetPositionZ3D(worldId, bodyId string) float64 { return GetPositionZ(worldId, bodyId) }
-func SetVelocity3D(worldId, bodyId string, vx, vy, vz float64) { SetVelocity(worldId, bodyId, vx, vy, vz) }
+func GetPositionX3D(worldId, bodyId string) float64         { return GetPositionX(worldId, bodyId) }
+func GetPositionY3D(worldId, bodyId string) float64         { return GetPositionY(worldId, bodyId) }
+func GetPositionZ3D(worldId, bodyId string) float64         { return GetPositionZ(worldId, bodyId) }
+func SetVelocity3D(worldId, bodyId string, vx, vy, vz float64) {
+	SetVelocity(worldId, bodyId, vx, vy, vz)
+}
 func GetVelocityX3D(worldId, bodyId string) float64 { return GetVelocityX(worldId, bodyId) }
 func GetVelocityY3D(worldId, bodyId string) float64 { return GetVelocityY(worldId, bodyId) }
 func GetVelocityZ3D(worldId, bodyId string) float64 { return GetVelocityZ(worldId, bodyId) }
-func GetYaw3D(worldId, bodyId string) float64   { return GetRotationY(worldId, bodyId) }
-func GetPitch3D(worldId, bodyId string) float64 { return GetRotationX(worldId, bodyId) }
-func GetRoll3D(worldId, bodyId string) float64  { return GetRotationZ(worldId, bodyId) }
-func SetRotation3D(worldId, bodyId string, rx, ry, rz float64) { SetRotation(worldId, bodyId, rx, ry, rz) }
-func ApplyForce3D(worldId, bodyId string, fx, fy, fz float64) { ApplyForce(worldId, bodyId, fx, fy, fz) }
-func ApplyImpulse3D(worldId, bodyId string, ix, iy, iz float64) { ApplyImpulse(worldId, bodyId, ix, iy, iz) }
+func GetYaw3D(worldId, bodyId string) float64       { return GetRotationY(worldId, bodyId) }
+func GetPitch3D(worldId, bodyId string) float64     { return GetRotationX(worldId, bodyId) }
+func GetRoll3D(worldId, bodyId string) float64      { return GetRotationZ(worldId, bodyId) }
+func SetRotation3D(worldId, bodyId string, rx, ry, rz float64) {
+	SetRotation(worldId, bodyId, rx, ry, rz)
+}
+func ApplyForce3D(worldId, bodyId string, fx, fy, fz float64) {
+	ApplyForce(worldId, bodyId, fx, fy, fz)
+}
+func ApplyImpulse3D(worldId, bodyId string, ix, iy, iz float64) {
+	ApplyImpulse(worldId, bodyId, ix, iy, iz)
+}
 func RayCastFromDir3D(worldId string, sx, sy, sz, dx, dy, dz, maxDist float64) int {
 	return RayCast(worldId, sx, sy, sz, dx, dy, dz, maxDist)
 }
-func RayHitX3D() float64    { return GetRayCastHitX() }
-func RayHitY3D() float64    { return GetRayCastHitY() }
-func RayHitZ3D() float64    { return GetRayCastHitZ() }
-func RayHitBody3D() string  { return GetRayCastHitBody() }
+func SphereCastFromDir3D(worldId string, sx, sy, sz, dx, dy, dz, radius, maxDist float64) int {
+	w := getWorld(worldId)
+	if w == nil {
+		lastRayMu.Lock()
+		lastRay.hit = false
+		lastRayMu.Unlock()
+		return 0
+	}
+	norm := math.Sqrt(dx*dx + dy*dy + dz*dz)
+	if norm < 1e-9 {
+		lastRayMu.Lock()
+		lastRay.hit = false
+		lastRayMu.Unlock()
+		return 0
+	}
+	dx, dy, dz = dx/norm, dy/norm, dz/norm
+	if radius < 0 {
+		radius = 0
+	}
+	w.mu.RLock()
+	var bestT float64 = 1e30
+	hit := false
+	var hitP vec3
+	var hitBodyId string
+	var hitNorm vec3
+	for id, b := range w.bodies {
+		if !b.active {
+			continue
+		}
+		min, max := bodyAABB(b)
+		min.x -= radius
+		min.y -= radius
+		min.z -= radius
+		max.x += radius
+		max.y += radius
+		max.z += radius
+		t := rayAABB(sx, sy, sz, dx, dy, dz, min.x, min.y, min.z, max.x, max.y, max.z)
+		if t >= 0 && t < maxDist && t < bestT {
+			bestT = t
+			hit = true
+			hitP = vec3{sx + dx*t, sy + dy*t, sz + dz*t}
+			hitBodyId = id
+			hitNorm = vec3{-dx, -dy, -dz}
+		}
+	}
+	w.mu.RUnlock()
+	lastRayMu.Lock()
+	lastRay.hit = hit
+	lastRay.p = hitP
+	lastRay.bodyId = hitBodyId
+	lastRay.normal = hitNorm
+	lastRayMu.Unlock()
+	if hit {
+		return 1
+	}
+	return 0
+}
+func RayHitX3D() float64       { return GetRayCastHitX() }
+func RayHitY3D() float64       { return GetRayCastHitY() }
+func RayHitZ3D() float64       { return GetRayCastHitZ() }
+func RayHitBody3D() string     { return GetRayCastHitBody() }
 func RayHitNormalX3D() float64 { return GetRayCastHitNormalX() }
 func RayHitNormalY3D() float64 { return GetRayCastHitNormalY() }
 func RayHitNormalZ3D() float64 { return GetRayCastHitNormalZ() }

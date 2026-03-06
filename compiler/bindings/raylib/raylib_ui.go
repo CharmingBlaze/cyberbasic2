@@ -29,30 +29,174 @@ const (
 	uiGroupPad   = 8
 )
 
-var (
-	uiX, uiY       int32
-	uiMu           sync.Mutex
-	uiTextBoxBuf   = make(map[string]string)
-	uiDropdownOpen = make(map[string]bool)
-	uiFocusedText  string
+const (
+	LayoutVertical   = 0
+	LayoutHorizontal = 1
+	LayoutGrid       = 2
 )
 
+var (
+	uiX, uiY           int32
+	uiLayoutMode       int32 = LayoutVertical
+	uiLayoutSpacing    int32 = 4
+	uiLayoutPadL       int32 = 0
+	uiLayoutPadT       int32 = 0
+	uiLayoutPadR       int32 = 0
+	uiLayoutPadB       int32 = 0
+	uiGridCols         int32 = 2
+	uiGridCol          int32
+	uiLayoutStartX     int32
+	uiLayoutStartY     int32
+	uiLayoutRowH       int32
+	uiMu               sync.Mutex
+	uiTextBoxBuf       = make(map[string]string)
+	uiDropdownOpen     = make(map[string]bool)
+	uiFocusedText      string
+	uiLayoutStack      []layoutState
+)
+
+type layoutState struct {
+	x, y, mode, spacing, padL, padT, padR, padB int32
+	gridCols, gridCol, rowH                    int32
+}
+
+// uiLayoutAdvance returns (x, y) for the current widget and advances layout.
+// Call with widget width and height.
+func uiLayoutAdvance(w, h int32) (x, y int32) {
+	uiMu.Lock()
+	defer uiMu.Unlock()
+	x, y = uiX, uiY
+	switch uiLayoutMode {
+	case LayoutVertical:
+		uiY += h + uiLayoutSpacing
+	case LayoutHorizontal:
+		uiX += w + uiLayoutSpacing
+		if h > uiLayoutRowH {
+			uiLayoutRowH = h
+		}
+	case LayoutGrid:
+		if h > uiLayoutRowH {
+			uiLayoutRowH = h
+		}
+		uiGridCol++
+		if uiGridCol >= uiGridCols {
+			uiGridCol = 0
+			uiX = uiLayoutStartX
+			uiY += uiLayoutRowH + uiLayoutSpacing
+			uiLayoutRowH = 0
+		} else {
+			uiX += w + uiLayoutSpacing
+		}
+	default:
+		uiY += h + uiLayoutSpacing
+	}
+	return x, y
+}
+
 func registerUI(v *vm.VM) {
+	v.RegisterForeign("LAYOUT_VERTICAL", func(args []interface{}) (interface{}, error) { return int(LayoutVertical), nil })
+	v.RegisterForeign("LAYOUT_HORIZONTAL", func(args []interface{}) (interface{}, error) { return int(LayoutHorizontal), nil })
+	v.RegisterForeign("LAYOUT_GRID", func(args []interface{}) (interface{}, error) { return int(LayoutGrid), nil })
 	v.RegisterForeign("BeginUI", func(args []interface{}) (interface{}, error) {
 		uiMu.Lock()
 		uiX, uiY = uiStartX, uiStartY
+		uiLayoutMode = LayoutVertical
+		uiLayoutStack = nil
 		uiMu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("EndUI", func(args []interface{}) (interface{}, error) {
 		return nil, nil
 	})
+	v.RegisterForeign("BeginLayout", func(args []interface{}) (interface{}, error) {
+		mode := int32(LayoutVertical)
+		if len(args) >= 1 {
+			mode = int32(toInt32(args[0]))
+		}
+		uiMu.Lock()
+		uiLayoutMode = mode
+		uiLayoutStartX, uiLayoutStartY = uiX, uiY
+		uiGridCol = 0
+		uiLayoutRowH = 0
+		if mode == LayoutGrid && len(args) >= 2 {
+			uiGridCols = int32(toInt32(args[1]))
+			if uiGridCols < 1 {
+				uiGridCols = 1
+			}
+		}
+		uiMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("LayoutSpacing", func(args []interface{}) (interface{}, error) {
+		if len(args) >= 1 {
+			uiMu.Lock()
+			uiLayoutSpacing = int32(toInt32(args[0]))
+			if uiLayoutSpacing < 0 {
+				uiLayoutSpacing = 0
+			}
+			uiMu.Unlock()
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("LayoutPadding", func(args []interface{}) (interface{}, error) {
+		if len(args) >= 4 {
+			uiMu.Lock()
+			uiLayoutPadL = int32(toInt32(args[0]))
+			uiLayoutPadT = int32(toInt32(args[1]))
+			uiLayoutPadR = int32(toInt32(args[2]))
+			uiLayoutPadB = int32(toInt32(args[3]))
+			uiMu.Unlock()
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("BeginLayoutGroup", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("BeginLayoutGroup(id, mode) requires 2 arguments")
+		}
+		mode := int32(toInt32(args[1]))
+		uiMu.Lock()
+		uiLayoutStack = append(uiLayoutStack, layoutState{
+			x: uiX, y: uiY, mode: uiLayoutMode, spacing: uiLayoutSpacing,
+			padL: uiLayoutPadL, padT: uiLayoutPadT, padR: uiLayoutPadR, padB: uiLayoutPadB,
+			gridCols: uiGridCols, gridCol: uiGridCol, rowH: uiLayoutRowH,
+		})
+		uiLayoutMode = mode
+		uiX += uiLayoutPadL
+		uiY += uiLayoutPadT
+		uiLayoutStartX, uiLayoutStartY = uiX, uiY
+		uiGridCol = 0
+		uiLayoutRowH = 0
+		if mode == LayoutGrid && len(args) >= 3 {
+			uiGridCols = int32(toInt32(args[2]))
+		}
+		uiMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("EndLayoutGroup", func(args []interface{}) (interface{}, error) {
+		uiMu.Lock()
+		if len(uiLayoutStack) > 0 {
+			prev := uiLayoutStack[len(uiLayoutStack)-1]
+			uiLayoutStack = uiLayoutStack[:len(uiLayoutStack)-1]
+			uiX = prev.x
+			if prev.mode == LayoutHorizontal {
+				uiY = prev.y + uiLayoutRowH + prev.spacing + prev.padB
+			} else {
+				uiY = uiY + prev.padB
+			}
+			uiLayoutMode = prev.mode
+			uiLayoutSpacing = prev.spacing
+			uiLayoutPadL, uiLayoutPadT = prev.padL, prev.padT
+			uiLayoutPadR, uiLayoutPadB = prev.padR, prev.padB
+			uiGridCols, uiGridCol = prev.gridCols, prev.gridCol
+			uiLayoutRowH = prev.rowH
+		}
+		uiMu.Unlock()
+		return nil, nil
+	})
 	v.RegisterForeign("Label", func(args []interface{}) (interface{}, error) {
 		text := fmt.Sprint(args[0])
-		uiMu.Lock()
-		x, y := uiX, uiY
-		uiY += uiLineH
-		uiMu.Unlock()
+		w := int32(rl.MeasureText(text, 20))
+		x, y := uiLayoutAdvance(w, uiLineH)
 		rl.DrawText(text, x, y, 20, rl.LightGray)
 		return nil, nil
 	})
@@ -68,14 +212,11 @@ func registerUI(v *vm.VM) {
 	})
 	v.RegisterForeign("Button", func(args []interface{}) (interface{}, error) {
 		text := fmt.Sprint(args[0])
-		uiMu.Lock()
-		x, y := int32(uiX), int32(uiY)
-		uiY += uiButtonH + uiPadding
-		uiMu.Unlock()
 		w := rl.MeasureText(text, 20) + 24
 		if w < uiMinBtnW {
 			w = uiMinBtnW
 		}
+		x, y := uiLayoutAdvance(w, uiButtonH)
 		h := uiButtonH
 		mx := rl.GetMouseX()
 		my := rl.GetMouseY()
@@ -133,17 +274,15 @@ func registerUI(v *vm.VM) {
 		if maxV <= minV {
 			maxV = minV + 1
 		}
-		uiMu.Lock()
-		x, y := uiX, uiY
-		uiY += uiSliderH + uiPadding
-		uiMu.Unlock()
-		w := int32(uiSliderW)
-		h := uiSliderH
+		labelW := int32(rl.MeasureText(text, 18)) + 8
+		w := labelW + int32(uiSliderW)
+		h := int32(uiSliderH)
+		x, y := uiLayoutAdvance(w, h)
 		mx := rl.GetMouseX()
 		my := rl.GetMouseY()
 		// Track thumb: left part = bar
-		barX := x + int32(rl.MeasureText(text, 18)) + 8
-		barW := w - (barX - x)
+		barX := x + labelW
+		barW := w - labelW
 		norm := (val - minV) / (maxV - minV)
 		if norm < 0 {
 			norm = 0
@@ -177,13 +316,12 @@ func registerUI(v *vm.VM) {
 		}
 		text := fmt.Sprint(args[0])
 		checked := toInt32(args[1]) != 0
-		uiMu.Lock()
-		x, y := uiX, uiY
-		uiY += uiLineH + uiPadding
-		uiMu.Unlock()
+		w := int32(uiCheckBoxW) + int32(rl.MeasureText(text, 18)) + 8
+		h := int32(uiLineH)
+		x, y := uiLayoutAdvance(w, h)
 		mx := rl.GetMouseX()
 		my := rl.GetMouseY()
-		hit := mx >= x && mx <= x+uiCheckBoxW+int32(rl.MeasureText(text, 18))+8 && my >= y && my <= y+uiCheckBoxW
+		hit := mx >= x && mx <= x+w && my >= y && my <= y+uiCheckBoxW
 		if hit && rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
 			checked = !checked
 		}
@@ -275,11 +413,10 @@ func registerUI(v *vm.VM) {
 			uiTextBoxBuf[id] = initial
 		}
 		buf := uiTextBoxBuf[id]
-		x, y := uiX, uiY
-		uiY += uiTextBoxH + uiPadding
 		uiMu.Unlock()
-		w := uiTextBoxW
-		h := uiTextBoxH
+		w := int32(uiTextBoxW)
+		h := int32(uiTextBoxH)
+		x, y := uiLayoutAdvance(w, h)
 		mx := rl.GetMouseX()
 		my := rl.GetMouseY()
 		hit := mx >= x && mx <= x+int32(w) && my >= y && my <= y+int32(h)
@@ -327,22 +464,24 @@ func registerUI(v *vm.VM) {
 		}
 		uiMu.Lock()
 		open := uiDropdownOpen[id]
-		x, y := uiX, uiY
-		uiY += uiDropdownH + uiPadding
 		uiMu.Unlock()
-		w := uiTextBoxW
-		h := uiDropdownH
+		w := int32(uiTextBoxW)
+		barH := int32(uiDropdownH)
+		h := barH
+		if open {
+			h += int32(len(items) * 24)
+		}
+		x, y := uiLayoutAdvance(w, h)
 		mx := rl.GetMouseX()
 		my := rl.GetMouseY()
-		barHit := mx >= x && mx <= x+int32(w) && my >= y && my <= y+int32(h)
+		barHit := mx >= x && mx <= x+int32(w) && my >= y && my <= y+int32(barH)
 		if barHit && rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
 			open = !open
 		}
 		if open {
 			itemH := 24
-			listH := len(items) * itemH
 			for i, item := range items {
-				iy := y + int32(h) + int32(i*itemH)
+				iy := y + int32(barH) + int32(i*itemH)
 				itemHit := mx >= x && mx <= x+int32(w) && my >= iy && my <= iy+int32(itemH)
 				if itemHit && rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
 					active = i
@@ -355,13 +494,10 @@ func registerUI(v *vm.VM) {
 				}
 				rl.DrawText(item, x+4, iy+2, 18, rl.White)
 			}
-			uiMu.Lock()
-			uiY += int32(listH)
-			uiMu.Unlock()
-			rl.DrawRectangleLines(x, y, int32(w), int32(h+listH), rl.LightGray)
+			rl.DrawRectangleLines(x, y, w, barH+int32(len(items)*24), rl.LightGray)
 		} else {
-			rl.DrawRectangle(x, y, int32(w), int32(h), rl.Gray)
-			rl.DrawRectangleLines(x, y, int32(w), int32(h), rl.LightGray)
+			rl.DrawRectangle(x, y, int32(w), int32(barH), rl.Gray)
+			rl.DrawRectangleLines(x, y, int32(w), int32(barH), rl.LightGray)
 			rl.DrawText(items[active], x+4, y+4, 18, rl.White)
 		}
 		uiDropdownOpen[id] = open
@@ -387,13 +523,12 @@ func registerUI(v *vm.VM) {
 		if norm > 1 {
 			norm = 1
 		}
-		uiMu.Lock()
-		x, y := uiX, uiY
-		uiY += uiProgressH + uiPadding
-		uiMu.Unlock()
-		w := int32(uiSliderW)
-		barX := x + int32(rl.MeasureText(text, 18)) + 8
-		barW := w - (barX - x)
+		labelW := int32(rl.MeasureText(text, 18)) + 8
+		w := labelW + int32(uiSliderW)
+		h := int32(uiProgressH)
+		x, y := uiLayoutAdvance(w, h)
+		barX := x + labelW
+		barW := w - labelW
 		rl.DrawText(text, x, y, 18, rl.LightGray)
 		rl.DrawRectangle(barX, y, barW, uiProgressH, rl.DarkGray)
 		rl.DrawRectangle(barX, y, int32(float64(barW)*norm), uiProgressH, rl.Gray)
@@ -407,9 +542,10 @@ func registerUI(v *vm.VM) {
 		if len(args) >= 1 {
 			title = fmt.Sprint(args[0])
 		}
+		w := int32(300)
+		h := int32(uiLineH + uiWindowPad)
+		x, y := uiLayoutAdvance(w, h)
 		uiMu.Lock()
-		x, y := uiX, uiY
-		uiY += uiLineH + uiWindowPad
 		uiX += uiWindowPad
 		uiMu.Unlock()
 		rl.DrawRectangle(x, y, 300, 2, rl.LightGray)
@@ -430,9 +566,10 @@ func registerUI(v *vm.VM) {
 		if len(args) >= 1 {
 			text = fmt.Sprint(args[0])
 		}
+		w := int32(280)
+		h := int32(uiLineH + uiGroupPad)
+		x, y := uiLayoutAdvance(w, h)
 		uiMu.Lock()
-		x, y := uiX, uiY
-		uiY += uiLineH + uiGroupPad
 		uiX += uiGroupPad
 		uiMu.Unlock()
 		rl.DrawRectangleLines(x, y, 280, 2, rl.Gray)

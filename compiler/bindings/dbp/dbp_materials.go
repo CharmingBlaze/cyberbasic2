@@ -18,6 +18,60 @@ var (
 )
 
 func registerMaterials(v *vm.VM) {
+	v.RegisterForeign("CreatePBRMaterial", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("CreatePBRMaterial(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		mat := rl.LoadMaterialDefault()
+		if mat.Maps != nil {
+			if metalMap := mat.GetMap(rl.MapMetalness); metalMap != nil {
+				metalMap.Value = 0
+			}
+			if roughMap := mat.GetMap(rl.MapRoughness); roughMap != nil {
+				roughMap.Value = 0.5
+			}
+		}
+		materialsMu.Lock()
+		materials[id] = mat
+		materialsMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetMaterialPBR", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetMaterialPBR(id, metallic, roughness, normalTextureID) requires 4 arguments")
+		}
+		id := toInt(args[0])
+		metallic := toFloat32(args[1])
+		roughness := toFloat32(args[2])
+		normTexID := toInt(args[3])
+		materialsMu.Lock()
+		mat, ok := materials[id]
+		materialsMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown material id %d", id)
+		}
+		if mat.Maps != nil {
+			if metalMap := mat.GetMap(rl.MapMetalness); metalMap != nil {
+				metalMap.Value = metallic
+			}
+			if roughMap := mat.GetMap(rl.MapRoughness); roughMap != nil {
+				roughMap.Value = roughness
+			}
+			if normTexID > 0 {
+				texturesMu.Lock()
+				tex, texOk := textures[normTexID]
+				texturesMu.Unlock()
+				if texOk {
+					rl.SetMaterialTexture(&mat, rl.MapNormal, tex)
+				}
+			}
+			materialsMu.Lock()
+			materials[id] = mat
+			materialsMu.Unlock()
+		}
+		return nil, nil
+	})
 	v.RegisterForeign("MakeMaterial", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("MakeMaterial(id) requires 1 argument")

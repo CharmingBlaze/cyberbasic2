@@ -51,7 +51,14 @@ WHILE TRUE
 WEND
 ```
 
-To accept new clients each frame, call **AcceptTimeout**(sid, 50) in the loop; when it returns a connectionId, the next **ProcessNetworkEvents()** will call **OnClientConnect** with that id. You can still use **Receive**(connectionId) to poll for messages if you prefer; messages are queued and either **OnMessage** is called or **Receive** will return them.
+To accept new clients each frame, call **AcceptTimeout**(sid, 50) in the loop; when it returns a connectionId, the next **ProcessNetworkEvents()** will call **OnClientConnect** with that id.
+
+Choose one message-consumption style per flow:
+
+- Callback-driven: call **ProcessNetworkEvents()** and handle text in **OnMessage**.
+- Polling-driven: skip **ProcessNetworkEvents()** for message delivery and read with **Receive** / **ReceiveJSON** / **ReceiveTable** / **ReceiveNumbers**.
+
+`ProcessNetworkEvents()` consumes queued messages before `Receive()` can see them, so callbacks and polling are now mutually exclusive for the same message stream instead of duplicating delivery.
 
 **Minimal client example:**
 
@@ -168,7 +175,7 @@ Same **Connect** / **Host** / **Send** / **Receive** / rooms API everywhere; onl
 
 ## Protocol
 
-Messages are sent as **lines of text** (one message per line). When you call **Send**(connectionId, text), a newline is appended. When you call **Receive**(connectionId), you get one line (without the newline), or null if no data is available (non-blocking) or the connection closed.
+Messages are sent as **lines of text** (one message per line). When you call **Send**(connectionId, text), a newline is appended. When you call **Receive**(connectionId), you get one line (without the newline), or null if no data is available or the connection closed.
 
 **Limits (optimized and secure):** Each message is limited to **256 KB** and must not contain newline or carriage-return characters. **Send** and **SendToRoom** reject oversized or invalid messages (return false or 0). This keeps the protocol predictable and prevents abuse.
 
@@ -285,6 +292,16 @@ In a game, typically:
 - **Client:** Each frame, call **Receive**(cid); if not null, update game state. Use **Send**(cid, ...) to send input or actions.
 
 Receive is non-blocking (returns null if no data), so your game stays responsive.
+
+## Fixed-step gameplay
+
+For deterministic or semi-deterministic multiplayer code, drive simulation from the fixed-step runtime instead of raw frame time:
+
+- `FixedUpdate(rate)` sets the fixed-step frequency.
+- `OnFixedUpdate(label$)` sets the callback run on each fixed step.
+- `FixedDeltaTime()` returns the current fixed timestep in seconds.
+
+Design note: lockstep / rollback networking is not implemented yet. See [Multiplayer Design](MULTIPLAYER_DESIGN.md) for the current architecture plan and status.
 
 ## RPC (remote procedure calls)
 

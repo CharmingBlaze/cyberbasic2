@@ -6,6 +6,7 @@ import (
 	"math"
 	"strconv"
 
+	"cyberbasic/compiler/bindings/bullet"
 	"cyberbasic/compiler/vm"
 )
 
@@ -93,18 +94,15 @@ func registerCollision(v *vm.VM) {
 		return v.CallForeign("RayHitBody2D", nil)
 	})
 
-	// --- Spherecast (3D): thick ray - uses raycast with radius check; stub returns 0 if no native support ---
+	// --- Spherecast (3D): sweeps a sphere along the ray against inflated body AABBs ---
 	v.RegisterForeign("Spherecast", func(args []interface{}) (interface{}, error) {
 		if len(args) < 7 {
 			return nil, fmt.Errorf("Spherecast(ox, oy, oz, dx, dy, dz, radius) requires 7 arguments")
 		}
-		// Delegate to Raycast; spherecast would need radius-aware hit - use raycast as approximation
 		ox, oy, oz := toFloat64Collision(args[0]), toFloat64Collision(args[1]), toFloat64Collision(args[2])
 		dx, dy, dz := toFloat64Collision(args[3]), toFloat64Collision(args[4]), toFloat64Collision(args[5])
-		_ = toFloat64Collision(args[6]) // radius - not used in simple impl
-		return v.CallForeign("RayCastFromDir3D", []interface{}{
-			defaultCollisionWorld3D, ox, oy, oz, dx, dy, dz, defaultRayMaxDist,
-		})
+		radius := toFloat64Collision(args[6])
+		return bullet.SphereCastFromDir3D(defaultCollisionWorld3D, ox, oy, oz, dx, dy, dz, radius, defaultRayMaxDist), nil
 	})
 
 	// --- Object collision (DBP objects by id) ---

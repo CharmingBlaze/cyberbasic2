@@ -78,11 +78,13 @@ All commands are **case-insensitive**. For the complete list see [API Reference]
 
 - **CreateBox3D**(worldId, bodyId, x, y, z, halfWidth, halfHeight, halfDepth, mass) — box (half-extents). mass 0 = static.
 - **CreateSphere3D**(worldId, bodyId, x, y, z, radius, mass) — sphere.
-- **CreateCapsule3D**, **CreateCylinder3D**, **CreateCone3D** — capsule, cylinder, cone (legacy names; see API Reference).
+- **CreateCapsule3D**, **CreateCylinder3D**, **CreateCone3D** — capsule, cylinder, cone (legacy names; see API Reference). In the pure-Go runtime, capsules are still approximated for collision/raycast math, but the requested capsule height is now preserved in the body's bounds instead of being ignored.
 - **CreateStaticMesh3D**, **CreateHeightmap3D** — static mesh and heightfield (legacy; see API Reference).
 - **CreateCompound3D**, **AddShapeToCompound3D** — compound bodies (multiple shapes). **SetScale3D** for scaling.
 
-**Body properties (implemented):** **SetFriction3D**(worldId, bodyId, friction), **SetRestitution3D**(worldId, bodyId, restitution), **SetDamping3D**(worldId, bodyId, linearDamp, angularDamp), **SetKinematic3D**(worldId, bodyId, kinematic), **SetGravity3D**(worldId, bodyId, gravityScale), **SetLinearFactor3D**(worldId, bodyId, fx, fy, fz), **SetAngularFactor3D**(worldId, bodyId, ax, ay, az), **SetCCD3D**(worldId, bodyId, enable). These are used in the pure-Go engine's Step and collision resolution. **3D joints** (CreateHingeJoint3D, CreateSliderJoint3D, etc.) remain stubbed in the pure-Go engine; see API Reference.
+**Body properties (implemented):** **SetFriction3D**, **SetRestitution3D**, **SetDamping3D**, **SetKinematic3D**, **SetGravity3D**, **SetLinearFactor3D**, **SetAngularFactor3D**, **SetCCD3D**.
+
+**3D joints:** **BulletJointsAvailable**() returns 0 (pure-Go engine) or 1 (CGO Bullet). CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, CreatePointToPointJoint3D, CreateFixedJoint3D, SetJointLimits3D, SetJointMotor3D are stubbed in the pure-Go engine; use a full Bullet CGO build for constraint joints.
 
 ---
 
@@ -105,23 +107,34 @@ Use these each frame after **Step3D** to draw your 3D model or to drive **GAME.C
 
 ## Raycast
 
-- **RayCast3D**(worldId, fromX, fromY, fromZ, toX, toY, toZ) — cast a ray from point to point. **RayCastFromDir3D**(worldId, sx, sy, sz, dx, dy, dz, maxDist) — from start along direction. Returns 1 if hit, 0 otherwise.
+- **RayCast3D**(worldId, fromX, fromY, fromZ, toX, toY, toZ) — cast a ray from point to point.
+- **RayCastFromDir3D**(worldId, sx, sy, sz, dx, dy, dz, maxDist) — cast from origin plus direction. Returns 1 if hit, 0 otherwise.
 - After a hit: **RayHitX3D**(), **RayHitY3D**(), **RayHitZ3D**() — hit point; **RayHitBody3D**() — body id; **RayHitNormalX3D**() etc. — hit normal.
+- DBP wrappers: **Raycast**(ox, oy, oz, dx, dy, dz [, maxDist]) and **Spherecast**(ox, oy, oz, dx, dy, dz, radius). The spherecast implementation currently sweeps against inflated body AABBs, so treat it as a broad-phase helper rather than exact Bullet geometry.
 
 ---
 
 ## Hybrid loop (StepAllPhysics3D)
 
-When you define **update(dt)** and **draw()** and use the automatic game loop, the pipeline calls **StepAllPhysics3D(dt)** — all registered Bullet worlds are stepped with the same dt. You do **not** need to call **Step3D** per world yourself.
+When you define **update(dt)** and **draw()** and use the automatic game loop, the runtime now accumulates time and steps **StepAllPhysics3D** on the fixed timestep from `FixedDeltaTime()` (default 1/60). Use `FixedUpdate(rate)` plus `OnFixedUpdate(label$)` when you want an explicit fixed-step callback alongside physics.
 
 See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop).
+
+---
+
+## Character controller
+
+- **CreateCharacterController**(worldId, bodyId, radius, height) — creates a capsule-style body centered at `height/2` with the requested total height preserved in the physics bounds.
+- **SetCharacterControllerSpeed**(bodyId, scale) — multiplies the speed in **GAME.MoveWASD** for that body.
+- **GAME.OnGround**(worldId, bodyId, planeY, tolerance) — returns 1 if body is near planeY.
+- **GAME.SnapToGround**(worldId, bodyId, planeY, offset) — snaps body to ground plane.
 
 ---
 
 ## GAME.* 3D helpers
 
 - **GAME.CameraOrbit**(cx, cy, cz, angle, pitch, distance) — position the 3D camera to orbit around a point (e.g. player position). Call each frame after reading body position.
-- **GAME.MoveWASD**(worldId, bodyId, angle, speed, jumpForce, dt) — apply WASD movement and jump to a body; use with **GAME.CameraOrbit** for a third-person controller.
+- **GAME.MoveWASD**(worldId, bodyId, angle, speed, jumpForce, dt) — applies horizontal movement by setting character velocity and uses `jumpForce` for the Y velocity when grounded; use with **GAME.CameraOrbit** for a third-person controller.
 - **GAME.SetCamera3DOrbit**(targetX, targetY, targetZ, …), **GAME.UpdateCamera3D** — alternative camera helpers (see [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)).
 
 See [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md#3d-physics-bullet).

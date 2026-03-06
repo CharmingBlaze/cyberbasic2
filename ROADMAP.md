@@ -1,6 +1,8 @@
 # CyberBasic Roadmap
 
-This document is the project’s priority list and planned improvements. Contributions are welcome—see the repo [issues](https://github.com/CharmingBlaze/cyberbasic2/issues) and open a discussion or PR for any item below.
+This document is the project's priority list and planned improvements. Contributions are welcome; see the repo [issues](https://github.com/CharmingBlaze/cyberbasic2/issues) and open a discussion or PR for any item below.
+
+For the current shipped/implemented status after the roadmap remediation pass, see `docs/ROADMAP_IMPLEMENTATION.md`. This file remains the forward-looking wishlist and priority list.
 
 ---
 

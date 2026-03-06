@@ -135,12 +135,38 @@ func registerInstancing(v *vm.VM) {
 		if !ok || !obj.visible {
 			return nil, nil
 		}
-		tint := rl.NewColor(obj.colorR, obj.colorG, obj.colorB, obj.colorA)
+		// Collect valid instances
+		var valid []*dbpInstance
 		instancesMu.Lock()
 		for _, inst := range list {
-			if inst == nil {
-				continue
+			if inst != nil {
+				valid = append(valid, inst)
 			}
+		}
+		instancesMu.Unlock()
+		if len(valid) == 0 {
+			return nil, nil
+		}
+		// GPU instancing when model has single mesh
+		meshes := obj.model.GetMeshes()
+		if obj.model.MeshCount == 1 && len(meshes) >= 1 && obj.model.Materials != nil {
+			transforms := make([]rl.Matrix, len(valid))
+			for i, inst := range valid {
+				angle := inst.yaw * math.Pi / 180
+				t := rl.MatrixTranslate(inst.x, inst.y, inst.z)
+				r := rl.MatrixRotateY(angle)
+				s := rl.MatrixScale(inst.scaleX, inst.scaleY, inst.scaleZ)
+				transforms[i] = rl.MatrixMultiply(rl.MatrixMultiply(t, r), s)
+			}
+			mesh := meshes[0]
+			mat := *obj.model.Materials
+			applyObjectPBR(obj)
+			rl.DrawMeshInstanced(mesh, mat, transforms, len(transforms))
+			return nil, nil
+		}
+		// Fallback: per-instance DrawModelEx for multi-mesh models
+		tint := rl.NewColor(obj.colorR, obj.colorG, obj.colorB, obj.colorA)
+		for _, inst := range valid {
 			pos := rl.Vector3{X: inst.x, Y: inst.y, Z: inst.z}
 			rotAxis := rl.Vector3{X: 0, Y: 1, Z: 0}
 			rotAngle := inst.yaw * math.Pi / 180
@@ -151,7 +177,6 @@ func registerInstancing(v *vm.VM) {
 				rl.DrawModelEx(obj.model, pos, rotAxis, rotAngle, scale, tint)
 			}
 		}
-		instancesMu.Unlock()
 		return nil, nil
 	})
 }

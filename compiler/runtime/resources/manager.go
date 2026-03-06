@@ -74,6 +74,14 @@ func ModelExists(path string) bool {
 	return ok
 }
 
+// TextureExists returns true if the texture is cached.
+func TextureExists(path string) bool {
+	texturesMu.RLock()
+	defer texturesMu.RUnlock()
+	_, ok := textures[path]
+	return ok
+}
+
 // LoadTexture loads a texture from path. Reference counted.
 func LoadTexture(path string) (string, error) {
 	texturesMu.Lock()

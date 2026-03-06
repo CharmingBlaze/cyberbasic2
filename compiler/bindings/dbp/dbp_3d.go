@@ -149,6 +149,20 @@ func register3DCamera(v *vm.VM) {
 	})
 }
 
+func getObjectLocalFloat(args []interface{}, getter func(*dbpObject) float32) (float64, error) {
+	if len(args) < 1 {
+		return 0, nil
+	}
+	id := toInt(args[0])
+	objectsMu.Lock()
+	obj, ok := objects[id]
+	objectsMu.Unlock()
+	if !ok {
+		return 0, nil
+	}
+	return float64(getter(obj)), nil
+}
+
 func toFloat64(v interface{}) float64 {
 	switch x := v.(type) {
 	case int:
@@ -353,6 +367,52 @@ func register3DObjects(v *vm.VM) {
 	})
 	v.RegisterForeign("DetachObject", func(args []interface{}) (interface{}, error) {
 		return v.CallForeign("UnparentObject", args)
+	})
+
+	// --- Local transform (object's own position/rotation/scale, before parent composition) ---
+	v.RegisterForeign("GetObjectLocalX", func(args []interface{}) (interface{}, error) {
+		return getObjectLocalFloat(args, func(o *dbpObject) float32 { return o.x })
+	})
+	v.RegisterForeign("GetObjectLocalY", func(args []interface{}) (interface{}, error) {
+		return getObjectLocalFloat(args, func(o *dbpObject) float32 { return o.y })
+	})
+	v.RegisterForeign("GetObjectLocalZ", func(args []interface{}) (interface{}, error) {
+		return getObjectLocalFloat(args, func(o *dbpObject) float32 { return o.z })
+	})
+	v.RegisterForeign("GetObjectLocalPitch", func(args []interface{}) (interface{}, error) {
+		return getObjectLocalFloat(args, func(o *dbpObject) float32 { return o.pitch })
+	})
+	v.RegisterForeign("GetObjectLocalYaw", func(args []interface{}) (interface{}, error) {
+		return getObjectLocalFloat(args, func(o *dbpObject) float32 { return o.yaw })
+	})
+	v.RegisterForeign("GetObjectLocalRoll", func(args []interface{}) (interface{}, error) {
+		return getObjectLocalFloat(args, func(o *dbpObject) float32 { return o.roll })
+	})
+	v.RegisterForeign("GetObjectLocalScaleX", func(args []interface{}) (interface{}, error) {
+		return getObjectLocalFloat(args, func(o *dbpObject) float32 { return o.scaleX })
+	})
+	v.RegisterForeign("GetObjectLocalScaleY", func(args []interface{}) (interface{}, error) {
+		return getObjectLocalFloat(args, func(o *dbpObject) float32 { return o.scaleY })
+	})
+	v.RegisterForeign("GetObjectLocalScaleZ", func(args []interface{}) (interface{}, error) {
+		return getObjectLocalFloat(args, func(o *dbpObject) float32 { return o.scaleZ })
+	})
+	v.RegisterForeign("SetObjectLocalTransform", func(args []interface{}) (interface{}, error) {
+		if len(args) < 10 {
+			return nil, fmt.Errorf("SetObjectLocalTransform(id, x,y,z, pitch,yaw,roll, scaleX,scaleY,scaleZ) requires 10 arguments")
+		}
+		id := toInt(args[0])
+		x, y, z := toFloat32(args[1]), toFloat32(args[2]), toFloat32(args[3])
+		pitch, yaw, roll := toFloat32(args[4]), toFloat32(args[5]), toFloat32(args[6])
+		sx, sy, sz := toFloat32(args[7]), toFloat32(args[8]), toFloat32(args[9])
+		objectsMu.Lock()
+		if obj, ok := objects[id]; ok {
+			obj.x, obj.y, obj.z = x, y, z
+			obj.pitch, obj.yaw, obj.roll = pitch, yaw, roll
+			obj.scaleX, obj.scaleY, obj.scaleZ = sx, sy, sz
+		}
+		objectsMu.Unlock()
+		return nil, nil
 	})
 
 	// --- Object tags ---

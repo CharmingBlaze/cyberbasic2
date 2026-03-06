@@ -5,7 +5,9 @@ import (
 	"bufio"
 	"crypto/tls"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"net"
 	"os"
 	"sort"
@@ -61,8 +63,8 @@ const maxSendNumbers = 16         // max numbers in SendNumbers / SendToRoomNumb
 
 // netEvent is one item in the event queue for ProcessNetworkEvents (connect, disconnect, message).
 type netEvent struct {
-	typ   string // "connect", "disconnect", "message"
-	id    string
+	typ     string // "connect", "disconnect", "message"
+	id      string
 	payload string
 }
 
@@ -104,6 +106,42 @@ func drainEvents() []netEvent {
 	return out
 }
 
+func cleanupConnection(cid string, conn net.Conn, sendDisconnectEvent bool) {
+	removed := false
+	netMu.Lock()
+	if existing, ok := conns[cid]; ok && (conn == nil || existing == conn) {
+		delete(conns, cid)
+		delete(readers, cid)
+		for roomID, set := range rooms {
+			delete(set, cid)
+			if len(set) == 0 {
+				delete(rooms, roomID)
+			}
+		}
+		removed = true
+	}
+	netMu.Unlock()
+	if !removed {
+		if conn != nil {
+			_ = conn.Close()
+		}
+		return
+	}
+	connMessagesMu.Lock()
+	delete(connMessages, cid)
+	connMessagesMu.Unlock()
+	pingMu.Lock()
+	delete(pingSentAt, cid)
+	delete(lastRTTMs, cid)
+	pingMu.Unlock()
+	if sendDisconnectEvent {
+		pushEvent("disconnect", cid, "")
+	}
+	if conn != nil {
+		_ = conn.Close()
+	}
+}
+
 // startReader runs in a goroutine; reads lines from conn, appends to connMessages[id], pushes "message" events; on error pushes "disconnect" and removes conn.
 func startReader(cid string, conn net.Conn) {
 	rd := bufio.NewReader(conn)
@@ -111,24 +149,20 @@ func startReader(cid string, conn net.Conn) {
 	readers[cid] = rd
 	netMu.Unlock()
 	for {
-		_ = conn.SetReadDeadline(time.Now().Add(50 * time.Millisecond))
+		_ = conn.SetReadDeadline(time.Now().Add(250 * time.Millisecond))
 		line, err := rd.ReadString('\n')
 		if err != nil {
-			eventMu.Lock()
-			eventQueue = append(eventQueue, netEvent{typ: "disconnect", id: cid, payload: ""})
-			eventMu.Unlock()
-			netMu.Lock()
-			delete(conns, cid)
-			delete(readers, cid)
-			netMu.Unlock()
-			connMessagesMu.Lock()
-			delete(connMessages, cid)
-			connMessagesMu.Unlock()
-			pingMu.Lock()
-			delete(pingSentAt, cid)
-			delete(lastRTTMs, cid)
-			pingMu.Unlock()
-			_ = conn.Close()
+			if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+				continue
+			}
+			if errors.Is(err, os.ErrDeadlineExceeded) {
+				continue
+			}
+			if errors.Is(err, io.EOF) || errors.Is(err, net.ErrClosed) {
+				cleanupConnection(cid, conn, true)
+				return
+			}
+			cleanupConnection(cid, conn, true)
 			return
 		}
 		if len(line) > 0 && line[len(line)-1] == '\n' {
@@ -138,6 +172,9 @@ func startReader(cid string, conn net.Conn) {
 			line = line[:len(line)-1]
 		}
 		if len(line) > maxMessageSize {
+			continue
+		}
+		if line == "" {
 			continue
 		}
 		if line == "P" {
@@ -152,14 +189,10 @@ func startReader(cid string, conn net.Conn) {
 			pingMu.Unlock()
 			continue
 		}
-		if strings.HasPrefix(line, "E\t") {
-			pushEvent("message", cid, line)
-			continue
-		}
 		connMessagesMu.Lock()
 		connMessages[cid] = append(connMessages[cid], line)
 		connMessagesMu.Unlock()
-		pushEvent("message", cid, line)
+		pushEvent("message", cid, "")
 	}
 }
 
@@ -491,27 +524,9 @@ func RegisterNet(v *vm.VM) {
 		id := toString(args[0])
 		netMu.Lock()
 		conn, ok := conns[id]
-		if ok {
-			delete(conns, id)
-			delete(readers, id)
-		}
-		// Remove connection from all rooms
-		for roomId, set := range rooms {
-			delete(set, id)
-			if len(set) == 0 {
-				delete(rooms, roomId)
-			}
-		}
 		netMu.Unlock()
-		connMessagesMu.Lock()
-		delete(connMessages, id)
-		connMessagesMu.Unlock()
-		pingMu.Lock()
-		delete(pingSentAt, id)
-		delete(lastRTTMs, id)
-		pingMu.Unlock()
-		if conn != nil {
-			_ = conn.Close()
+		if ok {
+			cleanupConnection(id, conn, false)
 		}
 		return nil, nil
 	})
@@ -1092,9 +1107,13 @@ func RegisterNet(v *vm.VM) {
 					_ = netVM.InvokeSub("onclientdisconnect", []interface{}{ev.id})
 				}
 			case "message":
+				msg, ok := popMessage(ev.id)
+				if !ok {
+					continue
+				}
 				handled := false
-				if strings.HasPrefix(ev.payload, "E\t") {
-					parts := strings.Split(ev.payload, "\t")
+				if strings.HasPrefix(msg, "E\t") {
+					parts := strings.Split(msg, "\t")
 					if len(parts) >= 4 {
 						entityId := parts[1]
 						x, _ := strconv.ParseFloat(parts[2], 64)
@@ -1117,10 +1136,10 @@ func RegisterNet(v *vm.VM) {
 						handled = true
 					}
 				}
-				if !handled && len(ev.payload) >= 3 && ev.payload[:2] == "R<" {
-					if idx := strings.Index(ev.payload, ">"); idx > 2 {
-						rpcName := strings.ToLower(ev.payload[2:idx])
-						rest := strings.TrimSpace(ev.payload[idx+1:])
+				if !handled && len(msg) >= 3 && msg[:2] == "R<" {
+					if idx := strings.Index(msg, ">"); idx > 2 {
+						rpcName := strings.ToLower(msg[2:idx])
+						rest := strings.TrimSpace(msg[idx+1:])
 						var rpcArgs []interface{}
 						if len(rest) > 0 {
 							_ = json.Unmarshal([]byte(rest), &rpcArgs)
@@ -1136,7 +1155,7 @@ func RegisterNet(v *vm.VM) {
 				}
 				if !handled {
 					if _, ok := netVM.Chunk().GetFunction("onmessage"); ok {
-						_ = netVM.InvokeSub("onmessage", []interface{}{ev.id, ev.payload})
+						_ = netVM.InvokeSub("onmessage", []interface{}{ev.id, msg})
 					}
 				}
 			}

@@ -33,6 +33,8 @@ var (
 	camera3DOrbitBody   string
 	camera3DOrbitDist   float32
 	camera3DOrbitHeight float32
+	charControllerSpeed = make(map[string]float32) // bodyId -> speed scale
+	charControllerMu    sync.Mutex
 )
 
 func registerGame(v *vm.VM) {
@@ -563,6 +565,43 @@ func registerGame(v *vm.VM) {
 		return nil, nil
 	})
 
+	v.RegisterForeign("CreateCharacterController", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("CreateCharacterController requires (worldId, bodyId, radius, height)")
+		}
+		worldId := fmt.Sprint(args[0])
+		bodyId := fmt.Sprint(args[1])
+		radius := toFloat64(args[2])
+		height := toFloat64(args[3])
+		if radius <= 0 {
+			radius = 0.4
+		}
+		if height <= 0 {
+			height = 1.6
+		}
+		_, err := v.CallForeign("CreateCapsule3D", []interface{}{worldId, bodyId, 0, height / 2, 0, radius, height, 1})
+		if err != nil {
+			return nil, err
+		}
+		charControllerMu.Lock()
+		charControllerSpeed[bodyId] = 1
+		charControllerMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetCharacterControllerSpeed", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetCharacterControllerSpeed requires (bodyId, scale)")
+		}
+		bodyId := fmt.Sprint(args[0])
+		scale := toFloat32(args[1])
+		if scale <= 0 {
+			scale = 1
+		}
+		charControllerMu.Lock()
+		charControllerSpeed[bodyId] = scale
+		charControllerMu.Unlock()
+		return nil, nil
+	})
 	// MoveWASD: apply horizontal force from WASD relative to angleRad, jump if Space and on ground. Uses bullet.* and RL.IsKeyDown.
 	v.RegisterForeign("GAME.MoveWASD", func(args []interface{}) (interface{}, error) {
 		if len(args) < 6 {
@@ -572,7 +611,13 @@ func registerGame(v *vm.VM) {
 		bodyId := fmt.Sprint(args[1])
 		angle := toFloat32(args[2])
 		speed := toFloat32(args[3])
+		charControllerMu.Lock()
+		if scale, ok := charControllerSpeed[bodyId]; ok {
+			speed *= scale
+		}
+		charControllerMu.Unlock()
 		jumpVel := toFloat32(args[4])
+		_ = toFloat32(args[5]) // kept for API compatibility; movement uses direct velocity.
 		cx := float32(math.Cos(float64(angle)))
 		cz := float32(math.Sin(float64(angle)))
 		moveX, moveZ := float32(0), float32(0)
@@ -597,9 +642,11 @@ func registerGame(v *vm.VM) {
 			len := float32(math.Sqrt(float64(len2)))
 			moveX /= len
 			moveZ /= len
-			fx := float64(moveX * speed)
-			fz := float64(moveZ * speed)
-			bullet.ApplyForce(worldId, bodyId, fx, 0, fz)
+			vy := bullet.GetVelocityY(worldId, bodyId)
+			bullet.SetVelocity(worldId, bodyId, float64(moveX*speed), vy, float64(moveZ*speed))
+		} else {
+			vy := bullet.GetVelocityY(worldId, bodyId)
+			bullet.SetVelocity(worldId, bodyId, 0, vy, 0)
 		}
 		py := bullet.GetPositionY(worldId, bodyId)
 		if py <= 0.6 && rl.IsKeyDown(KeySpace) {

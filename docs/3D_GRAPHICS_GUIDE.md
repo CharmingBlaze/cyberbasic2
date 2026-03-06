@@ -208,9 +208,9 @@ VAR state = CreateModelAnimState(model, animId, 24, TRUE)
 WHILE NOT WindowShouldClose()
     UpdateModelAnimState(state, GetFrameTime())
     ClearBackground(20, 20, 30, 255)
-    BeginMode3D(...)
+    
     DrawModel(model, 0, 0, 0, 1.0)
-    EndMode3D()
+    
 WEND
 
 DestroyModelAnimState(state)
@@ -307,6 +307,57 @@ You can build a 3D editor or level builder using mouse picking, ground/plane pic
 5. **Visuals** – `DrawGrid(slices, spacing)` for a grid; `DrawModelWires` or `DrawBoundingBox` for selection highlight. **Camera readback:** `GetCameraPositionX/Y/Z`, `GetCameraTargetX/Y/Z` for saving the view.
 
 See [API_REFERENCE.md](../API_REFERENCE.md) (3D editor and level builder) for all commands.
+
+---
+
+## Optimization: Culling and PBR
+
+### Frustum and distance culling
+
+**DrawObject** and **DrawLevel** skip objects outside the camera frustum or beyond the culling distance when enabled:
+
+```basic
+SetCullingDistance 500   ' Skip objects farther than 500 units
+EnableFrustumCulling 1   ' Skip objects outside camera view
+```
+
+- **SetCullingDistance**(distance) — objects beyond this distance are not drawn
+- **EnableFrustumCulling**(flag) — 1 = skip objects outside view frustum; 0 = draw all
+- **SetCullingMargin**(pixels) — used for 2D culling
+
+2D culling: **Enable2DCulling**(1) skips sprites outside the 2D camera view + margin.
+
+### Shadow mapping
+
+CyberBASIC2 now has a real first-pass shadow system aimed at being usable across low-, mid-, and higher-end machines without changing your scene setup.
+
+- `EnableShadows()` / `DisableShadows()` toggle the global shadow system.
+- `EnableShadows(lightId)` / `DisableShadows(lightId)` mark a specific DBP light as the preferred shadow caster.
+- `SetShadowQuality("low"|"medium"|"mid"|"high")` applies hardware-oriented presets.
+- `SetShadowMapSize(width, height)` overrides the preset resolution manually.
+- `SetShadowBias(bias)` adjusts acne/peter-panning tradeoffs.
+
+Supported now:
+
+- one active shadow-casting **directional** light in the main pass
+- one shadow map
+- low/mid/high quality scaling for weaker to stronger hardware
+
+Current limitations:
+
+- point-light and spot-light shadows are still future work
+- cascaded shadow maps are not implemented yet
+- the current implementation is designed around the unified renderer path and DBP object drawing
+
+Recommended usage tiers:
+
+- Simple: create a directional light, then call `EnableShadows()`
+- Standard: add `SetShadowQuality("medium")` or `SetShadowQuality("high")`
+- Advanced: call `EnableShadows(lightId)` on the directional light you want to cast shadows, then fine-tune `SetShadowMapSize` and `SetShadowBias`
+
+### PBR (Physically Based Rendering)
+
+Models loaded from GLTF/OBJ keep their imported metallic and roughness values. `SetObjectRoughness`, `SetObjectMetallic`, and `SetObjectNormalmap` apply explicit per-object overrides only after you call them.
 
 ---
 

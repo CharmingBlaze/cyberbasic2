@@ -18,9 +18,9 @@ var (
 	// seedableRand is used by SetRandomSeed/GetRandomValue when we want reproducible randomness.
 	seedableRand   *rand.Rand
 	seedableRandMu sync.Mutex
-	textures   = make(map[string]rl.Texture2D)
-	texCounter int
-	texMu      sync.Mutex
+	textures       = make(map[string]rl.Texture2D)
+	texCounter     int
+	texMu          sync.Mutex
 
 	models       = make(map[string]rl.Model)
 	modelCounter int
@@ -81,17 +81,17 @@ var (
 	fontCounter int
 	fontMu      sync.Mutex
 
-	meshes       = make(map[string]rl.Mesh)
-	meshCounter  int
-	meshMu       sync.Mutex
+	meshes          = make(map[string]rl.Mesh)
+	meshCounter     int
+	meshMu          sync.Mutex
 	materials       = make(map[string]rl.Material)
 	materialCounter int
 	materialMu      sync.Mutex
 
-	animations            = make(map[string]rl.ModelAnimation)
-	animCounter           int
-	animMu                sync.Mutex
-	lastLoadedAnimIds     []string
+	animations             = make(map[string]rl.ModelAnimation)
+	animCounter            int
+	animMu                 sync.Mutex
+	lastLoadedAnimIds      []string
 	lastLoadMaterialsCount int
 
 	images       = make(map[string]*rl.Image)
@@ -109,8 +109,8 @@ var (
 
 	lastCodepoints   []rune
 	lastCodepointsMu sync.Mutex
-	lastTextSplit   []string
-	lastTextSplitMu sync.Mutex
+	lastTextSplit    []string
+	lastTextSplitMu  sync.Mutex
 
 	// Orbit camera state (used by CameraZoom, CameraRotate(dx,dy), UpdateCamera, MouseOrbitCamera, OrbitCamera)
 	orbitTargetX     float32
@@ -128,33 +128,33 @@ var (
 	mouseLookMu    sync.Mutex
 
 	// Per-model state for simplified DrawModel / RotateModel / SetModelColor
-	modelColors   = make(map[string]rl.Color)
-	modelAngles   = make(map[string]float32) // radians
-	modelStateMu  sync.Mutex
+	modelColors  = make(map[string]rl.Color)
+	modelAngles  = make(map[string]float32) // radians
+	modelStateMu sync.Mutex
 
 	// Camera clip plane (stored for custom projection if needed)
 	cameraNearZ float32
 	cameraFarZ  float32
 
 	// Camera shake state
-	cameraShakeAmount    float32
-	cameraShakeDuration  float32
-	cameraShakeMu        sync.Mutex
+	cameraShakeAmount   float32
+	cameraShakeDuration float32
+	cameraShakeMu       sync.Mutex
 
 	// CollisionBox(id): center (x,y,z) + half-extents (hw,hh,hd)
-	collisionBoxes   = make(map[string]struct{ Cx, Cy, Cz, Hw, Hh, Hd float64 })
-	collisionBoxSeq  int
-	collisionBoxMu   sync.Mutex
+	collisionBoxes  = make(map[string]struct{ Cx, Cy, Cz, Hw, Hh, Hd float64 })
+	collisionBoxSeq int
+	collisionBoxMu  sync.Mutex
 
 	// CreateLight / SetLight* state
-	lightData   = make(map[string]*struct {
-		Type       int
-		X, Y, Z    float32
-		R, G, B    uint8
-		Intensity  float32
+	lightData = make(map[string]*struct {
+		Type             int
+		X, Y, Z          float32
+		R, G, B          uint8
+		Intensity        float32
 		DirX, DirY, DirZ float32
 	})
-	lightDataMu sync.Mutex
+	lightDataMu    sync.Mutex
 	shadowsEnabled bool
 
 	// RemoveShader() ends current shader mode
@@ -162,7 +162,7 @@ var (
 	currentShaderMu sync.Mutex
 
 	// Skybox / sky
-	skyboxEnabled bool
+	skyboxEnabled                   bool
 	skyColorR, skyColorG, skyColorB uint8 = 135, 206, 235
 
 	// Post-processing (state only; actual effects need RT + shaders)
@@ -173,26 +173,26 @@ var (
 	pixelateSize      int32
 
 	// Terrain: id -> height grid and optional model
-	terrainHeights   = make(map[string][]float32)
-	terrainWidth     = make(map[string]int)
-	terrainDepth     = make(map[string]int)
-	terrainScale     = make(map[string]float32)
-	terrainTexId     = make(map[string]string)
-	terrainMaterial  = make(map[string]string)
-	terrainSeq       int
-	terrainMu        sync.Mutex
+	terrainHeights       = make(map[string][]float32)
+	terrainWidth         = make(map[string]int)
+	terrainDepth         = make(map[string]int)
+	terrainScale         = make(map[string]float32)
+	terrainTexId         = make(map[string]string)
+	terrainMaterial      = make(map[string]string)
+	terrainSeq           int
+	terrainMu            sync.Mutex
 	terrainBrushSize     float32 = 3
 	terrainBrushStrength float32 = 0.1
-	terrainUndoStack     = make(map[string][]float32) // terrainId -> previous heights copy
+	terrainUndoStack             = make(map[string][]float32) // terrainId -> previous heights copy
 
 	// Skybox: cubemap texture id (optional); drawing uses SetSkyColor clear or cubemap
 	skyboxTexId string
 
 	// Optimization (Phase 8): culling distance and frustum culling flag
-	cullingDistance  float32 = 1000
-	frustumCulling   bool
-	enable2DCulling  bool
-	cullingMargin    float32 = 64
+	cullingDistance float32 = 1000
+	frustumCulling  bool
+	enable2DCulling bool
+	cullingMargin   float32 = 64
 )
 
 // getRand returns the seedable RNG, creating it with a time-based seed if never set.
@@ -459,6 +459,16 @@ func SpriteInCullingRect(spriteID string) bool {
 	}
 	minX, minY, maxX, maxY := getCullingRect()
 	return sLeft < maxX && sRight > minX && sTop < maxY && sBottom > minY
+}
+
+// ShadowsEnabled returns whether EnableShadows has been called.
+func ShadowsEnabled() bool {
+	return shadowsEnabled
+}
+
+// SetShadowsEnabled toggles the global shadow flag used by the renderer.
+func SetShadowsEnabled(enabled bool) {
+	shadowsEnabled = enabled
 }
 
 // GetCamera3D returns the current 3D camera for use by the unified renderer.

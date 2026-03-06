@@ -33,10 +33,11 @@ import (
 	"sync"
 	"time"
 
-	"cyberbasic/compiler/bindings/model"
+	"cyberbasic/compiler/bindings/raylib"
 	"cyberbasic/compiler/bindings/terrain"
 	"cyberbasic/compiler/bindings/water"
 	"cyberbasic/compiler/runtime"
+	"cyberbasic/compiler/runtime/assets"
 	"cyberbasic/compiler/runtime/camera"
 	"cyberbasic/compiler/runtime/errors"
 	"cyberbasic/compiler/runtime/renderer"
@@ -61,55 +62,65 @@ var (
 	soundLoop   = make(map[int]bool)
 	soundLoopMu sync.Mutex
 
-	fonts   = make(map[int]rl.Font)
-	fontsMu sync.Mutex
+	fonts         = make(map[int]rl.Font)
+	fontsMu       sync.Mutex
 	currentFontID int = -1 // -1 = default font
 
 	// Current draw color for Ink(r, g, b)
 	inkR, inkG, inkB, inkA uint8 = 255, 255, 255, 255
-	inkMu                   sync.Mutex
+	inkMu                  sync.Mutex
 
 	// FPS camera state
-	fpsCameraOn    bool
-	fpsCamX        float32
-	fpsCamY        float32
-	fpsCamZ        float32
-	fpsYaw         float32
-	fpsPitch       float32
-	fpsMoveSpeed   float32 = 5.0
-	fpsLookSpeed   float32 = 0.002
-	fpsCameraMu    sync.Mutex
+	fpsCameraOn  bool
+	fpsCamX      float32
+	fpsCamY      float32
+	fpsCamZ      float32
+	fpsYaw       float32
+	fpsPitch     float32
+	fpsMoveSpeed float32 = 5.0
+	fpsLookSpeed float32 = 0.002
+	fpsCameraMu  sync.Mutex
 )
 
 type dbpObject struct {
-	model       rl.Model
-	x, y, z     float32
-	pitch       float32
-	yaw         float32
-	roll        float32
-	scaleX      float32
-	scaleY      float32
-	scaleZ      float32
-	visible     bool
-	colorR      uint8
-	colorG      uint8
-	colorB      uint8
-	colorA      uint8
-	textureId   int
-	normalMapId int   // For SetObjectNormalmap
-	shaderId    int   // For custom shaders; DrawModelEx doesn't take shader
-	wireframe   bool
-	collision   bool
-	fixed       bool
-	parentID    int   // -1 = no parent; for ParentObject/UnparentObject
-	tag         string
-	ownerID     int   // For multiplayer: player who owns this object
-	syncMe      bool  // Mark for replication
-	roughness   float32 // PBR; stored for shader use
-	metallic    float32
-	emissiveR   uint8
-	emissiveG   uint8
-	emissiveB   uint8
+	model        rl.Model
+	x, y, z      float32
+	pitch        float32
+	yaw          float32
+	roll         float32
+	scaleX       float32
+	scaleY       float32
+	scaleZ       float32
+	visible      bool
+	colorR       uint8
+	colorG       uint8
+	colorB       uint8
+	colorA       uint8
+	textureId    int
+	normalMapId  int // For SetObjectNormalmap
+	shaderId     int // For custom shaders; DrawModelEx doesn't take shader
+	wireframe    bool
+	collision    bool
+	fixed        bool
+	parentID     int // -1 = no parent; for ParentObject/UnparentObject
+	tag          string
+	ownerID      int     // For multiplayer: player who owns this object
+	syncMe       bool    // Mark for replication
+	roughness    float32 // PBR; stored for shader use
+	metallic     float32
+	emissiveR    uint8
+	emissiveG    uint8
+	emissiveB    uint8
+	roughnessSet bool
+	metallicSet  bool
+	emissiveSet  bool
+	boundsRadius float32
+}
+
+type objectTransform struct {
+	position rl.Vector3
+	rotation rl.Quaternion
+	scale    rl.Vector3
 }
 
 // getSpriteColor returns the stored tint for a sprite, or White if not set.
@@ -124,13 +135,24 @@ func getSpriteColor(id int) rl.Color {
 }
 
 func newDbpObject(model rl.Model) *dbpObject {
-	return &dbpObject{
-		model:    model,
-		scaleX:   1, scaleY: 1, scaleZ: 1,
-		visible:  true,
-		colorR:   255, colorG: 255, colorB: 255, colorA: 255,
+	obj := &dbpObject{
+		model:  model,
+		scaleX: 1, scaleY: 1, scaleZ: 1,
+		visible: true,
+		colorR:  255, colorG: 255, colorB: 255, colorA: 255,
 		parentID: -1,
 	}
+	if model.MeshCount > 0 {
+		bounds := rl.GetModelBoundingBox(model)
+		cx := (bounds.Min.X + bounds.Max.X) * 0.5
+		cy := (bounds.Min.Y + bounds.Max.Y) * 0.5
+		cz := (bounds.Min.Z + bounds.Max.Z) * 0.5
+		dx := bounds.Max.X - cx
+		dy := bounds.Max.Y - cy
+		dz := bounds.Max.Z - cz
+		obj.boundsRadius = float32(math.Sqrt(float64(dx*dx + dy*dy + dz*dz)))
+	}
+	return obj
 }
 
 func toInt(v interface{}) int {
@@ -170,37 +192,162 @@ func toString(v interface{}) string {
 
 // getObjectWorldTransform returns effective world position, rotation, and scale for an object.
 // When parentID >= 0, recursively composes parent transforms.
-func getObjectWorldTransform(id int) (x, y, z, pitch, yaw, roll, scaleX, scaleY, scaleZ float32) {
+func identityObjectTransform() objectTransform {
+	return objectTransform{
+		rotation: rl.QuaternionIdentity(),
+		scale:    rl.Vector3{X: 1, Y: 1, Z: 1},
+	}
+}
+
+func makeObjectTransform(x, y, z, pitch, yaw, roll, scaleX, scaleY, scaleZ float32) objectTransform {
+	return objectTransform{
+		position: rl.Vector3{X: x, Y: y, Z: z},
+		rotation: rl.QuaternionFromEuler(
+			pitch*float32(math.Pi)/180,
+			yaw*float32(math.Pi)/180,
+			roll*float32(math.Pi)/180,
+		),
+		scale: rl.Vector3{X: scaleX, Y: scaleY, Z: scaleZ},
+	}
+}
+
+func localObjectTransform(obj *dbpObject) objectTransform {
+	return makeObjectTransform(obj.x, obj.y, obj.z, obj.pitch, obj.yaw, obj.roll, obj.scaleX, obj.scaleY, obj.scaleZ)
+}
+
+func composeObjectTransform(parent, local objectTransform) objectTransform {
+	scaledLocal := rl.Vector3Multiply(local.position, parent.scale)
+	rotatedLocal := rl.Vector3RotateByQuaternion(scaledLocal, parent.rotation)
+	return objectTransform{
+		position: rl.Vector3Add(parent.position, rotatedLocal),
+		rotation: rl.QuaternionNormalize(rl.QuaternionMultiply(parent.rotation, local.rotation)),
+		scale:    rl.Vector3Multiply(parent.scale, local.scale),
+	}
+}
+
+func quaternionToDegrees(q rl.Quaternion) (pitch, yaw, roll float32) {
+	euler := rl.QuaternionToEuler(rl.QuaternionNormalize(q))
+	const radToDeg = 180 / math.Pi
+	return euler.X * radToDeg, euler.Y * radToDeg, euler.Z * radToDeg
+}
+
+func quaternionToAxisAngle(q rl.Quaternion) (rl.Vector3, float32) {
+	q = rl.QuaternionNormalize(q)
+	axis := rl.Vector3{X: 0, Y: 1, Z: 0}
+	angle := float32(0)
+	rl.QuaternionToAxisAngle(q, &axis, &angle)
+	if math.IsNaN(float64(angle)) || math.IsInf(float64(angle), 0) {
+		return rl.Vector3{X: 0, Y: 1, Z: 0}, 0
+	}
+	if axis.X == 0 && axis.Y == 0 && axis.Z == 0 {
+		axis = rl.Vector3{X: 0, Y: 1, Z: 0}
+	}
+	return axis, angle * 180 / float32(math.Pi)
+}
+
+func getObjectWorldState(id int) objectTransform {
 	objectsMu.Lock()
 	obj, ok := objects[id]
 	objectsMu.Unlock()
 	if !ok {
-		return 0, 0, 0, 0, 0, 0, 1, 1, 1
+		return identityObjectTransform()
 	}
-	x, y, z = obj.x, obj.y, obj.z
-	pitch, yaw, roll = obj.pitch, obj.yaw, obj.roll
-	scaleX, scaleY, scaleZ = obj.scaleX, obj.scaleY, obj.scaleZ
+	local := localObjectTransform(obj)
 	if obj.parentID < 0 {
-		return x, y, z, pitch, yaw, roll, scaleX, scaleY, scaleZ
+		return local
 	}
-	// Compose with parent's world transform
-	px, py, pz, pp, pyaw, pr, psx, psy, psz := getObjectWorldTransform(obj.parentID)
-	// Rotate child local offset by parent yaw (Y-up), scale by parent scale, add to parent pos
-	rad := pyaw * math.Pi / 180
-	c, s := float32(math.Cos(float64(rad))), float32(math.Sin(float64(rad)))
-	lx := (x*psx)*c - (z*psz)*s
-	lz := (x*psx)*s + (z*psz)*c
-	ly := y * psy
-	x = px + lx
-	y = py + ly
-	z = pz + lz
-	pitch = pp + pitch
-	yaw = pyaw + yaw
-	roll = pr + roll
-	scaleX = psx * scaleX
-	scaleY = psy * scaleY
-	scaleZ = psz * scaleZ
-	return x, y, z, pitch, yaw, roll, scaleX, scaleY, scaleZ
+	return composeObjectTransform(getObjectWorldState(obj.parentID), local)
+}
+
+func getObjectWorldTransform(id int) (x, y, z, pitch, yaw, roll, scaleX, scaleY, scaleZ float32) {
+	state := getObjectWorldState(id)
+	pitch, yaw, roll = quaternionToDegrees(state.rotation)
+	return state.position.X, state.position.Y, state.position.Z, pitch, yaw, roll, state.scale.X, state.scale.Y, state.scale.Z
+}
+
+func objectWorldBounds(obj *dbpObject, state objectTransform) (rl.Vector3, float32) {
+	maxScale := float32(math.Abs(float64(state.scale.X)))
+	if sy := float32(math.Abs(float64(state.scale.Y))); sy > maxScale {
+		maxScale = sy
+	}
+	if sz := float32(math.Abs(float64(state.scale.Z))); sz > maxScale {
+		maxScale = sz
+	}
+	return state.position, obj.boundsRadius * maxScale
+}
+
+// applyObjectPBR applies object PBR values (roughness, metallic, emissive, normal map) to the model's material.
+func applyObjectPBR(obj *dbpObject) {
+	if obj.model.Materials == nil || obj.model.Materials.Maps == nil {
+		return
+	}
+	mat := obj.model.Materials
+	if obj.metallicSet {
+		if metalMap := mat.GetMap(rl.MapMetalness); metalMap != nil {
+			metalMap.Value = obj.metallic
+		}
+	}
+	if obj.roughnessSet {
+		if roughMap := mat.GetMap(rl.MapRoughness); roughMap != nil {
+			roughMap.Value = obj.roughness
+		}
+	}
+	if obj.normalMapId != 0 {
+		texturesMu.Lock()
+		tex, ok := textures[obj.normalMapId]
+		texturesMu.Unlock()
+		if ok {
+			rl.SetMaterialTexture(mat, rl.MapNormal, tex)
+		}
+	}
+	if obj.emissiveSet {
+		// Emissive color is stored for custom shader pipelines; the default material has no emissive slot.
+	}
+}
+
+func withObjectShadowShader(obj *dbpObject, drawModel *rl.Model, fn func()) {
+	if drawModel == nil || drawModel.MaterialCount == 0 || drawModel.Materials == nil {
+		fn()
+		return
+	}
+	if renderer.IsShadowPassActive() {
+		depthShader, ok := renderer.DepthShader()
+		if !ok {
+			fn()
+			return
+		}
+		materials := drawModel.GetMaterials()
+		saved := make([]rl.Shader, len(materials))
+		for i := range materials {
+			saved[i] = materials[i].Shader
+			materials[i].Shader = depthShader
+		}
+		fn()
+		for i := range materials {
+			materials[i].Shader = saved[i]
+		}
+		return
+	}
+	if obj.shaderId != 0 || obj.wireframe || !renderer.IsShadowLightingActive() {
+		fn()
+		return
+	}
+	renderer.PrepareShadowShader()
+	shadowShader, ok := renderer.ShadowShader()
+	if !ok {
+		fn()
+		return
+	}
+	materials := drawModel.GetMaterials()
+	saved := make([]rl.Shader, len(materials))
+	for i := range materials {
+		saved[i] = materials[i].Shader
+		materials[i].Shader = shadowShader
+	}
+	fn()
+	for i := range materials {
+		materials[i].Shader = saved[i]
+	}
 }
 
 // DrawScene3D draws the full 3D scene: sky, terrain, water, clouds, objects.
@@ -297,26 +444,34 @@ func DrawAllDBPObjects() {
 		objectsMu.Lock()
 		obj, ok := objects[id]
 		objectsMu.Unlock()
-		if !ok || !obj.visible {
+		if !ok || !obj.visible || obj.model.MeshCount == 0 {
 			continue
+		}
+		world := getObjectWorldState(id)
+		if !renderer.IsShadowPassActive() {
+			center, radius := objectWorldBounds(obj, world)
+			if raylib.ObjectBoundsShouldCull3D(center, radius) {
+				continue
+			}
 		}
 		UpdateObjectAnimation(id, obj)
 		UpdateMeshAnimation(id)
+		applyObjectPBR(obj)
 		drawModel := &obj.model
 		if meshModel := GetMeshAnimationModel(id); meshModel != nil {
 			drawModel = meshModel
 		}
-		wx, wy, wz, _, wyaw, _, wsx, wsy, wsz := getObjectWorldTransform(id)
-		pos := rl.Vector3{X: wx, Y: wy, Z: wz}
-		rotAxis := rl.Vector3{X: 0, Y: 1, Z: 0}
-		rotAngle := wyaw * math.Pi / 180
-		scale := rl.Vector3{X: wsx, Y: wsy, Z: wsz}
+		pos := world.position
+		rotAxis, rotAngle := quaternionToAxisAngle(world.rotation)
+		scale := world.scale
 		tint := rl.NewColor(obj.colorR, obj.colorG, obj.colorB, obj.colorA)
-		if obj.wireframe {
-			rl.DrawModelWiresEx(*drawModel, pos, rotAxis, rotAngle, scale, tint)
-		} else {
-			rl.DrawModelEx(*drawModel, pos, rotAxis, rotAngle, scale, tint)
-		}
+		withObjectShadowShader(obj, drawModel, func() {
+			if obj.wireframe {
+				rl.DrawModelWiresEx(*drawModel, pos, rotAxis, rotAngle, scale, tint)
+			} else {
+				rl.DrawModelEx(*drawModel, pos, rotAxis, rotAngle, scale, tint)
+			}
+		})
 	}
 }
 
@@ -339,9 +494,11 @@ func RegisterDBP(v *vm.VM) {
 	registerParticles(v)
 	registerNet(v)
 	registerFile(v)
+	registerAssets(v)
 	registerRuntime(v)
 	registerReplication(v)
 	register3D(v)
+	registerShadowCompatibility(v)
 	registerLevel(v)
 	registerPrefab(v)
 	registerIK(v)
@@ -432,9 +589,10 @@ func RegisterDBP(v *vm.VM) {
 		path := toString(args[1])
 		ext := strings.ToLower(filepath.Ext(path))
 		if ext == ".gltf" || ext == ".glb" {
-			m, err := model.Load(path)
+			m, err := assets.LoadModelForBuild(path)
 			if err == nil && len(m.Animations) > 0 {
-				// Animated GLTF: use raylib for bones + animation support
+				// Animated GLTF: use raylib for bones + animation support (asset cache doesn't apply)
+				assets.UnloadModelForBuild(path)
 				rlModel := rl.LoadModel(path)
 				objectsMu.Lock()
 				objects[id] = newDbpObject(rlModel)
@@ -442,7 +600,7 @@ func RegisterDBP(v *vm.VM) {
 				return nil, nil
 			}
 		}
-		m, err := model.Load(path)
+		m, err := assets.LoadModelForBuild(path)
 		if err != nil {
 			return nil, fmt.Errorf("LoadObject: %w", err)
 		}
@@ -555,18 +713,27 @@ func RegisterDBP(v *vm.VM) {
 		if !obj.visible {
 			return nil, nil
 		}
-		UpdateObjectAnimation(id, obj)
-		wx, wy, wz, _, wyaw, _, wsx, wsy, wsz := getObjectWorldTransform(id)
-		pos := rl.Vector3{X: wx, Y: wy, Z: wz}
-		rotAxis := rl.Vector3{X: 0, Y: 1, Z: 0}
-		rotAngle := wyaw * math.Pi / 180
-		scale := rl.Vector3{X: wsx, Y: wsy, Z: wsz}
-		tint := rl.NewColor(obj.colorR, obj.colorG, obj.colorB, obj.colorA)
-		if obj.wireframe {
-			rl.DrawModelWiresEx(obj.model, pos, rotAxis, rotAngle, scale, tint)
-		} else {
-			rl.DrawModelEx(obj.model, pos, rotAxis, rotAngle, scale, tint)
+		if obj.model.MeshCount == 0 {
+			return nil, nil
 		}
+		world := getObjectWorldState(id)
+		center, radius := objectWorldBounds(obj, world)
+		if !renderer.IsShadowPassActive() && raylib.ObjectBoundsShouldCull3D(center, radius) {
+			return nil, nil
+		}
+		UpdateObjectAnimation(id, obj)
+		applyObjectPBR(obj)
+		pos := world.position
+		rotAxis, rotAngle := quaternionToAxisAngle(world.rotation)
+		scale := world.scale
+		tint := rl.NewColor(obj.colorR, obj.colorG, obj.colorB, obj.colorA)
+		withObjectShadowShader(obj, &obj.model, func() {
+			if obj.wireframe {
+				rl.DrawModelWiresEx(obj.model, pos, rotAxis, rotAngle, scale, tint)
+			} else {
+				rl.DrawModelEx(obj.model, pos, rotAxis, rotAngle, scale, tint)
+			}
+		})
 		return nil, nil
 	})
 	// PointCamera(x, y, z): set camera target - delegates to raylib SetCameraTarget
@@ -753,12 +920,12 @@ func RegisterDBP(v *vm.VM) {
 		mesh := rl.GenMeshCube(src.scaleX*2, src.scaleY*2, src.scaleZ*2)
 		newModel := rl.LoadModelFromMesh(mesh)
 		clone := &dbpObject{
-			model:     newModel,
-			x:         src.x, y: src.y, z: src.z,
-			pitch:     src.pitch, yaw: src.yaw, roll: src.roll,
-			scaleX:    1, scaleY: 1, scaleZ: 1,
-			visible:   src.visible,
-			colorR:    src.colorR, colorG: src.colorG, colorB: src.colorB, colorA: src.colorA,
+			model: newModel,
+			x:     src.x, y: src.y, z: src.z,
+			pitch: src.pitch, yaw: src.yaw, roll: src.roll,
+			scaleX: 1, scaleY: 1, scaleZ: 1,
+			visible: src.visible,
+			colorR:  src.colorR, colorG: src.colorG, colorB: src.colorB, colorA: src.colorA,
 			textureId: src.textureId, wireframe: src.wireframe, collision: src.collision, fixed: src.fixed,
 		}
 		objects[newID] = clone
@@ -893,6 +1060,7 @@ func RegisterDBP(v *vm.VM) {
 		objectsMu.Lock()
 		if obj, ok := objects[id]; ok {
 			obj.roughness = val
+			obj.roughnessSet = true
 		}
 		objectsMu.Unlock()
 		return nil, nil
@@ -906,6 +1074,7 @@ func RegisterDBP(v *vm.VM) {
 		objectsMu.Lock()
 		if obj, ok := objects[id]; ok {
 			obj.metallic = val
+			obj.metallicSet = true
 		}
 		objectsMu.Unlock()
 		return nil, nil
@@ -919,6 +1088,7 @@ func RegisterDBP(v *vm.VM) {
 		objectsMu.Lock()
 		if obj, ok := objects[id]; ok {
 			obj.emissiveR, obj.emissiveG, obj.emissiveB = uint8(r), uint8(g), uint8(b)
+			obj.emissiveSet = true
 		}
 		objectsMu.Unlock()
 		return nil, nil

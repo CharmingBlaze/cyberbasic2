@@ -75,6 +75,11 @@ When you define **update(dt)** and **draw()**, call **BeginUI**/ **EndUI** or **
 |---------|-----------|---------|-------------|
 | **BeginUI** | () | — | Start UI layout; resets cursor |
 | **EndUI** | () | — | End UI layout |
+| **BeginLayout** | (mode) or (mode, cols) | — | Set layout: LAYOUT_VERTICAL, LAYOUT_HORIZONTAL, LAYOUT_GRID; for grid, cols = number of columns |
+| **LayoutSpacing** | (pixels) | — | Spacing between widgets |
+| **LayoutPadding** | (left, top, right, bottom) | — | Padding around layout |
+| **BeginLayoutGroup** | (id, mode) or (id, mode, cols) | — | Nested layout group |
+| **EndLayoutGroup** | () | — | End layout group |
 | **Label** | (text) | — | Label widget |
 | **Button** | (text) | 1 or 0 | 1 if clicked |
 | **Slider** | (text, value, min, max) | float | Slider; returns current value |
@@ -105,10 +110,30 @@ All coordinates and sizes in pixels (x, y, width, height).
 | **GuiLine** | (x, y, w, h, text) | — | Line |
 | **GuiPanel** | (x, y, w, h, text) | — | Panel |
 
-### Theme and layout (raygui)
+### Layout engine (BeginUI / pure-Go)
 
-- **Layout:** Position controls manually with (x, y, w, h). There is no automatic layout; place each widget at the desired pixel coordinates.
-- **Theme / style:** Use **GuiLoadStyle**(filePath) to load a `.rgs` style file, or **GuiLoadStyleDefault**() to reset to the default theme. Use **GuiSetStyle**(controlId, propertyId, value) to set a single property (e.g. colors, border width, text padding). Use **GuiGetStyle**(controlId, propertyId) to read a property value. Control and property IDs are integers (see raygui documentation: DEFAULT=0, LABEL=1, BUTTON=2, etc.; BORDER=0, BASE=1, TEXT=2, BORDER_WIDTH=12, TEXT_PADDING=13, etc.). Value for colors is typically packed RGBA.
+Use **BeginLayout**(mode) to set layout direction. Modes: **LAYOUT_VERTICAL** (0), **LAYOUT_HORIZONTAL** (1), **LAYOUT_GRID** (2). For grid, pass columns: `BeginLayout(LAYOUT_GRID, 3)`.
+
+- **LayoutSpacing**(pixels) – spacing between widgets
+- **LayoutPadding**(left, top, right, bottom) – padding around layout
+- **BeginLayoutGroup**(id, mode) – nested layout; use **EndLayoutGroup**() to close
+
+Example: horizontal row of buttons:
+```basic
+BeginUI()
+BeginLayout(LAYOUT_VERTICAL)
+Label("Options")
+BeginLayoutGroup("row", LAYOUT_HORIZONTAL)
+  IF Button("OK") THEN ...
+  IF Button("Cancel") THEN ...
+EndLayoutGroup()
+EndUI()
+```
+
+### Theme and style (raygui)
+
+- **Layout (Gui*):** Position controls manually with (x, y, w, h). There is no automatic layout; place each widget at the desired pixel coordinates.
+- **Theme / style:** Use **GuiLoadStyle**(filePath) to load a `.rgs` style file, or **GuiLoadStyleDefault**() to reset to the default theme. Use **LoadUIStyle**(name) for the built-in presets `"default"`, `"dark"`, `"light"`, and `"cyber"`. These style presets apply to the raygui-backed `Gui*` controls; the pure-Go `BeginUI` layout widgets do not currently consume raygui style state. Use **GuiSetStyle**(controlId, propertyId, value) to set a single property (e.g. colors, border width, text padding). Use **GuiGetStyle**(controlId, propertyId) to read a property value. Control and property IDs are integers (see raygui documentation: DEFAULT=0, LABEL=1, BUTTON=2, etc.; BORDER=0, BASE=1, TEXT=2, BORDER_WIDTH=12, TEXT_PADDING=13, etc.). Value for colors is typically packed RGBA.
 
 ## Example: options menu
 

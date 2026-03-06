@@ -20,13 +20,13 @@ type BuildResult struct {
 
 // nextTexID, nextMatID for level-scoped resources
 var (
-	levelTexCounter    int
-	levelMatCounter    int
-	levelLightCounter  int
-	levelBuildMu       sync.Mutex
-	defaultTexture     rl.Texture2D
-	defaultTextureOnce sync.Once
-	defaultMaterial    rl.Material
+	levelTexCounter     int
+	levelMatCounter     int
+	levelLightCounter   int
+	levelBuildMu        sync.Mutex
+	defaultTexture      rl.Texture2D
+	defaultTextureOnce  sync.Once
+	defaultMaterial     rl.Material
 	defaultMaterialOnce sync.Once
 )
 
@@ -56,6 +56,16 @@ func getDefaultMaterial() rl.Material {
 // objectIDBase: for levels use levelID*levelObjectIDBase; for single object use user id.
 // basePath: directory of the source file (for resolving texture paths).
 func BuildModel(m *model.Model, objectIDBase int, basePath string) (*BuildResult, error) {
+	return buildModelInternal(m, objectIDBase, basePath, false)
+}
+
+// BuildModelWithHierarchy is like BuildModel but creates parent-child links from the GLTF node tree.
+// Mesh nodes are parented to their nearest mesh ancestor. Use for LoadLevel when hierarchy matters.
+func BuildModelWithHierarchy(m *model.Model, objectIDBase int, basePath string) (*BuildResult, error) {
+	return buildModelInternal(m, objectIDBase, basePath, true)
+}
+
+func buildModelInternal(m *model.Model, objectIDBase int, basePath string, withHierarchy bool) (*BuildResult, error) {
 	res := &BuildResult{}
 	levelBuildMu.Lock()
 	texBase := levelTexCounter
@@ -169,6 +179,58 @@ func BuildModel(m *model.Model, objectIDBase int, basePath string) (*BuildResult
 		_ = indicesKeep // keep alive until UploadMesh done
 	}
 
+	parentOf := make([]int, len(m.Nodes))
+	for i := range parentOf {
+		parentOf[i] = -1
+	}
+	for i, node := range m.Nodes {
+		for _, childIdx := range node.Children {
+			if childIdx >= 0 && childIdx < len(m.Nodes) {
+				parentOf[childIdx] = i
+			}
+		}
+	}
+
+	nearestMeshAncestor := make([]int, len(m.Nodes))
+	for i := range nearestMeshAncestor {
+		nearestMeshAncestor[i] = -2
+	}
+	var findMeshAncestor func(int) int
+	findMeshAncestor = func(idx int) int {
+		if idx < 0 || idx >= len(m.Nodes) {
+			return -1
+		}
+		if nearestMeshAncestor[idx] != -2 {
+			return nearestMeshAncestor[idx]
+		}
+		p := parentOf[idx]
+		if p < 0 {
+			nearestMeshAncestor[idx] = -1
+			return -1
+		}
+		if m.Nodes[p].MeshIndex >= 0 && m.Nodes[p].MeshIndex < len(meshModels) {
+			nearestMeshAncestor[idx] = p
+			return p
+		}
+		nearestMeshAncestor[idx] = findMeshAncestor(p)
+		return nearestMeshAncestor[idx]
+	}
+
+	buildNodeTransform := func(tr model.Transform) objectTransform {
+		return makeObjectTransform(tr.X, tr.Y, tr.Z, tr.Pitch, tr.Yaw, tr.Roll, tr.ScaleX, tr.ScaleY, tr.ScaleZ)
+	}
+	composeNodePath := func(nodeIdx, stopParent int) objectTransform {
+		path := make([]int, 0, 4)
+		for cur := nodeIdx; cur >= 0 && cur != stopParent; cur = parentOf[cur] {
+			path = append(path, cur)
+		}
+		acc := identityObjectTransform()
+		for i := len(path) - 1; i >= 0; i-- {
+			acc = composeObjectTransform(acc, buildNodeTransform(m.Nodes[path[i]].Transform))
+		}
+		return acc
+	}
+
 	// Create DBP objects for nodes that have meshes
 	for i, node := range m.Nodes {
 		if node.MeshIndex < 0 || node.MeshIndex >= len(meshModels) {
@@ -176,15 +238,22 @@ func BuildModel(m *model.Model, objectIDBase int, basePath string) (*BuildResult
 		}
 		objID := objectIDBase + i
 		obj := newDbpObject(meshModels[node.MeshIndex])
-		obj.x = node.Transform.X
-		obj.y = node.Transform.Y
-		obj.z = node.Transform.Z
-		obj.pitch = node.Transform.Pitch
-		obj.yaw = node.Transform.Yaw
-		obj.roll = node.Transform.Roll
-		obj.scaleX = node.Transform.ScaleX
-		obj.scaleY = node.Transform.ScaleY
-		obj.scaleZ = node.Transform.ScaleZ
+		effective := buildNodeTransform(node.Transform)
+		if withHierarchy {
+			ancestor := findMeshAncestor(i)
+			effective = composeNodePath(i, ancestor)
+			obj.parentID = -1
+			if ancestor >= 0 && ancestor != i {
+				obj.parentID = objectIDBase + ancestor
+			}
+		}
+		obj.x = effective.position.X
+		obj.y = effective.position.Y
+		obj.z = effective.position.Z
+		obj.pitch, obj.yaw, obj.roll = quaternionToDegrees(effective.rotation)
+		obj.scaleX = effective.scale.X
+		obj.scaleY = effective.scale.Y
+		obj.scaleZ = effective.scale.Z
 		matIdx := m.Meshes[node.MeshIndex].MaterialIndex
 		if matIdx < 0 || matIdx >= len(res.MaterialIDs) {
 			matIdx = 0
@@ -199,6 +268,14 @@ func BuildModel(m *model.Model, objectIDBase int, basePath string) (*BuildResult
 			} else {
 				_ = getDefaultMaterial() // ensure init
 				obj.model.Materials = &defaultMaterial
+			}
+			if matIdx >= 0 && matIdx < len(materialsList) {
+				srcMat := materialsList[matIdx]
+				obj.roughness = srcMat.Roughness
+				obj.metallic = srcMat.Metallic
+				obj.emissiveR = uint8(srcMat.EmissiveFactorR * 255)
+				obj.emissiveG = uint8(srcMat.EmissiveFactorG * 255)
+				obj.emissiveB = uint8(srcMat.EmissiveFactorB * 255)
 			}
 		}
 		objectsMu.Lock()
@@ -216,13 +293,16 @@ func BuildModel(m *model.Model, objectIDBase int, basePath string) (*BuildResult
 		}
 		lights[lid] = &dbpLight{
 			lightType: light.Type,
-			x: light.X, y: light.Y, z: light.Z,
+			x:         light.X, y: light.Y, z: light.Z,
 			r: light.R, g: light.G, b: light.B,
 			intensity: light.Intensity,
 			range_:    light.Range,
 		}
 		lightsMu.Unlock()
 		res.LightIDs = append(res.LightIDs, lid)
+	}
+	if len(m.Lights) > 0 {
+		syncRendererShadowLights()
 	}
 
 	_ = texBase

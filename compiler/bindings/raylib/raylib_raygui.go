@@ -5,6 +5,7 @@ package raylib
 
 import (
 	"fmt"
+	"strings"
 	"sync"
 
 	"cyberbasic/compiler/vm"
@@ -20,6 +21,97 @@ var (
 
 func rect(x, y, w, h float32) rl.Rectangle {
 	return rl.Rectangle{X: x, Y: y, Width: w, Height: h}
+}
+
+// applyUIStylePreset applies a named style preset via raygui.SetStyle.
+// Presets: "default", "dark", "light", "cyber"
+func applyUIStylePreset(name string) {
+	// Property IDs: BORDER_COLOR_NORMAL=0, BASE_COLOR_NORMAL=1, TEXT_COLOR_NORMAL=2,
+	// BORDER_COLOR_FOCUSED=3, BASE_COLOR_FOCUSED=4, TEXT_COLOR_FOCUSED=5,
+	// BORDER_COLOR_PRESSED=6, BASE_COLOR_PRESSED=7, TEXT_COLOR_PRESSED=8,
+	// BORDER_COLOR_DISABLED=9, BASE_COLOR_DISABLED=10, TEXT_COLOR_DISABLED=11,
+	// BORDER_WIDTH=12, TEXT_PADDING=13, TEXT_ALIGNMENT=14
+	// BACKGROUND_COLOR=19 (16+3)
+	const (
+		borderColorNormal = 0
+		baseColorNormal   = 1
+		textColorNormal   = 2
+		borderColorFocused = 3
+		baseColorFocused  = 4
+		textColorFocused  = 5
+		borderColorPressed = 6
+		baseColorPressed  = 7
+		textColorPressed  = 8
+		borderColorDisabled = 9
+		baseColorDisabled = 10
+		textColorDisabled = 11
+		borderWidth      = 12
+		textPadding      = 13
+		backgroundColor  = 19
+	)
+	set := func(ctrl, prop int32, val raygui.PropertyValue) {
+		raygui.SetStyle(raygui.ControlID(ctrl), raygui.PropertyID(prop), val)
+	}
+	c := func(r, g, b, a uint8) raygui.PropertyValue {
+		return raygui.NewColorPropertyValue(rl.Color{R: r, G: g, B: b, A: a})
+	}
+	switch name {
+	case "default":
+		raygui.LoadStyleDefault()
+	case "dark":
+		// Dark theme: dark grays, light text
+		set(0, borderColorNormal, c(80, 80, 90, 255))
+		set(0, baseColorNormal, c(60, 60, 70, 255))
+		set(0, textColorNormal, c(220, 220, 230, 255))
+		set(0, borderColorFocused, c(100, 100, 120, 255))
+		set(0, baseColorFocused, c(80, 80, 100, 255))
+		set(0, textColorFocused, c(240, 240, 255, 255))
+		set(0, borderColorPressed, c(120, 120, 140, 255))
+		set(0, baseColorPressed, c(100, 100, 120, 255))
+		set(0, textColorPressed, c(255, 255, 255, 255))
+		set(0, borderColorDisabled, c(50, 50, 55, 255))
+		set(0, baseColorDisabled, c(40, 40, 45, 255))
+		set(0, textColorDisabled, c(120, 120, 130, 255))
+		set(0, borderWidth, 1)
+		set(0, textPadding, 4)
+		set(0, backgroundColor, c(35, 35, 40, 255))
+	case "light":
+		// Light theme: light grays, dark text
+		set(0, borderColorNormal, c(180, 180, 190, 255))
+		set(0, baseColorNormal, c(240, 240, 245, 255))
+		set(0, textColorNormal, c(40, 40, 50, 255))
+		set(0, borderColorFocused, c(100, 150, 200, 255))
+		set(0, baseColorFocused, c(230, 238, 248, 255))
+		set(0, textColorFocused, c(30, 80, 150, 255))
+		set(0, borderColorPressed, c(80, 130, 180, 255))
+		set(0, baseColorPressed, c(210, 225, 242, 255))
+		set(0, textColorPressed, c(20, 70, 140, 255))
+		set(0, borderColorDisabled, c(200, 200, 205, 255))
+		set(0, baseColorDisabled, c(230, 230, 235, 255))
+		set(0, textColorDisabled, c(150, 150, 160, 255))
+		set(0, borderWidth, 1)
+		set(0, textPadding, 4)
+		set(0, backgroundColor, c(250, 250, 252, 255))
+	case "cyber":
+		// Cyber/neon: dark base, cyan/magenta accents
+		set(0, borderColorNormal, c(0, 200, 220, 255))
+		set(0, baseColorNormal, c(15, 25, 45, 255))
+		set(0, textColorNormal, c(0, 255, 255, 255))
+		set(0, borderColorFocused, c(255, 0, 200, 255))
+		set(0, baseColorFocused, c(25, 35, 65, 255))
+		set(0, textColorFocused, c(255, 100, 255, 255))
+		set(0, borderColorPressed, c(255, 50, 220, 255))
+		set(0, baseColorPressed, c(40, 50, 90, 255))
+		set(0, textColorPressed, c(255, 150, 255, 255))
+		set(0, borderColorDisabled, c(50, 80, 90, 255))
+		set(0, baseColorDisabled, c(10, 15, 25, 255))
+		set(0, textColorDisabled, c(80, 120, 130, 255))
+		set(0, borderWidth, 2)
+		set(0, textPadding, 6)
+		set(0, backgroundColor, c(5, 10, 20, 255))
+	default:
+		raygui.LoadStyleDefault()
+	}
 }
 
 func registerRaygui(v *vm.VM) {
@@ -299,6 +391,14 @@ func registerRaygui(v *vm.VM) {
 	})
 	v.RegisterForeign("GuiLoadStyleDefault", func(args []interface{}) (interface{}, error) {
 		raygui.LoadStyleDefault()
+		return nil, nil
+	})
+	v.RegisterForeign("LoadUIStyle", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("LoadUIStyle(name) requires 1 argument")
+		}
+		name := strings.ToLower(strings.TrimSpace(toString(args[0])))
+		applyUIStylePreset(name)
 		return nil, nil
 	})
 	v.RegisterForeign("GuiSetStyle", func(args []interface{}) (interface{}, error) {

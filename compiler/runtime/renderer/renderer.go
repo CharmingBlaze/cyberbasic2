@@ -101,6 +101,9 @@ func (r *Renderer) Frame() {
 	rl.BeginDrawing()
 	rl.ClearBackground(r.clearColor)
 
+	// Shadow pass (when enabled): render from light POV to depth texture
+	RenderShadowPass()
+
 	// 3D pass: scene (sky, terrain, water, clouds, objects) + queued 3D items
 	cam := raylib.GetCamera3D()
 	rl.BeginMode3D(cam)

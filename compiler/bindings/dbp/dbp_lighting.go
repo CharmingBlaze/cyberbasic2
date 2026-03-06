@@ -16,9 +16,13 @@ package dbp
 
 import (
 	"fmt"
+	"math"
 	"sync"
 
+	"cyberbasic/compiler/bindings/raylib"
+	"cyberbasic/compiler/runtime/renderer"
 	"cyberbasic/compiler/vm"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 type dbpLight struct {
@@ -38,6 +42,35 @@ var (
 	lightsMu sync.Mutex
 )
 
+func lightDirectionVector(l *dbpLight) rl.Vector3 {
+	q := rl.QuaternionFromEuler(
+		l.pitch*float32(math.Pi)/180,
+		l.yaw*float32(math.Pi)/180,
+		l.roll*float32(math.Pi)/180,
+	)
+	dir := rl.Vector3RotateByQuaternion(rl.Vector3{X: 0, Y: 0, Z: -1}, q)
+	if rl.Vector3Length(dir) <= 1e-6 {
+		return rl.Vector3{X: 0.45, Y: -0.8, Z: 0.4}
+	}
+	return rl.Vector3Normalize(dir)
+}
+
+func syncRendererShadowLights() {
+	lightsMu.Lock()
+	list := make([]renderer.ShadowLight, 0, len(lights))
+	for _, l := range lights {
+		list = append(list, renderer.ShadowLight{
+			Type:      l.lightType,
+			Position:  rl.Vector3{X: l.x, Y: l.y, Z: l.z},
+			Direction: lightDirectionVector(l),
+			Range:     l.range_,
+			Shadows:   l.shadows,
+		})
+	}
+	lightsMu.Unlock()
+	renderer.SetShadowLights(list)
+}
+
 // registerLighting adds MakeLight, PositionLight, RotateLight, SetLightColor, SetLightIntensity, SetLightRange, DeleteLight, SyncLight.
 func registerLighting(v *vm.VM) {
 	v.RegisterForeign("MakeLight", func(args []interface{}) (interface{}, error) {
@@ -49,6 +82,7 @@ func registerLighting(v *vm.VM) {
 		lightsMu.Lock()
 		lights[id] = &dbpLight{lightType: typ, r: 1, g: 1, b: 1, intensity: 1, range_: 10}
 		lightsMu.Unlock()
+		syncRendererShadowLights()
 		return nil, nil
 	})
 
@@ -63,6 +97,7 @@ func registerLighting(v *vm.VM) {
 			l.x, l.y, l.z = x, y, z
 		}
 		lightsMu.Unlock()
+		syncRendererShadowLights()
 		return nil, nil
 	})
 
@@ -77,6 +112,7 @@ func registerLighting(v *vm.VM) {
 			l.pitch, l.yaw, l.roll = p, y, r
 		}
 		lightsMu.Unlock()
+		syncRendererShadowLights()
 		return nil, nil
 	})
 
@@ -100,6 +136,7 @@ func registerLighting(v *vm.VM) {
 			l.r, l.g, l.b = r, g, b
 		}
 		lightsMu.Unlock()
+		syncRendererShadowLights()
 		return nil, nil
 	})
 
@@ -114,6 +151,7 @@ func registerLighting(v *vm.VM) {
 			l.intensity = val
 		}
 		lightsMu.Unlock()
+		syncRendererShadowLights()
 		return nil, nil
 	})
 
@@ -128,6 +166,7 @@ func registerLighting(v *vm.VM) {
 			l.range_ = val
 		}
 		lightsMu.Unlock()
+		syncRendererShadowLights()
 		return nil, nil
 	})
 
@@ -142,6 +181,7 @@ func registerLighting(v *vm.VM) {
 			l.angle = deg
 		}
 		lightsMu.Unlock()
+		syncRendererShadowLights()
 		return nil, nil
 	})
 
@@ -156,6 +196,7 @@ func registerLighting(v *vm.VM) {
 			l.shadows = true
 		}
 		lightsMu.Unlock()
+		syncRendererShadowLights()
 		return nil, nil
 	})
 	// DisableLightShadows(id): Disables shadow casting for a light.
@@ -169,20 +210,52 @@ func registerLighting(v *vm.VM) {
 			l.shadows = false
 		}
 		lightsMu.Unlock()
+		syncRendererShadowLights()
 		return nil, nil
 	})
 	// EnableShadows(id) / DisableShadows(id): DBP aliases for per-light shadow control.
 	v.RegisterForeign("EnableShadows", func(args []interface{}) (interface{}, error) {
+		if len(args) == 0 {
+			raylib.SetShadowsEnabled(true)
+			return nil, nil
+		}
 		if len(args) >= 1 {
 			return v.CallForeign("EnableLightShadows", args)
 		}
 		return nil, fmt.Errorf("EnableShadows(id) requires 1 argument")
 	})
 	v.RegisterForeign("DisableShadows", func(args []interface{}) (interface{}, error) {
+		if len(args) == 0 {
+			raylib.SetShadowsEnabled(false)
+			return nil, nil
+		}
 		if len(args) >= 1 {
 			return v.CallForeign("DisableLightShadows", args)
 		}
 		return nil, fmt.Errorf("DisableShadows(id) requires 1 argument")
+	})
+	v.RegisterForeign("SetShadowMapSize", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetShadowMapSize(width, height) requires 2 arguments")
+		}
+		w := int32(toInt(args[0]))
+		h := int32(toInt(args[1]))
+		renderer.SetShadowMapSize(w, h)
+		return nil, nil
+	})
+	v.RegisterForeign("SetShadowBias", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SetShadowBias(bias) requires 1 argument")
+		}
+		renderer.SetShadowBias(toFloat32(args[0]))
+		return nil, nil
+	})
+	v.RegisterForeign("SetShadowQuality", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SetShadowQuality(name) requires 1 argument")
+		}
+		renderer.SetShadowQuality(toString(args[0]))
+		return nil, nil
 	})
 
 	v.RegisterForeign("DeleteLight", func(args []interface{}) (interface{}, error) {
@@ -193,6 +266,7 @@ func registerLighting(v *vm.VM) {
 		lightsMu.Lock()
 		delete(lights, id)
 		lightsMu.Unlock()
+		syncRendererShadowLights()
 		return nil, nil
 	})
 
@@ -291,5 +365,22 @@ func registerLighting(v *vm.VM) {
 			return 0.0, nil
 		}
 		return float64(l.b * 255), nil
+	})
+}
+
+func registerShadowCompatibility(v *vm.VM) {
+	v.RegisterForeign("EnableShadows", func(args []interface{}) (interface{}, error) {
+		if len(args) == 0 {
+			raylib.SetShadowsEnabled(true)
+			return nil, nil
+		}
+		return v.CallForeign("EnableLightShadows", args)
+	})
+	v.RegisterForeign("DisableShadows", func(args []interface{}) (interface{}, error) {
+		if len(args) == 0 {
+			raylib.SetShadowsEnabled(false)
+			return nil, nil
+		}
+		return v.CallForeign("DisableLightShadows", args)
 	})
 }

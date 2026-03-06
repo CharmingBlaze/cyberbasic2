@@ -12,6 +12,7 @@ Complete guide to all CyberBASIC2 documentation.
 - **[FAQ](FAQ.md)** – Hybrid vs manual loop, in-process vs multi-process windows, API and include syntax
 - **[Troubleshooting](TROUBLESHOOTING.md)** – Common errors (compiler not found, parse errors, runtime, multiplayer)
 - **[Roadmap (ROADMAP.md)](../ROADMAP.md)** – Planned features and priorities
+- **[Roadmap Implementation Status](ROADMAP_IMPLEMENTATION.md)** – What the remediation pass actually completed and what still remains partial
 - **[Changelog (CHANGELOG.md)](../CHANGELOG.md)** – Version history and release notes
 
 ## Language Reference
@@ -65,6 +66,7 @@ Complete guide to all CyberBASIC2 documentation.
   - 3D game checklist
   - **3D editor and level builder** (GetMouseRay, PickGroundPlane, level objects, SaveLevel/LoadLevel)
 - **[3D Physics Guide](3D_PHYSICS_GUIDE.md)** – Bullet: worlds, bodies, position/rotation, forces, raycast, StepAllPhysics3D, GAME.* helpers
+- **[Asset Pipeline](ASSET_PIPELINE.md)** – LoadAsset, PreloadAsset, caching, level vs object loading
 
 - **[Windows, scaling, and splitscreen](WINDOWS_AND_VIEWS.md)** – Window commands, DPI/scaling, views and split-screen
   - Window and config flags (FLAG_*), blend modes (BLEND_*)
@@ -92,6 +94,7 @@ Complete guide to all CyberBASIC2 documentation.
   - Connect, Send, Receive, Disconnect (client)
   - Host, Accept, CloseServer (server)
   - Event callbacks (OnClientConnect, OnMessage), SendTable/ReceiveTable, RPC, entity sync
+- **[Multiplayer Design](MULTIPLAYER_DESIGN.md)** – Current architecture, fixed-step simulation guidance, and future lockstep/rollback gaps
 
 - **[GUI Guide](GUI_GUIDE.md)** – Full GUI guide: immediate-mode UI
   - BeginUI, EndUI, Label, Button, Slider, Checkbox, TextBox, Dropdown, ProgressBar
