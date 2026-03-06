@@ -204,6 +204,24 @@ func GetHeightmap(id string) *Heightmap {
 	return hm
 }
 
+// CloneHeightmap creates a copy of the heightmap. Returns new heightmap id.
+func CloneHeightmap(srcID string) (string, error) {
+	heightmapMu.Lock()
+	src, ok := heightmaps[srcID]
+	if !ok {
+		heightmapMu.Unlock()
+		return "", fmt.Errorf("unknown heightmap id: %s", srcID)
+	}
+	heights := make([]float32, len(src.Heights))
+	copy(heights, src.Heights)
+	hm := &Heightmap{Width: src.Width, Depth: src.Depth, Heights: heights}
+	heightmapSeq++
+	newID := fmt.Sprintf("heightmap_%d", heightmapSeq)
+	heightmaps[newID] = hm
+	heightmapMu.Unlock()
+	return newID, nil
+}
+
 // SampleHeight performs bilinear sampling of the heightmap at normalized [0,1] x [0,1].
 func (h *Heightmap) SampleHeight(nx, nz float32) float32 {
 	if h == nil || len(h.Heights) == 0 {

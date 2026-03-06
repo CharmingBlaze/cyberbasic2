@@ -26,12 +26,16 @@ type spritesheetEntry struct {
 }
 
 var (
-	spritesheets   = make(map[int]*spritesheetEntry)
-	spritesheetsMu sync.Mutex
+	spritesheets       = make(map[int]*spritesheetEntry)
+	spritesheetsMu     sync.Mutex
+	spritesheetTexRefs = make(map[uint32]int) // texture ID -> ref count
+	spritesheetTexMu   sync.Mutex
 
 	// Tilemap id mapping: DBP int id -> game string id (e.g. "tm_1")
-	tilemapId2Str   = make(map[int]string)
-	tilemapId2StrMu sync.Mutex
+	tilemapId2Str    = make(map[int]string)
+	tilemapId2StrMu  sync.Mutex
+	tilemapVisible   = make(map[int]bool) // default true when not set
+	tilemapVisibleMu sync.Mutex
 
 	// Camera2D default state
 	camera2DOn       bool
@@ -59,6 +63,7 @@ type spriteObject2D struct {
 	sx       float32
 	sy       float32
 	syncMe   bool
+	visible  bool
 }
 
 type particle2D struct {
@@ -238,6 +243,9 @@ func register2DSpritesheets(v *vm.VM) {
 		spritesheetsMu.Lock()
 		spritesheets[id] = &spritesheetEntry{tex: tex, frameW: fw, frameH: fh, frameCount: count}
 		spritesheetsMu.Unlock()
+		spritesheetTexMu.Lock()
+		spritesheetTexRefs[tex.ID]++
+		spritesheetTexMu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("SetSpriteFrame", func(args []interface{}) (interface{}, error) {
@@ -313,6 +321,73 @@ func register2DSpritesheets(v *vm.VM) {
 		spritesheetsMu.Unlock()
 		return nil, nil
 	})
+	v.RegisterForeign("DeleteSpritesheet", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteSpritesheet(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		spritesheetsMu.Lock()
+		s, ok := spritesheets[id]
+		if ok {
+			delete(spritesheets, id)
+		}
+		spritesheetsMu.Unlock()
+		if ok && s.tex.ID != 0 {
+			spritesheetTexMu.Lock()
+			spritesheetTexRefs[s.tex.ID]--
+			if spritesheetTexRefs[s.tex.ID] <= 0 {
+				delete(spritesheetTexRefs, s.tex.ID)
+				spritesheetTexMu.Unlock()
+				rl.UnloadTexture(s.tex)
+			} else {
+				spritesheetTexMu.Unlock()
+			}
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("CloneSpritesheet", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("CloneSpritesheet(newID, sourceID) requires 2 arguments")
+		}
+		newID := toInt(args[0])
+		srcID := toInt(args[1])
+		spritesheetsMu.Lock()
+		src, ok := spritesheets[srcID]
+		if !ok {
+			spritesheetsMu.Unlock()
+			return nil, fmt.Errorf("unknown spritesheet id %d", srcID)
+		}
+		clone := &spritesheetEntry{
+			tex:          src.tex,
+			frameW:       src.frameW,
+			frameH:       src.frameH,
+			frameCount:   src.frameCount,
+			currentFrame: src.currentFrame,
+			animStart:    src.animStart,
+			animEnd:      src.animEnd,
+			animSpeed:    src.animSpeed,
+			animAccum:    src.animAccum,
+		}
+		spritesheets[newID] = clone
+		spritesheetsMu.Unlock()
+		spritesheetTexMu.Lock()
+		spritesheetTexRefs[src.tex.ID]++
+		spritesheetTexMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SpritesheetExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SpritesheetExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		spritesheetsMu.Lock()
+		_, ok := spritesheets[id]
+		spritesheetsMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
+	})
 }
 
 func register2DTilemaps(v *vm.VM) {
@@ -330,6 +405,9 @@ func register2DTilemaps(v *vm.VM) {
 		tilemapId2StrMu.Lock()
 		tilemapId2Str[id] = strId
 		tilemapId2StrMu.Unlock()
+		tilemapVisibleMu.Lock()
+		tilemapVisible[id] = true
+		tilemapVisibleMu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("DrawTilemap", func(args []interface{}) (interface{}, error) {
@@ -337,6 +415,12 @@ func register2DTilemaps(v *vm.VM) {
 			return nil, fmt.Errorf("DrawTilemap(id [, x, y]) requires 1+ arguments")
 		}
 		id := toInt(args[0])
+		tilemapVisibleMu.Lock()
+		vis := tilemapVisible[id]
+		tilemapVisibleMu.Unlock()
+		if !vis {
+			return nil, nil
+		}
 		tilemapId2StrMu.Lock()
 		strId, ok := tilemapId2Str[id]
 		tilemapId2StrMu.Unlock()
@@ -371,6 +455,52 @@ func register2DTilemaps(v *vm.VM) {
 			strId = toString(args[0])
 		}
 		return v.CallForeign("GetTileByMapId", []interface{}{strId, args[1], args[2]})
+	})
+	v.RegisterForeign("DeleteTilemap", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteTilemap(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		tilemapId2StrMu.Lock()
+		delete(tilemapId2Str, id)
+		tilemapId2StrMu.Unlock()
+		tilemapVisibleMu.Lock()
+		delete(tilemapVisible, id)
+		tilemapVisibleMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("HideTilemap", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("HideTilemap(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		tilemapVisibleMu.Lock()
+		tilemapVisible[id] = false
+		tilemapVisibleMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("ShowTilemap", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("ShowTilemap(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		tilemapVisibleMu.Lock()
+		tilemapVisible[id] = true
+		tilemapVisibleMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("TilemapExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("TilemapExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		tilemapId2StrMu.Lock()
+		_, ok := tilemapId2Str[id]
+		tilemapId2StrMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
 	})
 }
 
@@ -558,7 +688,7 @@ func register2DObjects(v *vm.VM) {
 		id := toInt(args[0])
 		spriteId := toInt(args[1])
 		spriteObjects2DMu.Lock()
-		spriteObjects2D[id] = &spriteObject2D{spriteId: spriteId, x: 0, y: 0, angle: 0, sx: 1, sy: 1}
+		spriteObjects2D[id] = &spriteObject2D{spriteId: spriteId, x: 0, y: 0, angle: 0, sx: 1, sy: 1, visible: true}
 		spriteObjects2DMu.Unlock()
 		return nil, nil
 	})
@@ -623,7 +753,7 @@ func register2DObjects(v *vm.VM) {
 		spriteObjects2DMu.Lock()
 		o, ok := spriteObjects2D[id]
 		spriteObjects2DMu.Unlock()
-		if !ok {
+		if !ok || !o.visible {
 			return nil, nil
 		}
 		imagesMu.Lock()
@@ -653,6 +783,77 @@ func register2DObjects(v *vm.VM) {
 		}
 		spriteObjects2DMu.Unlock()
 		return v.CallForeign("ReplicatePosition", []interface{}{fmt.Sprintf("obj2d_%d", id)})
+	})
+	v.RegisterForeign("DeleteSpriteObject", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteSpriteObject(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		spriteObjects2DMu.Lock()
+		delete(spriteObjects2D, id)
+		spriteObjects2DMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("HideSpriteObject", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("HideSpriteObject(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		spriteObjects2DMu.Lock()
+		if o, ok := spriteObjects2D[id]; ok {
+			o.visible = false
+		}
+		spriteObjects2DMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("ShowSpriteObject", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("ShowSpriteObject(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		spriteObjects2DMu.Lock()
+		if o, ok := spriteObjects2D[id]; ok {
+			o.visible = true
+		}
+		spriteObjects2DMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("CloneSpriteObject", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("CloneSpriteObject(newID, sourceID) requires 2 arguments")
+		}
+		newID := toInt(args[0])
+		srcID := toInt(args[1])
+		spriteObjects2DMu.Lock()
+		src, ok := spriteObjects2D[srcID]
+		if !ok {
+			spriteObjects2DMu.Unlock()
+			return nil, fmt.Errorf("unknown sprite object id %d", srcID)
+		}
+		clone := &spriteObject2D{
+			spriteId: src.spriteId,
+			x:        src.x, y: src.y,
+			angle: src.angle,
+			sx: src.sx, sy: src.sy,
+			syncMe:  false,
+			visible: src.visible,
+		}
+		spriteObjects2D[newID] = clone
+		spriteObjects2DMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SpriteObjectExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SpriteObjectExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		spriteObjects2DMu.Lock()
+		_, ok := spriteObjects2D[id]
+		spriteObjects2DMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
 	})
 }
 
@@ -827,5 +1028,28 @@ func register2DParticles(v *vm.VM) {
 			rl.DrawCircle(int32(part.x), int32(part.y), part.size, c)
 		}
 		return nil, nil
+	})
+	v.RegisterForeign("DeleteParticles2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteParticles2D(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		particles2DMu.Lock()
+		delete(particles2D, id)
+		particles2DMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("Particles2DExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("Particles2DExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		particles2DMu.Lock()
+		_, ok := particles2D[id]
+		particles2DMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
 	})
 }

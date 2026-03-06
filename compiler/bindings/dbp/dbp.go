@@ -550,6 +550,24 @@ func RegisterDBP(v *vm.VM) {
 		return nil, nil
 	})
 
+	// CopyObject(newID, sourceID): Alias for CloneObject (DBP parity).
+	v.RegisterForeign("CopyObject", func(args []interface{}) (interface{}, error) {
+		return v.CallForeign("CloneObject", args)
+	})
+	// ObjectExists(id): Returns 1 if object exists, 0 otherwise.
+	v.RegisterForeign("ObjectExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("ObjectExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		objectsMu.Lock()
+		_, ok := objects[id]
+		objectsMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
+	})
 	// --- Object extras ---
 	v.RegisterForeign("CloneObject", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
@@ -889,6 +907,19 @@ func RegisterDBP(v *vm.VM) {
 		}
 		return v.CallForeign("LoadImage", []interface{}{args[1], args[0]})
 	})
+	v.RegisterForeign("SpriteExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SpriteExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		imagesMu.Lock()
+		_, ok := images[id]
+		imagesMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
+	})
 
 	// --- Text (DBP-style) ---
 	v.RegisterForeign("DrawText", func(args []interface{}) (interface{}, error) {
@@ -937,6 +968,38 @@ func RegisterDBP(v *vm.VM) {
 		currentFontID = toInt(args[0])
 		fontsMu.Unlock()
 		return nil, nil
+	})
+	v.RegisterForeign("DeleteFont", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteFont(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		fontsMu.Lock()
+		f, ok := fonts[id]
+		if ok {
+			delete(fonts, id)
+			if currentFontID == id {
+				currentFontID = -1
+			}
+		}
+		fontsMu.Unlock()
+		if ok {
+			rl.UnloadFont(f)
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("FontExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("FontExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		fontsMu.Lock()
+		_, ok := fonts[id]
+		fontsMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
 	})
 
 	// --- File I/O (DBP-style) ---
@@ -1135,6 +1198,35 @@ func RegisterDBP(v *vm.VM) {
 		}
 		rl.SetSoundVolume(snd, vol)
 		return nil, nil
+	})
+	v.RegisterForeign("DeleteSound", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteSound(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		soundsMu.Lock()
+		snd, ok := sounds[id]
+		if ok {
+			delete(sounds, id)
+		}
+		soundsMu.Unlock()
+		if ok {
+			rl.UnloadSound(snd)
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("SoundExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SoundExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		soundsMu.Lock()
+		_, ok := sounds[id]
+		soundsMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
 	})
 
 	// --- FPS Camera ---

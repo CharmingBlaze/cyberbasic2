@@ -70,6 +70,54 @@ func registerInstancing(v *vm.VM) {
 		instancesMu.Unlock()
 		return nil, nil
 	})
+	v.RegisterForeign("DeleteInstance", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteInstance(instanceID) requires 1 argument")
+		}
+		instanceID := toInt(args[0])
+		instancesMu.Lock()
+		info, ok := instanceToBase[instanceID]
+		if ok {
+			delete(instanceToBase, instanceID)
+			if list, exists := instances[info.baseID]; exists && info.idx >= 0 && info.idx < len(list) {
+				list[info.idx] = nil
+			}
+		}
+		instancesMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("DeleteAllInstances", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteAllInstances(baseID) requires 1 argument")
+		}
+		baseID := toInt(args[0])
+		instancesMu.Lock()
+		var toDelete []int
+		for instanceID, info := range instanceToBase {
+			if info.baseID == baseID {
+				toDelete = append(toDelete, instanceID)
+			}
+		}
+		for _, id := range toDelete {
+			delete(instanceToBase, id)
+		}
+		instances[baseID] = make([]*dbpInstance, 0)
+		instancesMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("InstanceExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("InstanceExists(instanceID) requires 1 argument")
+		}
+		instanceID := toInt(args[0])
+		instancesMu.Lock()
+		_, ok := instanceToBase[instanceID]
+		instancesMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
+	})
 	v.RegisterForeign("DrawInstances", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("DrawInstances(baseID) requires 1 argument")
@@ -78,7 +126,7 @@ func registerInstancing(v *vm.VM) {
 		instancesMu.Lock()
 		list := instances[baseID]
 		instancesMu.Unlock()
-		if len(list) == 0 {
+		if list == nil || len(list) == 0 {
 			return nil, nil
 		}
 		objectsMu.Lock()

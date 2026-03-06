@@ -74,4 +74,17 @@ func registerTextures(v *vm.VM) {
 		rl.SetTextureWrap(tex, rl.TextureWrapMode(mode))
 		return nil, nil
 	})
+	v.RegisterForeign("TextureExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("TextureExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		texturesMu.Lock()
+		_, ok := textures[id]
+		texturesMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
+	})
 }

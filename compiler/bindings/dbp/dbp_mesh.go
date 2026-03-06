@@ -74,4 +74,16 @@ func register3DMesh(v *vm.VM) {
 		}
 		return meshes[0].TriangleCount, nil
 	})
+	v.RegisterForeign("DeleteMesh", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteMesh(id) requires 1 argument")
+		}
+		return v.CallForeign("DeleteObject", args[:1])
+	})
+	v.RegisterForeign("MeshExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("MeshExists(id) requires 1 argument")
+		}
+		return v.CallForeign("ObjectExists", args[:1])
+	})
 }

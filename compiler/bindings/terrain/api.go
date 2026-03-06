@@ -24,6 +24,7 @@ type TerrainState struct {
 	PosZ             float32
 	Layers           [4]string // Texture paths/ids for splat layers 0-3
 	SplatmapPath     string    // RGBA splatmap; if missing, use layer 0 only
+	Visible          bool      // Visibility for Hide/Show
 }
 
 var (
@@ -75,6 +76,7 @@ func MakeTerrainFlat(v *vm.VM, sizeX, sizeZ float32) (string, error) {
 		SizeZ:       sizeZ,
 		HeightScale: 0,
 		LODLevel:    0,
+		Visible:     true,
 	}
 	terrainMu.Unlock()
 	return id, nil
@@ -97,6 +99,7 @@ func TerrainCreate(v *vm.VM, heightmapID string, sizeX, sizeZ, heightScale float
 		SizeZ:       sizeZ,
 		HeightScale: heightScale,
 		LODLevel:    0,
+		Visible:     true,
 	}
 	terrainMu.Unlock()
 	return id, nil
@@ -127,6 +130,9 @@ func DrawTerrain(v *vm.VM, terrainID string, posX, posY, posZ float32) error {
 	terrainMu.Unlock()
 	if !ok {
 		return fmt.Errorf("unknown terrain id: %s", terrainID)
+	}
+	if !ts.Visible {
+		return nil
 	}
 	matID := ts.MaterialID
 	if matID == "" {
@@ -250,4 +256,72 @@ func SetTerrainSplatmap(terrainID string, path string) error {
 	}
 	ts.SplatmapPath = path
 	return nil
+}
+
+// SetTerrainVisible sets visibility for Hide/Show.
+func SetTerrainVisible(terrainID string, visible bool) {
+	terrainMu.Lock()
+	defer terrainMu.Unlock()
+	if ts, ok := terrains[terrainID]; ok {
+		ts.Visible = visible
+	}
+}
+
+// TerrainDelete removes terrain from the registry and unloads mesh.
+func TerrainDelete(v *vm.VM, terrainID string) error {
+	terrainMu.Lock()
+	ts, ok := terrains[terrainID]
+	if !ok {
+		terrainMu.Unlock()
+		return nil
+	}
+	meshID := ts.MeshID
+	delete(terrains, terrainID)
+	terrainMu.Unlock()
+	if meshID != "" {
+		_, _ = v.CallForeign("UnloadMesh", []interface{}{meshID})
+	}
+	return nil
+}
+
+// TerrainClone creates a new terrain with the same state. Returns new terrain id.
+func TerrainClone(v *vm.VM, srcID string) (string, error) {
+	terrainMu.Lock()
+	src, ok := terrains[srcID]
+	if !ok {
+		terrainMu.Unlock()
+		return "", fmt.Errorf("unknown terrain id: %s", srcID)
+	}
+	terrainMu.Unlock()
+	hmID, err := CloneHeightmap(src.HeightmapID)
+	if err != nil {
+		return "", err
+	}
+	meshID, err := GenTerrainMesh(v, hmID, src.SizeX, src.SizeZ, src.HeightScale, src.LODLevel)
+	if err != nil {
+		return "", err
+	}
+	terrainMu.Lock()
+	terrainSeq++
+	newID := fmt.Sprintf("terrain_%d", terrainSeq)
+	terrains[newID] = &TerrainState{
+		HeightmapID:      hmID,
+		MeshID:           meshID,
+		MaterialID:       src.MaterialID,
+		SizeX:            src.SizeX,
+		SizeZ:            src.SizeZ,
+		HeightScale:      src.HeightScale,
+		LODLevel:         src.LODLevel,
+		CollisionEnabled: src.CollisionEnabled,
+		Friction:          src.Friction,
+		Bounce:            src.Bounce,
+		PosX:             src.PosX,
+		PosY:             src.PosY,
+		PosZ:             src.PosZ,
+		Layers:           src.Layers,
+		SplatmapPath:     src.SplatmapPath,
+		Visible:          src.Visible,
+	}
+	terrainMu.Unlock()
+	return newID, nil
 }

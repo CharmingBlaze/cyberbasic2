@@ -23,8 +23,10 @@ import (
 )
 
 var (
-	groups   = make(map[int][]int) // groupID -> objectIDs
-	groupsMu sync.Mutex
+	groups        = make(map[int][]int) // groupID -> objectIDs
+	groupsMu      sync.Mutex
+	groupVisible  = make(map[int]bool) // groupID -> visible (default true)
+	groupVisibleMu sync.Mutex
 )
 
 // registerGroups adds MakeGroup, AddToGroup, RemoveFromGroup, PositionGroup, RotateGroup, DrawGroup, SyncGroup.
@@ -37,6 +39,9 @@ func registerGroups(v *vm.VM) {
 		groupsMu.Lock()
 		groups[id] = []int{}
 		groupsMu.Unlock()
+		groupVisibleMu.Lock()
+		groupVisible[id] = true
+		groupVisibleMu.Unlock()
 		return nil, nil
 	})
 
@@ -114,6 +119,12 @@ func registerGroups(v *vm.VM) {
 			return nil, fmt.Errorf("DrawGroup(groupID) requires 1 argument")
 		}
 		gid := toInt(args[0])
+		groupVisibleMu.Lock()
+		vis := groupVisible[gid]
+		groupVisibleMu.Unlock()
+		if !vis {
+			return nil, nil
+		}
 		groupsMu.Lock()
 		list := groups[gid]
 		groupsMu.Unlock()
@@ -139,5 +150,51 @@ func registerGroups(v *vm.VM) {
 	v.RegisterForeign("SyncGroup", func(args []interface{}) (interface{}, error) {
 		// Placeholder for multiplayer sync - would push group state to net layer
 		return nil, nil
+	})
+	v.RegisterForeign("DeleteGroup", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteGroup(id) requires 1 argument")
+		}
+		gid := toInt(args[0])
+		groupsMu.Lock()
+		delete(groups, gid)
+		groupsMu.Unlock()
+		groupVisibleMu.Lock()
+		delete(groupVisible, gid)
+		groupVisibleMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("HideGroup", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("HideGroup(id) requires 1 argument")
+		}
+		gid := toInt(args[0])
+		groupVisibleMu.Lock()
+		groupVisible[gid] = false
+		groupVisibleMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("ShowGroup", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("ShowGroup(id) requires 1 argument")
+		}
+		gid := toInt(args[0])
+		groupVisibleMu.Lock()
+		groupVisible[gid] = true
+		groupVisibleMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("GroupExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("GroupExists(id) requires 1 argument")
+		}
+		gid := toInt(args[0])
+		groupsMu.Lock()
+		_, ok := groups[gid]
+		groupsMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
 	})
 }

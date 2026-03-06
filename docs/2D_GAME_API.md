@@ -56,6 +56,7 @@ DrawRectOutline 250, 250, 40, 40
 | `LoadSprite` | (path, id) | Alias for LoadImage |
 | `Sprite` | (id, x, y) | Draw sprite at position |
 | `DeleteSprite` | (id) | Unload sprite from memory |
+| `SpriteExists` | (id) | Returns 1 if exists, 0 otherwise |
 | `DrawSpriteRotated` | (id, x, y, angle) | Draw with rotation (degrees) |
 | `DrawSpriteScaled` | (id, x, y, sx, sy) | Draw with scale |
 | `DrawSpriteTint` | (id, x, y, r, g, b) | Draw with tint color |
@@ -81,6 +82,9 @@ DrawSpriteScaled 1, 200, 200, 2, 2
 | `NextSpriteFrame` | (id) | Advance to next frame (wraps) |
 | `DrawSpriteFrame` | (id, frame, x, y) | Draw specific frame |
 | `AnimateSprite` | (id, startFrame, endFrame, speed) | Configure animation range and speed |
+| `DeleteSpritesheet` | (id) | Unload spritesheet |
+| `CloneSpritesheet` | (newID, sourceID) | Duplicate spritesheet (shares texture) |
+| `SpritesheetExists` | (id) | Returns 1 if exists, 0 otherwise |
 
 **Multiplayer-safe?** ✓ Yes (draw-only).
 
@@ -106,6 +110,10 @@ DrawSpriteFrame 1, 3, 100, 100
 | `DrawTilemap` | (id) | Draw tilemap |
 | `SetTile` | (id, x, y, tileIndex) | Set tile at grid position |
 | `GetTile` | (id, x, y) | Get tile value (assign to variable) |
+| `DeleteTilemap` | (id) | Remove tilemap |
+| `HideTilemap` | (id) | Set visible=false |
+| `ShowTilemap` | (id) | Set visible=true |
+| `TilemapExists` | (id) | Returns 1 if exists, 0 otherwise |
 
 **Multiplayer-safe?** SetTile modifies shared state; use replication for sync.
 
@@ -207,6 +215,11 @@ Combine sprite + position/rotation/scale for easy game objects.
 | `ScaleObject2D` | (id, sx, sy) | Set scale |
 | `DrawObject2D` | (id) | Draw sprite at object transform |
 | `SyncObject2D` | (id) | Mark for replication |
+| `DeleteSpriteObject` | (id) | Remove sprite object |
+| `HideSpriteObject` | (id) | Set visible=false |
+| `ShowSpriteObject` | (id) | Set visible=true |
+| `CloneSpriteObject` | (newID, sourceID) | Duplicate sprite object |
+| `SpriteObjectExists` | (id) | Returns 1 if exists, 0 otherwise |
 
 **Multiplayer-safe?** SyncObject2D registers for replication; use with ReplicatePosition.
 
@@ -286,6 +299,8 @@ vec = Normalize2D dx, dy
 | `SetParticles2DSpeed` | (id, speed) | Set velocity magnitude |
 | `EmitParticles2D` | (id, count [, x, y]) | Spawn particles |
 | `DrawParticles2D` | (id) | Update and draw particles |
+| `DeleteParticles2D` | (id) | Remove particle system |
+| `Particles2DExists` | (id) | Returns 1 if exists, 0 otherwise |
 
 **Multiplayer-safe?** ✓ Yes (client-local effects).
 
@@ -336,6 +351,18 @@ For networked games, use these with the replication system:
 - `ReplicateScale(entityId)` – Register scale
 
 See `docs/DBP_EXTENDED.md` and the replication module for full setup.
+
+---
+
+## Lifecycle Commands (Delete, Hide, Clone, Exists)
+
+| Entity | Delete | Hide/Show | Clone | Exists |
+|--------|--------|-----------|-------|--------|
+| Sprite | DeleteSprite | - | - | SpriteExists |
+| Spritesheet | DeleteSpritesheet | - | CloneSpritesheet | SpritesheetExists |
+| Tilemap | DeleteTilemap | HideTilemap, ShowTilemap | - | TilemapExists |
+| SpriteObject2D | DeleteSpriteObject | HideSpriteObject, ShowSpriteObject | CloneSpriteObject | SpriteObjectExists |
+| Particles2D | DeleteParticles2D | - | - | Particles2DExists |
 
 ---
 

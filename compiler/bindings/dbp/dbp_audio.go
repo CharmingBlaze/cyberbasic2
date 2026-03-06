@@ -98,4 +98,35 @@ func registerAudioExpanded(v *vm.VM) {
 		// raylib Music loops by default; loop count API may vary
 		return nil, nil
 	})
+	v.RegisterForeign("DeleteMusic", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteMusic(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		musicsMu.Lock()
+		m, ok := musics[id]
+		if ok {
+			delete(musics, id)
+			delete(musicLoops, id)
+		}
+		musicsMu.Unlock()
+		if ok {
+			rl.StopMusicStream(m)
+			rl.UnloadMusicStream(m)
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("MusicExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("MusicExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		musicsMu.Lock()
+		_, ok := musics[id]
+		musicsMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
+	})
 }

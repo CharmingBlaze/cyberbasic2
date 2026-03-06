@@ -143,6 +143,19 @@ func registerLighting(v *vm.VM) {
 	v.RegisterForeign("SyncLight", func(args []interface{}) (interface{}, error) {
 		return nil, nil
 	})
+	v.RegisterForeign("LightExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("LightExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		lightsMu.Lock()
+		_, ok := lights[id]
+		lightsMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
+	})
 
 	// Light queries
 	v.RegisterForeign("GetLightX", func(args []interface{}) (interface{}, error) {

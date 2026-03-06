@@ -133,6 +133,9 @@ FpsUpdate
 | `LoadPrefab` | (id, path) | Load prefab template |
 | `SpawnPrefab` | (id, x, y, z) | Instantiate prefab at position; returns object ID |
 | `DeleteObject` | (id) | Unload and remove |
+| `CloneObject` | (newID, sourceID) | Duplicate object |
+| `CopyObject` | (newID, sourceID) | Alias for CloneObject |
+| `ObjectExists` | (id) | Returns 1 if exists, 0 otherwise |
 
 **Example:**
 ```basic
@@ -285,6 +288,25 @@ tag$ = GetObjectTag 1
 
 ---
 
+## 13b. Lifecycle Commands (Delete, Hide, Clone, Exists)
+
+| Entity | Delete | Hide/Show | Clone | Exists |
+|--------|--------|-----------|-------|--------|
+| `Object` | DeleteObject | HideObject, ShowObject | CloneObject, CopyObject | ObjectExists |
+| `Light` | DeleteLight | - | - | LightExists |
+| `Texture` | DeleteTexture | - | - | TextureExists |
+| `Material` | DeleteMaterial | - | - | MaterialExists |
+| `Water` | DeleteWater | HideWater, ShowWater | CloneWater | WaterExists |
+| `Terrain` | DeleteTerrain | HideTerrain, ShowTerrain | CloneTerrain | TerrainExists |
+| `Group` | DeleteGroup | HideGroup, ShowGroup | - | GroupExists |
+| `Instance` | DeleteInstance, DeleteAllInstances | - | - | InstanceExists |
+| `Mesh` | DeleteMesh | - | - | MeshExists |
+| `Prefab` | DeletePrefab | - | - | PrefabExists |
+| `Particles` | DeleteParticles | - | - | - |
+
+
+---
+
 ## 14. Object Groups
 
 | Command | Args | Description |
@@ -395,6 +417,7 @@ dot = Dot3D x1, y1, z1, x2, y2, z2
 | `SetLightIntensity` | (id, value) | Set intensity |
 | `SetLightRange` | (id, value) | Set range |
 | `DeleteLight` | (id) | Remove |
+| `LightExists` | (id) | Returns 1 if exists, 0 otherwise |
 | `SyncLight` | (id) | Sync for multiplayer |
 | `GetLightX` | (id) | Light position X |
 | `GetLightY` | (id) | Light position Y |
@@ -415,6 +438,7 @@ dot = Dot3D x1, y1, z1, x2, y2, z2
 | `ApplyMaterial` | (id, objectID) | Apply to object |
 | `LoadTexture` | (id, path) | Load texture |
 | `DeleteTexture` | (id) | Unload |
+| `TextureExists` | (id) | Returns 1 if exists, 0 otherwise |
 | `SetTextureFilter` | (id, mode) | Filter mode |
 | `SetTextureWrap` | (id, mode) | Wrap mode |
 
@@ -470,6 +494,11 @@ dot = Dot3D x1, y1, z1, x2, y2, z2
 | `SetWaterDepthColor` | (id, r, g, b) | Deep water tint |
 | `SetWaterShallowColor` | (id, r, g, b) | Shallow water tint |
 | `DrawWater` | (id) | Draw at stored position |
+| `DeleteWater` | (id) | Remove and unload |
+| `HideWater` | (id) | Set visible=false |
+| `ShowWater` | (id) | Set visible=true |
+| `CloneWater` | (newID, sourceID) | Duplicate water |
+| `WaterExists` | (id) | Returns 1 if exists, 0 otherwise |
 
 ---
 
@@ -485,6 +514,11 @@ dot = Dot3D x1, y1, z1, x2, y2, z2
 | `SetTerrainSplatmap` | (id, path) | Splatmap (fallback: layer 0 if missing) |
 | `GenerateTerrainNoise` | (id, seed, octaves, scale) | Procedural (deterministic) |
 | `DrawTerrain` | (id) | Draw at stored position |
+| `DeleteTerrain` | (id) | Remove and unload |
+| `HideTerrain` | (id) | Set visible=false |
+| `ShowTerrain` | (id) | Set visible=true |
+| `CloneTerrain` | (newID, sourceID) | Duplicate terrain |
+| `TerrainExists` | (id) | Returns 1 if exists, 0 otherwise |
 | `TerrainGetHeight` | (terrainId, x, z) | Get height at point |
 | `TerrainRaise` | (terrainId, x, z, radius, amount) | Raise terrain |
 | `TerrainLower` | (terrainId, x, z, radius, amount) | Lower terrain |

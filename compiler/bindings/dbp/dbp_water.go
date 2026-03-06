@@ -340,6 +340,94 @@ func registerWater(v *vm.VM) {
 		})
 	})
 
+	// DeleteWater(id): Remove water and unload resources.
+	v.RegisterForeign("DeleteWater", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteWater(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		idToWaterMu.Lock()
+		internalID, ok := idToWater[id]
+		if ok {
+			delete(idToWater, id)
+		}
+		idToWaterMu.Unlock()
+		if !ok {
+			return nil, nil
+		}
+		return nil, water.WaterDelete(v, internalID)
+	})
+
+	// HideWater(id): Set visible=false.
+	v.RegisterForeign("HideWater", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("HideWater(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		idToWaterMu.Lock()
+		internalID, ok := idToWater[id]
+		idToWaterMu.Unlock()
+		if !ok {
+			return nil, nil
+		}
+		_, _ = v.CallForeign("SetWaterVisible", []interface{}{internalID, 0})
+		return nil, nil
+	})
+
+	// ShowWater(id): Set visible=true.
+	v.RegisterForeign("ShowWater", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("ShowWater(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		idToWaterMu.Lock()
+		internalID, ok := idToWater[id]
+		idToWaterMu.Unlock()
+		if !ok {
+			return nil, nil
+		}
+		_, _ = v.CallForeign("SetWaterVisible", []interface{}{internalID, 1})
+		return nil, nil
+	})
+
+	// CloneWater(newID, sourceID): Create copy of water at new ID.
+	v.RegisterForeign("CloneWater", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("CloneWater(newID, sourceID) requires 2 arguments")
+		}
+		newID := toInt(args[0])
+		srcID := toInt(args[1])
+		idToWaterMu.Lock()
+		srcInternal, ok := idToWater[srcID]
+		idToWaterMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown water id %d", srcID)
+		}
+		newInternal, err := water.WaterClone(v, srcInternal)
+		if err != nil {
+			return nil, err
+		}
+		idToWaterMu.Lock()
+		idToWater[newID] = newInternal
+		idToWaterMu.Unlock()
+		return nil, nil
+	})
+
+	// WaterExists(id): Returns 1 if water exists, 0 otherwise.
+	v.RegisterForeign("WaterExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("WaterExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		idToWaterMu.Lock()
+		_, ok := idToWater[id]
+		idToWaterMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
+	})
+
 	v.RegisterRenderType("drawwater", vm.Render3D)
 }
 

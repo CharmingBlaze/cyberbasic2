@@ -80,4 +80,27 @@ func registerPrefab(v *vm.VM) {
 		}
 		return res.ObjectIDs[0], nil
 	})
+	v.RegisterForeign("DeletePrefab", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeletePrefab(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		prefabsMu.Lock()
+		delete(prefabs, id)
+		prefabsMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("PrefabExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("PrefabExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		prefabsMu.Lock()
+		_, ok := prefabs[id]
+		prefabsMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
+	})
 }

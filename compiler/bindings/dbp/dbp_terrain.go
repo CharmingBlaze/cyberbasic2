@@ -216,6 +216,94 @@ func registerTerrain(v *vm.VM) {
 		return nil, terrain.DrawTerrain(v, internalID, ts.PosX, ts.PosY, ts.PosZ)
 	})
 
+	// DeleteTerrain(id): Remove terrain and unload resources.
+	v.RegisterForeign("DeleteTerrain", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteTerrain(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		idToTerrainMu.Lock()
+		internalID, ok := idToTerrain[id]
+		if ok {
+			delete(idToTerrain, id)
+		}
+		idToTerrainMu.Unlock()
+		if !ok {
+			return nil, nil
+		}
+		return nil, terrain.TerrainDelete(v, internalID)
+	})
+
+	// HideTerrain(id): Set visible=false.
+	v.RegisterForeign("HideTerrain", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("HideTerrain(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		idToTerrainMu.Lock()
+		internalID, ok := idToTerrain[id]
+		idToTerrainMu.Unlock()
+		if !ok {
+			return nil, nil
+		}
+		terrain.SetTerrainVisible(internalID, false)
+		return nil, nil
+	})
+
+	// ShowTerrain(id): Set visible=true.
+	v.RegisterForeign("ShowTerrain", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("ShowTerrain(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		idToTerrainMu.Lock()
+		internalID, ok := idToTerrain[id]
+		idToTerrainMu.Unlock()
+		if !ok {
+			return nil, nil
+		}
+		terrain.SetTerrainVisible(internalID, true)
+		return nil, nil
+	})
+
+	// CloneTerrain(newID, sourceID): Create copy of terrain at new ID.
+	v.RegisterForeign("CloneTerrain", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("CloneTerrain(newID, sourceID) requires 2 arguments")
+		}
+		newID := toInt(args[0])
+		srcID := toInt(args[1])
+		idToTerrainMu.Lock()
+		srcInternal, ok := idToTerrain[srcID]
+		idToTerrainMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown terrain id %d", srcID)
+		}
+		newInternal, err := terrain.TerrainClone(v, srcInternal)
+		if err != nil {
+			return nil, err
+		}
+		idToTerrainMu.Lock()
+		idToTerrain[newID] = newInternal
+		idToTerrainMu.Unlock()
+		return nil, nil
+	})
+
+	// TerrainExists(id): Returns 1 if terrain exists, 0 otherwise.
+	v.RegisterForeign("TerrainExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("TerrainExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		idToTerrainMu.Lock()
+		_, ok := idToTerrain[id]
+		idToTerrainMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
+	})
+
 	v.RegisterRenderType("drawterrain", vm.Render3D)
 }
 

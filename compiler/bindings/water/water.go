@@ -52,6 +52,8 @@ type WaterState struct {
 	ShallowColorR float32
 	ShallowColorG float32
 	ShallowColorB float32
+	// Visibility for Hide/Show
+	Visible bool
 }
 
 var (
@@ -134,15 +136,16 @@ func RegisterWater(v *vm.VM) {
 		waterSeq++
 		id := fmt.Sprintf("water_%d", waterSeq)
 		waters[id] = &WaterState{
-			MeshID:     meshID,
-			MaterialID: matID,
-			Width:      width,
-			Depth:      depth,
-			WaveSpeed:  1,
-			WaveHeight: 0.2,
-			WaveFreq:   0.5,
-			ColorA:     0.8,
+			MeshID:       meshID,
+			MaterialID:   matID,
+			Width:        width,
+			Depth:        depth,
+			WaveSpeed:    1,
+			WaveHeight:   0.2,
+			WaveFreq:     0.5,
+			ColorA:       0.8,
 			Transparency: 0.8,
+			Visible:      true,
 		}
 		waterMu.Unlock()
 		return id, nil
@@ -158,6 +161,9 @@ func RegisterWater(v *vm.VM) {
 		waterMu.Unlock()
 		if !ok {
 			return nil, fmt.Errorf("unknown water id: %s", id)
+		}
+		if !w.Visible {
+			return nil, nil
 		}
 		posX, posY, posZ := w.PosX, w.PosY, w.PosZ
 		if len(args) >= 4 {
@@ -483,6 +489,18 @@ func RegisterWater(v *vm.VM) {
 		}
 		return nil, nil
 	})
+	// SetWaterVisible(waterId, onOff): Hide/Show water.
+	v.RegisterForeign("SetWaterVisible", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetWaterVisible requires (waterId, onOff)")
+		}
+		waterMu.Lock()
+		defer waterMu.Unlock()
+		if w, ok := waters[toString(args[0])]; ok {
+			w.Visible = toFloat32(args[1]) != 0
+		}
+		return nil, nil
+	})
 }
 
 // GetWaterByID returns WaterState for internal string id (for DBP id mapping).
@@ -491,4 +509,66 @@ func GetWaterByID(internalID string) *WaterState {
 	w := waters[internalID]
 	waterMu.Unlock()
 	return w
+}
+
+// WaterDelete removes water from the registry and unloads its mesh.
+func WaterDelete(v *vm.VM, waterID string) error {
+	waterMu.Lock()
+	w, ok := waters[waterID]
+	if !ok {
+		waterMu.Unlock()
+		return nil // already gone
+	}
+	meshID := w.MeshID
+	delete(waters, waterID)
+	waterMu.Unlock()
+	if meshID != "" {
+		_, _ = v.CallForeign("UnloadMesh", []interface{}{meshID})
+	}
+	return nil
+}
+
+// WaterClone creates a new water with the same state as the source. Returns new internal ID.
+func WaterClone(v *vm.VM, srcID string) (string, error) {
+	waterMu.Lock()
+	src, ok := waters[srcID]
+	if !ok {
+		waterMu.Unlock()
+		return "", fmt.Errorf("unknown water id: %s", srcID)
+	}
+	tileSize := src.Width / 16
+	if tileSize < 1 {
+		tileSize = 1
+	}
+	waterMu.Unlock()
+	res, err := v.CallForeign("WaterCreate", []interface{}{src.Width, src.Depth, tileSize})
+	if err != nil {
+		return "", err
+	}
+	newID, ok := res.(string)
+	if !ok || newID == "" {
+		return "", fmt.Errorf("WaterCreate did not return water id")
+	}
+	waterMu.Lock()
+	dst, ok := waters[newID]
+	if !ok {
+		waterMu.Unlock()
+		return "", fmt.Errorf("new water not found")
+	}
+	dst.PosX, dst.PosY, dst.PosZ = src.PosX, src.PosY, src.PosZ
+	dst.WaveSpeed, dst.WaveHeight, dst.WaveFreq = src.WaveSpeed, src.WaveHeight, src.WaveFreq
+	dst.Time = src.Time
+	dst.UScroll, dst.VScroll = src.UScroll, src.VScroll
+	dst.ReflectionOn, dst.RefractionOn = src.ReflectionOn, src.RefractionOn
+	dst.ReflectionTexture, dst.RefractionTexture = src.ReflectionTexture, src.RefractionTexture
+	dst.NormalMap, dst.FoamTexture = src.NormalMap, src.FoamTexture
+	dst.ColorR, dst.ColorG, dst.ColorB, dst.ColorA = src.ColorR, src.ColorG, src.ColorB, src.ColorA
+	dst.Shininess, dst.FoamEnabled, dst.FoamIntensity = src.Shininess, src.FoamEnabled, src.FoamIntensity
+	dst.DepthFade, dst.Transparency, dst.Density = src.DepthFade, src.Transparency, src.Density
+	dst.DragLinear, dst.DragAngular = src.DragLinear, src.DragAngular
+	dst.DepthColorR, dst.DepthColorG, dst.DepthColorB = src.DepthColorR, src.DepthColorG, src.DepthColorB
+	dst.ShallowColorR, dst.ShallowColorG, dst.ShallowColorB = src.ShallowColorR, src.ShallowColorG, src.ShallowColorB
+	dst.Visible = src.Visible
+	waterMu.Unlock()
+	return newID, nil
 }

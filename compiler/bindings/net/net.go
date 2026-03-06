@@ -976,6 +976,18 @@ func RegisterNet(v *vm.VM) {
 	v.RegisterForeign("NetDisconnect", func(args []interface{}) (interface{}, error) {
 		return v.CallForeign("Disconnect", args)
 	})
+	v.RegisterForeign("NetCloseAll", func(args []interface{}) (interface{}, error) {
+		netMu.Lock()
+		ids := make([]string, 0, len(conns))
+		for id := range conns {
+			ids = append(ids, id)
+		}
+		netMu.Unlock()
+		for _, id := range ids {
+			_, _ = v.CallForeign("Disconnect", []interface{}{id})
+		}
+		return nil, nil
+	})
 	v.RegisterForeign("NetIsServer", func(args []interface{}) (interface{}, error) {
 		netMu.Lock()
 		n := len(servers)

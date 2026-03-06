@@ -61,6 +61,8 @@ The DBP bindings are split into modular files under `compiler/bindings/dbp/`:
 
 ### Object Extras
 - `CloneObject(newID, sourceID)` - Clone object
+- `CopyObject(newID, sourceID)` - Alias for CloneObject
+- `ObjectExists(id)` - Returns 1 if exists, 0 otherwise
 - `FixObject(id)` / `UnfixObject(id)` - Fixed/kinematic flag
 - `SetObjectColor(id, r, g, b)` - Tint color
 - `SetObjectAlpha(id, value)` - Alpha
@@ -103,12 +105,15 @@ The DBP bindings are split into modular files under `compiler/bindings/dbp/`:
 ## Textures (dbp_textures.go)
 - `LoadTexture(id, path)` - Load texture at id
 - `DeleteTexture(id)` - Unload and remove
+- `TextureExists(id)` - Returns 1 if exists, 0 otherwise
 - `SetTextureFilter(id, mode)` / `SetTextureWrap(id, mode)`
 
 ## Materials (dbp_materials.go)
 - `MakeMaterial(id)` - Create material
 - `SetMaterialColor(id, r, g, b)` / `SetMaterialTexture(id, textureID)`
 - `ApplyMaterial(id, objectID)` - Apply to object
+- `DeleteMaterial(id)` - Unload and remove
+- `MaterialExists(id)` - Returns 1 if exists, 0 otherwise
 
 ## Camera Extras (dbp_camera.go)
 - `CameraFollow(objectID, distance)` - Follow object
@@ -125,6 +130,30 @@ The DBP bindings are split into modular files under `compiler/bindings/dbp/`:
 - **Sun:** `SetSunDirection(x, y, z)` / `SetSunColor(r, g, b)` / `SetSunIntensity(value)`
 - **Time:** `SetWorldTime(hours)` / `GetWorldTime()` / `SetWorldTimeScale(value)` / `SetWeatherPreset(name)`
 
+## Lifecycle Commands (Delete, Hide, Clone, Exists)
+
+All entity types support lifecycle operations. Use `XExists(id)` to check validity before use; `IsNull(value)` for optional returns (e.g. NetConnect).
+
+| Entity | Delete | Hide/Show | Clone | Exists |
+|--------|--------|-----------|-------|--------|
+| Object | DeleteObject | HideObject, ShowObject | CloneObject, CopyObject | ObjectExists |
+| Light | DeleteLight | - | - | LightExists |
+| Texture | DeleteTexture | - | - | TextureExists |
+| Material | DeleteMaterial | - | - | MaterialExists |
+| Water | DeleteWater | HideWater, ShowWater | CloneWater | WaterExists |
+| Terrain | DeleteTerrain | HideTerrain, ShowTerrain | CloneTerrain | TerrainExists |
+| Group | DeleteGroup | HideGroup, ShowGroup | - | GroupExists |
+| Instance | DeleteInstance, DeleteAllInstances | - | - | InstanceExists |
+| SpriteObject2D | DeleteSpriteObject | HideSpriteObject, ShowSpriteObject | CloneSpriteObject | SpriteObjectExists |
+| Tilemap | DeleteTilemap | HideTilemap, ShowTilemap | - | TilemapExists |
+| Spritesheet | DeleteSpritesheet | - | CloneSpritesheet | SpritesheetExists |
+| Particles2D | DeleteParticles2D | - | - | Particles2DExists |
+| Font | DeleteFont | - | - | FontExists |
+| Music | DeleteMusic | - | - | MusicExists |
+| Sound | DeleteSound | - | - | SoundExists |
+| Mesh | DeleteMesh | - | - | MeshExists |
+| Prefab | DeletePrefab | - | - | PrefabExists |
+
 ## Water (dbp_water.go)
 - `MakeWater(id, width, depth)` - Create water plane
 - `SetWaterTexture(id, path)` / `PositionWater(id, x, y, z)` / `SetWaterLevel(id, height)` / `SetWaterColor(id, r, g, b)`
@@ -133,6 +162,7 @@ The DBP bindings are split into modular files under `compiler/bindings/dbp/`:
 - `SetWaterReflection(id, onOff)` / `SetWaterRefraction(id, onOff)`
 - `SetWaterNormalmap(id, path)` / `SetWaterFoamTexture(id, path)` / `SetWaterDepthColor(id, r, g, b)` / `SetWaterShallowColor(id, r, g, b)`
 - `DrawWater(id)` - Draw at stored position
+- `DeleteWater(id)` / `HideWater(id)` / `ShowWater(id)` / `CloneWater(newID, sourceID)` / `WaterExists(id)`
 
 ## Terrain (dbp_terrain.go)
 - `MakeTerrain(id, width, depth)` - Create flat terrain
@@ -141,11 +171,13 @@ The DBP bindings are split into modular files under `compiler/bindings/dbp/`:
 - `SetTerrainLayer(id, layerIndex, path)` / `SetTerrainSplatmap(id, path)`
 - `GenerateTerrainNoise(id, seed, octaves, scale)` - Procedural (deterministic)
 - `DrawTerrain(id)` - Draw at stored position
+- `DeleteTerrain(id)` / `HideTerrain(id)` / `ShowTerrain(id)` / `CloneTerrain(newID, sourceID)` / `TerrainExists(id)`
 
 See [docs/WORLD_WATER_TERRAIN.md](WORLD_WATER_TERRAIN.md) for full reference and safety rules.
 
 ## Groups (dbp_groups.go)
 - `MakeGroup(id)` / `AddToGroup(groupID, objectID)` / `RemoveFromGroup(groupID, objectID)`
+- `DeleteGroup(id)` / `HideGroup(id)` / `ShowGroup(id)` / `GroupExists(id)`
 - `PositionGroup(groupID, x, y, z)` / `RotateGroup(groupID, pitch, yaw, roll)`
 - `DrawGroup(groupID)` / `SyncGroup(groupID)`
 

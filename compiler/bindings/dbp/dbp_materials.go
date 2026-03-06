@@ -106,4 +106,33 @@ func registerMaterials(v *vm.VM) {
 		}
 		return nil, nil
 	})
+	v.RegisterForeign("DeleteMaterial", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteMaterial(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		materialsMu.Lock()
+		mat, ok := materials[id]
+		if ok {
+			delete(materials, id)
+		}
+		materialsMu.Unlock()
+		if ok && mat.Maps != nil {
+			rl.UnloadMaterial(mat)
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("MaterialExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("MaterialExists(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		materialsMu.Lock()
+		_, ok := materials[id]
+		materialsMu.Unlock()
+		if ok {
+			return 1, nil
+		}
+		return 0, nil
+	})
 }
