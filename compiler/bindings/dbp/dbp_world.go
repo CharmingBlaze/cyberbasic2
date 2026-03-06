@@ -85,6 +85,29 @@ func registerWorld(v *vm.VM) {
 		return nil, nil
 	})
 
+	// SetSkyboxCubemap(right, left, top, bottom, front, back): Load 6 faces for cubemap skybox.
+	v.RegisterForeign("SetSkyboxCubemap", func(args []interface{}) (interface{}, error) {
+		if len(args) < 6 {
+			return nil, fmt.Errorf("SetSkyboxCubemap(right, left, top, bottom, front, back) requires 6 arguments")
+		}
+		paths := []string{toString(args[0]), toString(args[1]), toString(args[2]), toString(args[3]), toString(args[4]), toString(args[5])}
+		skyboxMu.Lock()
+		if skyboxLoaded && skyboxTex.ID > 0 {
+			rl.UnloadTexture(skyboxTex)
+		}
+		skyboxLoaded = false
+		if paths[0] != "" {
+			tex := rl.LoadTexture(paths[0])
+			if tex.ID > 0 {
+				skyboxTex = tex
+				skyboxLoaded = true
+			}
+		}
+		skyboxMu.Unlock()
+		// raylib-go cubemap: typically uses first face; full 6-face cubemap would need custom shader
+		return nil, nil
+	})
+
 	// SetAmbientLight(r, g, b): Set ambient light color (0-1 or 0-255).
 	v.RegisterForeign("SetAmbientLight", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {

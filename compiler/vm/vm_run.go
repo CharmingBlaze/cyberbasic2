@@ -1258,6 +1258,41 @@ func (vm *VM) executeInstruction(instruction byte) error {
 			delete(vm.fileReaders, h)
 		}
 
+	case OpReadByte:
+		if len(vm.stack) == 0 {
+			return fmt.Errorf("stack underflow for ReadByte")
+		}
+		h := valueToInt(vm.pop())
+		f, ok := vm.fileHandles[h]
+		if !ok {
+			return fmt.Errorf("invalid file handle: %d", h)
+		}
+		rd := vm.fileReaders[h]
+		if rd == nil {
+			rd = bufio.NewReader(f)
+			vm.fileReaders[h] = rd
+		}
+		b, err := rd.ReadByte()
+		if err != nil {
+			vm.push(0)
+		} else {
+			vm.push(int(b))
+		}
+
+	case OpWriteByte:
+		if len(vm.stack) < 2 {
+			return fmt.Errorf("stack underflow for WriteByte")
+		}
+		val := valueToInt(vm.pop())
+		h := valueToInt(vm.pop())
+		f, ok := vm.fileHandles[h]
+		if !ok {
+			return fmt.Errorf("invalid file handle: %d", h)
+		}
+		if _, err := f.Write([]byte{byte(val & 0xff)}); err != nil {
+			return fmt.Errorf("WriteByte: %w", err)
+		}
+
 	case OpCreateArray:
 		if vm.ip+1 >= len(vm.chunk.Code) {
 			return fmt.Errorf("unexpected end of code for OpCreateArray")

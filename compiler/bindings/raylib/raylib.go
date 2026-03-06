@@ -3,6 +3,7 @@
 package raylib
 
 import (
+	"cyberbasic/compiler/runtime/camera"
 	"cyberbasic/compiler/vm"
 	"fmt"
 	"math/rand"
@@ -458,6 +459,14 @@ func SpriteInCullingRect(spriteID string) bool {
 	}
 	minX, minY, maxX, maxY := getCullingRect()
 	return sLeft < maxX && sRight > minX && sTop < maxY && sBottom > minY
+}
+
+// GetCamera3D returns the current 3D camera for use by the unified renderer.
+func GetCamera3D() rl.Camera3D {
+	if camera.HasOverride() {
+		return camera.GetActive()
+	}
+	return camera3D
 }
 
 // getCurrentCamera2D returns the active 2D camera (by ID or default). Applies smooth follow if set.

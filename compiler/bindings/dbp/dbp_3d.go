@@ -55,6 +55,14 @@ func register3DWindow(v *vm.VM) {
 		rl.SetTargetFPS(int32(toInt(args[0])))
 		return nil, nil
 	})
+	// SetFramerate(cap): DBP alias for SetTargetFPS. 0 = uncapped.
+	v.RegisterForeign("SetFramerate", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SetFramerate(cap) requires 1 argument")
+		}
+		rl.SetTargetFPS(int32(toInt(args[0])))
+		return nil, nil
+	})
 	// Clear, StartDraw, EndDraw, Start3D, End3D: already in dbp.go
 }
 
@@ -328,6 +336,9 @@ func register3DObjects(v *vm.VM) {
 		objectsMu.Unlock()
 		return nil, nil
 	})
+	v.RegisterForeign("AttachObject", func(args []interface{}) (interface{}, error) {
+		return v.CallForeign("ParentObject", []interface{}{args[0], args[1]})
+	})
 	v.RegisterForeign("UnparentObject", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("UnparentObject(id) requires 1 argument")
@@ -339,6 +350,9 @@ func register3DObjects(v *vm.VM) {
 		}
 		objectsMu.Unlock()
 		return nil, nil
+	})
+	v.RegisterForeign("DetachObject", func(args []interface{}) (interface{}, error) {
+		return v.CallForeign("UnparentObject", args)
 	})
 
 	// --- Object tags ---

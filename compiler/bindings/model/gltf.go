@@ -136,6 +136,20 @@ func importGLTF(path string) (*Model, error) {
 		}
 	}
 
+	// Import animations
+	jointSet := make(map[int]int)
+	if m.Skeleton != nil && len(doc.Skins) > 0 {
+		for i, jointIdx := range doc.Skins[0].Joints {
+			jointSet[jointIdx] = i
+		}
+	}
+	for _, ganim := range doc.Animations {
+		anim := importAnimation(doc, ganim, jointSet)
+		if len(anim.Channels) > 0 {
+			m.Animations = append(m.Animations, anim)
+		}
+	}
+
 	// Import lights from KHR_lights_punctual extension
 	if ext, ok := doc.Extensions["KHR_lights_punctual"]; ok {
 		if lights, ok := ext.(map[string]any); ok {
@@ -146,11 +160,132 @@ func importGLTF(path string) (*Model, error) {
 	return m, nil
 }
 
+func importAnimation(doc *gltf.Document, ganim *gltf.Animation, jointSet map[int]int) Animation {
+	anim := Animation{
+		Name:     ganim.Name,
+		Duration: 0,
+		Channels: make([]AnimationChannel, 0),
+	}
+	for _, ch := range ganim.Channels {
+		if ch.Sampler >= len(ganim.Samplers) {
+			continue
+		}
+		sampler := ganim.Samplers[ch.Sampler]
+		if sampler.Input >= len(doc.Accessors) || sampler.Output >= len(doc.Accessors) {
+			continue
+		}
+		inputAcr := doc.Accessors[sampler.Input]
+		outputAcr := doc.Accessors[sampler.Output]
+		times, err := readAccessorFloat32(doc, inputAcr)
+		if err != nil || len(times) == 0 {
+			continue
+		}
+		values, err := readAccessorVec(doc, outputAcr, ch.Target.Path)
+		if err != nil || len(values) == 0 {
+			continue
+		}
+		if len(times) != len(values) {
+			continue
+		}
+		keyframes := make([]Keyframe, len(times))
+		for i := range times {
+			keyframes[i] = Keyframe{Time: times[i], Value: values[i]}
+		}
+		nodeIdx := -1
+		if ch.Target.Node != nil {
+			nodeIdx = *ch.Target.Node
+		}
+		boneIdx := -1
+		if nodeIdx >= 0 {
+			if bi, ok := jointSet[nodeIdx]; ok {
+				boneIdx = bi
+			}
+		}
+		prop := string(ch.Target.Path)
+		if prop == "" {
+			prop = "translation"
+		}
+		channel := AnimationChannel{
+			NodeIndex:  nodeIdx,
+			BoneIndex:  boneIdx,
+			Property:   prop,
+			Keyframes:  keyframes,
+		}
+		anim.Channels = append(anim.Channels, channel)
+		if times[len(times)-1] > anim.Duration {
+			anim.Duration = times[len(times)-1]
+		}
+	}
+	return anim
+}
+
+func readAccessorFloat32(doc *gltf.Document, acr *gltf.Accessor) ([]float32, error) {
+	data, err := modeler.ReadAccessor(doc, acr, nil)
+	if err != nil {
+		return nil, err
+	}
+	switch v := data.(type) {
+	case []float32:
+		return v, nil
+	case []float64:
+		out := make([]float32, len(v))
+		for i, x := range v {
+			out[i] = float32(x)
+		}
+		return out, nil
+	default:
+		return nil, fmt.Errorf("unexpected accessor type for time")
+	}
+}
+
+func readAccessorVec(doc *gltf.Document, acr *gltf.Accessor, path gltf.TRSProperty) ([][]float32, error) {
+	data, err := modeler.ReadAccessor(doc, acr, nil)
+	if err != nil {
+		return nil, err
+	}
+	switch path {
+	case gltf.TRSTranslation, gltf.TRSScale:
+		// VEC3
+		switch v := data.(type) {
+		case [][3]float32:
+			out := make([][]float32, len(v))
+			for i, x := range v {
+				out[i] = []float32{x[0], x[1], x[2]}
+			}
+			return out, nil
+		case [][3]float64:
+			out := make([][]float32, len(v))
+			for i, x := range v {
+				out[i] = []float32{float32(x[0]), float32(x[1]), float32(x[2])}
+			}
+			return out, nil
+		}
+	case gltf.TRSRotation:
+		// VEC4 quaternion
+		switch v := data.(type) {
+		case [][4]float32:
+			out := make([][]float32, len(v))
+			for i, x := range v {
+				out[i] = []float32{x[0], x[1], x[2], x[3]}
+			}
+			return out, nil
+		case [][4]float64:
+			out := make([][]float32, len(v))
+			for i, x := range v {
+				out[i] = []float32{float32(x[0]), float32(x[1]), float32(x[2]), float32(x[3])}
+			}
+			return out, nil
+		}
+	}
+	return nil, fmt.Errorf("unsupported path %s", path)
+}
+
 func importMaterial(gmat *gltf.Material, idx int) Material {
 	mat := Material{
 		BaseColorR: 1, BaseColorG: 1, BaseColorB: 1, BaseColorA: 1,
 		Metallic:  0, Roughness: 1,
 		BaseColorTextureIndex: -1, NormalTextureIndex: -1, MetallicRoughnessTextureIndex: -1,
+		EmissiveTextureIndex: -1,
 	}
 	if gmat.PBRMetallicRoughness != nil {
 		pbr := gmat.PBRMetallicRoughness
@@ -175,6 +310,14 @@ func importMaterial(gmat *gltf.Material, idx int) Material {
 	}
 	if gmat.NormalTexture != nil && gmat.NormalTexture.Index != nil {
 		mat.NormalTextureIndex = *gmat.NormalTexture.Index
+	}
+	if len(gmat.EmissiveFactor) >= 3 {
+		mat.EmissiveFactorR = float32(gmat.EmissiveFactor[0])
+		mat.EmissiveFactorG = float32(gmat.EmissiveFactor[1])
+		mat.EmissiveFactorB = float32(gmat.EmissiveFactor[2])
+	}
+	if gmat.EmissiveTexture != nil && gmat.EmissiveTexture.Index >= 0 {
+		mat.EmissiveTextureIndex = gmat.EmissiveTexture.Index
 	}
 	return mat
 }
@@ -244,6 +387,34 @@ func importPrimitive(doc *gltf.Document, prim *gltf.Primitive) (Mesh, error) {
 		mesh.Indices, err = modeler.ReadIndices(doc, idxAcr, nil)
 		if err != nil {
 			return mesh, fmt.Errorf("read indices: %w", err)
+		}
+	}
+
+	// Skinning (optional) - JOINTS_0 and WEIGHTS_0
+	if jointsIdx, ok := prim.Attributes[gltf.JOINTS_0]; ok {
+		jointsAcr := doc.Accessors[jointsIdx]
+		joints, jerr := modeler.ReadJoints(doc, jointsAcr, nil)
+		if jerr == nil && len(joints) > 0 {
+			mesh.BoneIndices = make([]uint8, len(joints)*4)
+			for i, j := range joints {
+				mesh.BoneIndices[i*4] = uint8(j[0])
+				mesh.BoneIndices[i*4+1] = uint8(j[1])
+				mesh.BoneIndices[i*4+2] = uint8(j[2])
+				mesh.BoneIndices[i*4+3] = uint8(j[3])
+			}
+		}
+	}
+	if weightsIdx, ok := prim.Attributes[gltf.WEIGHTS_0]; ok {
+		weightsAcr := doc.Accessors[weightsIdx]
+		weights, werr := modeler.ReadWeights(doc, weightsAcr, nil)
+		if werr == nil && len(weights) > 0 {
+			mesh.BoneWeights = make([]float32, len(weights)*4)
+			for i, w := range weights {
+				mesh.BoneWeights[i*4] = w[0]
+				mesh.BoneWeights[i*4+1] = w[1]
+				mesh.BoneWeights[i*4+2] = w[2]
+				mesh.BoneWeights[i*4+3] = w[3]
+			}
 		}
 	}
 

@@ -184,6 +184,10 @@ func registerWater(v *vm.VM) {
 		})
 	})
 
+	// SetWaterWave(id, strength): Alias for SetWaterWaveStrength.
+	v.RegisterForeign("SetWaterWave", func(args []interface{}) (interface{}, error) {
+		return v.CallForeign("SetWaterWaveStrength", args)
+	})
 	// SetWaterWaveStrength(id, value): Alias for SetWaterWaveHeight.
 	v.RegisterForeign("SetWaterWaveStrength", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {

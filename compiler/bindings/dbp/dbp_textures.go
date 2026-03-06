@@ -13,9 +13,22 @@ import (
 )
 
 var (
-	textures   = make(map[int]rl.Texture2D)
-	texturesMu sync.Mutex
+	textures    = make(map[int]rl.Texture2D)
+	texturesMu  sync.Mutex
+	textureSeq  int = 1000000 // Auto-generated IDs for path-loaded textures
 )
+
+// LoadTextureFromPath loads a texture from path and stores it with an auto-generated ID.
+// Returns the new texture ID for use with SetObjectTexture.
+func LoadTextureFromPath(path string) (int, rl.Texture2D) {
+	tex := rl.LoadTexture(path)
+	texturesMu.Lock()
+	textureSeq++
+	id := textureSeq
+	textures[id] = tex
+	texturesMu.Unlock()
+	return id, tex
+}
 
 func registerTextures(v *vm.VM) {
 	v.RegisterForeign("LoadTexture", func(args []interface{}) (interface{}, error) {

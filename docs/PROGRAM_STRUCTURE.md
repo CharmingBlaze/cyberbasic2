@@ -1,4 +1,4 @@
-# CyberBasic Program Structure
+# CyberBASIC2 Program Structure
 
 This document summarizes program structure, comments, and the main language features.
 
@@ -8,7 +8,8 @@ This document summarizes program structure, comments, and the main language feat
 2. [Feature list (implemented)](#feature-list-implemented)
 3. [Block structure (quick reference)](#block-structure-quick-reference)
 4. [Example skeleton](#example-skeleton)
-5. [Hybrid update/draw loop](#hybrid-updatedraw-loop)
+5. [DBP-style (OnStart/OnUpdate/OnDraw)](#dbp-style-onstartonupdateondraw)
+6. [Hybrid update/draw loop](#hybrid-updatedraw-loop)
 
 ---
 
@@ -95,6 +96,10 @@ main()
 ```
 
 ---
+
+## DBP-style (OnStart/OnUpdate/OnDraw)
+
+**Zero boilerplate:** Define `OnStart()`, `OnUpdate(dt)`, and `OnDraw()`—no `InitWindow`, no `WHILE` loop. The runtime creates the window and runs the loop. Use `UseUnifiedRenderer` and `SYNC` for the unified 3D→2D→GUI pipeline. See [DBP Parity](DBP_PARITY.md).
 
 ## Hybrid update/draw loop
 

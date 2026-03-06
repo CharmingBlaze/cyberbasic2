@@ -3,6 +3,7 @@ package dbp
 
 import (
 	"fmt"
+	"path/filepath"
 	"sync"
 
 	"cyberbasic/compiler/vm"
@@ -10,16 +11,29 @@ import (
 )
 
 type dbpAnimState struct {
-	animId int
-	frame  float32
-	speed  float32
+	animId    int
+	clipIndex int
+	frame     float32
+	speed     float32
+	loop      bool
+}
+
+type dbpMeshAnimState struct {
+	frames    []rl.Model
+	frame     float32
+	speed     float32
+	playing   bool
+	loop      bool
 }
 
 var (
-	dbpAnims        = make(map[int]rl.ModelAnimation)
-	dbpAnimsMu      sync.Mutex
-	objectAnimState = make(map[int]*dbpAnimState)
-	objectAnimMu    sync.Mutex
+	dbpAnims          = make(map[int][]rl.ModelAnimation) // animID -> all clips
+	dbpAnimsMu        sync.Mutex
+	objectAnimState   = make(map[int]*dbpAnimState)
+	objectAnimMu      sync.Mutex
+	meshAnimFrames    = make(map[int][]rl.Model)
+	meshAnimState     = make(map[int]*dbpMeshAnimState)
+	meshAnimMu        sync.Mutex
 )
 
 // register3DAnimation adds LoadAnimation, PlayAnimation, SetAnimationFrame, GetAnimationFrame, GetAnimationLength, GetAnimationName.
@@ -35,26 +49,101 @@ func register3DAnimation(v *vm.VM) {
 			return nil, nil // graceful: succeed with no animations; GetAnimationLength returns 0
 		}
 		dbpAnimsMu.Lock()
-		dbpAnims[id] = anims[0]
+		dbpAnims[id] = anims
 		dbpAnimsMu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("PlayAnimation", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {
-			return nil, fmt.Errorf("PlayAnimation(objectID, animID, speed) requires 3 arguments")
+			return nil, fmt.Errorf("PlayAnimation(objectID, animID, speed) or (objectID, animID, clipIndex, speed) requires 3-4 arguments")
 		}
 		objID := toInt(args[0])
 		animID := toInt(args[1])
+		clipIndex := 0
 		speed := toFloat32(args[2])
+		if len(args) >= 4 {
+			clipIndex = toInt(args[2])
+			speed = toFloat32(args[3])
+		}
 		dbpAnimsMu.Lock()
-		_, hasAnim := dbpAnims[animID]
+		clips, hasAnim := dbpAnims[animID]
 		dbpAnimsMu.Unlock()
-		if !hasAnim {
+		if !hasAnim || len(clips) == 0 {
 			return nil, nil // no-op when no animation
 		}
+		if clipIndex < 0 || clipIndex >= len(clips) {
+			clipIndex = 0
+		}
 		objectAnimMu.Lock()
-		objectAnimState[objID] = &dbpAnimState{animId: animID, frame: 0, speed: speed}
+		objectAnimState[objID] = &dbpAnimState{animId: animID, clipIndex: clipIndex, frame: 0, speed: speed, loop: true}
 		objectAnimMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("StopAnimation", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("StopAnimation(objectID) requires 1 argument")
+		}
+		objID := toInt(args[0])
+		objectAnimMu.Lock()
+		delete(objectAnimState, objID)
+		objectAnimMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetAnimationSpeed", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetAnimationSpeed(objectID, speed) requires 2 arguments")
+		}
+		objID := toInt(args[0])
+		speed := toFloat32(args[1])
+		objectAnimMu.Lock()
+		if st, ok := objectAnimState[objID]; ok {
+			st.speed = speed
+		}
+		objectAnimMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetAnimationLoop", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetAnimationLoop(objectID, onOff) requires 2 arguments")
+		}
+		objID := toInt(args[0])
+		onOff := toInt(args[1]) != 0
+		objectAnimMu.Lock()
+		if st, ok := objectAnimState[objID]; ok {
+			st.loop = onOff
+		}
+		objectAnimMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("ResetBones", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("ResetBones(objectID) requires 1 argument")
+		}
+		objID := toInt(args[0])
+		objectAnimMu.Lock()
+		st, ok := objectAnimState[objID]
+		objectAnimMu.Unlock()
+		if !ok || st.animId == 0 {
+			return nil, nil
+		}
+		dbpAnimsMu.Lock()
+		clips, ok := dbpAnims[st.animId]
+		dbpAnimsMu.Unlock()
+		if !ok || len(clips) == 0 {
+			return nil, nil
+		}
+		ci := st.clipIndex
+		if ci < 0 || ci >= len(clips) {
+			ci = 0
+		}
+		anim := clips[ci]
+		objectsMu.Lock()
+		obj, ok := objects[objID]
+		objectsMu.Unlock()
+		if !ok || obj.model.MeshCount == 0 {
+			return nil, nil
+		}
+		rl.UpdateModelAnimation(obj.model, anim, 0)
 		return nil, nil
 	})
 	v.RegisterForeign("SetAnimationFrame", func(args []interface{}) (interface{}, error) {
@@ -63,11 +152,12 @@ func register3DAnimation(v *vm.VM) {
 		}
 		objID := toInt(args[0])
 		frame := toFloat32(args[1])
-		var animID int
+		var animID, clipIndex int
 		objectAnimMu.Lock()
 		if st, ok := objectAnimState[objID]; ok {
 			st.frame = frame
 			animID = st.animId
+			clipIndex = st.clipIndex
 		} else {
 			objectAnimState[objID] = &dbpAnimState{frame: frame}
 		}
@@ -82,11 +172,15 @@ func register3DAnimation(v *vm.VM) {
 			return nil, nil
 		}
 		dbpAnimsMu.Lock()
-		anim, ok := dbpAnims[animID]
+		clips, ok := dbpAnims[animID]
 		dbpAnimsMu.Unlock()
-		if !ok {
+		if !ok || len(clips) == 0 {
 			return nil, nil // graceful: no-op when no anim
 		}
+		if clipIndex < 0 || clipIndex >= len(clips) {
+			clipIndex = 0
+		}
+		anim := clips[clipIndex]
 		rl.UpdateModelAnimation(obj.model, anim, int32(frame))
 		return nil, nil
 	})
@@ -108,27 +202,165 @@ func register3DAnimation(v *vm.VM) {
 			return 0, nil
 		}
 		animID := toInt(args[0])
+		clipIndex := 0
+		if len(args) >= 2 {
+			clipIndex = toInt(args[1])
+		}
 		dbpAnimsMu.Lock()
-		anim, ok := dbpAnims[animID]
+		clips, ok := dbpAnims[animID]
 		dbpAnimsMu.Unlock()
-		if !ok {
+		if !ok || len(clips) == 0 {
 			return 0, nil // graceful: return 0 when no anim
 		}
-		return anim.FrameCount, nil
+		if clipIndex < 0 || clipIndex >= len(clips) {
+			clipIndex = 0
+		}
+		return clips[clipIndex].FrameCount, nil
 	})
 	v.RegisterForeign("GetAnimationName", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return "", nil
 		}
 		animID := toInt(args[0])
+		clipIndex := 0
+		if len(args) >= 2 {
+			clipIndex = toInt(args[1])
+		}
 		dbpAnimsMu.Lock()
-		anim, ok := dbpAnims[animID]
+		clips, ok := dbpAnims[animID]
 		dbpAnimsMu.Unlock()
-		if !ok {
+		if !ok || len(clips) == 0 {
 			return "", nil
 		}
-		return anim.Name, nil
+		if clipIndex < 0 || clipIndex >= len(clips) {
+			clipIndex = 0
+		}
+		return clips[clipIndex].Name, nil
 	})
+	// SetBoneRotation(id, boneName, pitch, yaw, roll): Manual bone control. Stored for future IK/skeletal use.
+	v.RegisterForeign("SetBoneRotation", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("SetBoneRotation(id, boneName, pitch, yaw, roll) requires 5 arguments")
+		}
+		// Placeholder: store for manual animation; full implementation in runtime/animation
+		return nil, nil
+	})
+	// SetBonePosition(id, boneName, x, y, z): Manual bone control.
+	v.RegisterForeign("SetBonePosition", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("SetBonePosition(id, boneName, x, y, z) requires 5 arguments")
+		}
+		return nil, nil
+	})
+	// LoadMeshAnimation(id, folder$, frameCount): Load frame-by-frame mesh animation from folder.
+	v.RegisterForeign("LoadMeshAnimation", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("LoadMeshAnimation(id, folder, frameCount) requires 3 arguments")
+		}
+		id := toInt(args[0])
+		folder := toString(args[1])
+		frameCount := toInt(args[2])
+		if frameCount <= 0 {
+			return nil, nil
+		}
+		var frames []rl.Model
+		for i := 0; i < frameCount; i++ {
+			path := filepath.Join(folder, fmt.Sprintf("%03d.obj", i+1))
+			model := rl.LoadModel(path)
+			if model.MeshCount == 0 {
+				path = filepath.Join(folder, fmt.Sprintf("frame_%03d.obj", i+1))
+				model = rl.LoadModel(path)
+			}
+			if model.MeshCount == 0 {
+				path = filepath.Join(folder, fmt.Sprintf("%d.obj", i+1))
+				model = rl.LoadModel(path)
+			}
+			frames = append(frames, model)
+		}
+		meshAnimMu.Lock()
+		meshAnimFrames[id] = frames
+		meshAnimState[id] = &dbpMeshAnimState{frames: frames, frame: 0, speed: 1, loop: true}
+		meshAnimMu.Unlock()
+		return nil, nil
+	})
+	// PlayMeshAnimation(id, speed): Play frame-by-frame animation.
+	v.RegisterForeign("PlayMeshAnimation", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("PlayMeshAnimation(id, speed) requires 2 arguments")
+		}
+		id := toInt(args[0])
+		speed := toFloat32(args[1])
+		meshAnimMu.Lock()
+		if st, ok := meshAnimState[id]; ok {
+			st.playing = true
+			st.speed = speed
+		}
+		meshAnimMu.Unlock()
+		return nil, nil
+	})
+	// SetMeshAnimationFrame(id, frame): Set current mesh animation frame.
+	v.RegisterForeign("SetMeshAnimationFrame", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetMeshAnimationFrame(id, frame) requires 2 arguments")
+		}
+		id := toInt(args[0])
+		frame := toFloat32(args[1])
+		meshAnimMu.Lock()
+		if st, ok := meshAnimState[id]; ok {
+			st.frame = frame
+		}
+		meshAnimMu.Unlock()
+		return nil, nil
+	})
+}
+
+// GetMeshAnimationModel returns the model to draw for object with mesh animation, or nil if none.
+func GetMeshAnimationModel(objID int) *rl.Model {
+	meshAnimMu.Lock()
+	st, ok := meshAnimState[objID]
+	meshAnimMu.Unlock()
+	if !ok || st == nil || len(st.frames) == 0 {
+		return nil
+	}
+	frameIdx := int(st.frame)
+	if frameIdx < 0 {
+		frameIdx = 0
+	}
+	if frameIdx >= len(st.frames) {
+		frameIdx = len(st.frames) - 1
+	}
+	return &st.frames[frameIdx]
+}
+
+// UpdateMeshAnimation advances mesh animation for an object. Call from draw loop.
+func UpdateMeshAnimation(objID int) {
+	meshAnimMu.Lock()
+	st, ok := meshAnimState[objID]
+	if !ok || st == nil || !st.playing || len(st.frames) == 0 {
+		meshAnimMu.Unlock()
+		return
+	}
+	dt := rl.GetFrameTime()
+	st.frame += st.speed * dt * 30
+	fc := float32(len(st.frames))
+	if st.loop {
+		for st.frame >= fc {
+			st.frame -= fc
+		}
+		for st.frame < 0 {
+			st.frame += fc
+		}
+	} else {
+		if st.frame >= fc {
+			st.frame = fc - 1
+			st.playing = false
+		}
+		if st.frame < 0 {
+			st.frame = 0
+			st.playing = false
+		}
+	}
+	meshAnimMu.Unlock()
 }
 
 // UpdateObjectAnimation advances animation for an object and applies to model. Call from DrawObject.
@@ -140,21 +372,37 @@ func UpdateObjectAnimation(objID int, obj *dbpObject) {
 		return
 	}
 	dbpAnimsMu.Lock()
-	anim, ok := dbpAnims[st.animId]
+	clips, ok := dbpAnims[st.animId]
 	dbpAnimsMu.Unlock()
-	if !ok || obj.model.MeshCount == 0 {
+	if !ok || len(clips) == 0 || obj.model.MeshCount == 0 {
 		return
 	}
+	ci := st.clipIndex
+	if ci < 0 || ci >= len(clips) {
+		ci = 0
+	}
+	anim := clips[ci]
 	dt := rl.GetFrameTime()
 	objectAnimMu.Lock()
 	st.frame += st.speed * dt * float32(anim.FrameCount) / 60.0
 	fc := float32(anim.FrameCount)
 	if fc > 0 {
-		for st.frame >= fc {
-			st.frame -= fc
-		}
-		for st.frame < 0 {
-			st.frame += fc
+		if st.loop {
+			for st.frame >= fc {
+				st.frame -= fc
+			}
+			for st.frame < 0 {
+				st.frame += fc
+			}
+		} else {
+			if st.frame >= fc {
+				st.frame = fc - 1
+				delete(objectAnimState, objID)
+			}
+			if st.frame < 0 {
+				st.frame = 0
+				delete(objectAnimState, objID)
+			}
 		}
 	}
 	frame := int32(st.frame)

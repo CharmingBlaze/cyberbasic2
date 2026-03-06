@@ -1,6 +1,6 @@
 # ECS (Entity-Component System) Guide
 
-CyberBasic provides an ECS via the **ECS.*** binding. Use it to organize many game objects (enemies, projectiles, props) with shared logic: create a world, create entities, add components (Transform, Sprite, Health), and query entities by component type.
+CyberBASIC2 provides an ECS via the **ECS.*** binding. Use it to organize many game objects (enemies, projectiles, props) with shared logic: create a world, create entities, add components (Transform, Sprite, Health), and query entities by component type.
 
 ## Setup
 

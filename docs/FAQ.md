@@ -30,7 +30,9 @@ Use **`#include "path/to/file.bas"`**. The compiler also accepts **IMPORT "path"
 
 **How do I see all commands?**
 
-Run **`cyberbasic --list-commands`** for a short grouped list. For the full reference, see [Command Reference](COMMAND_REFERENCE.md) and [API Reference](../API_REFERENCE.md). In your program you can call **HELP()** or **?()** to print a reminder and paths.
+Run **`cyberbasic --list-commands`** for a short grouped list. For DBP-style commands (LoadObject, MakeCamera, SYNC, etc.), see [Core Command Reference](CORE_COMMAND_REFERENCE.md), [2D Game API](2D_GAME_API.md), and [3D Game API](3D_GAME_API.md). For the full reference, see [Command Reference](COMMAND_REFERENCE.md) and [API Reference](../API_REFERENCE.md). In your program you can call **HELP()** or **?()** to print a reminder and paths.
+
+**Do not use:** `INITGRAPHICS`, `CLEARSCREEN`, `DRAWRECTANGLE`, `RL.InitWindow`—these are not registered. Use `InitWindow`, `ClearBackground`, `DrawRectangle` instead.
 
 **Why does my draw() not show anything?**
 

@@ -1,6 +1,6 @@
 # GUI Development Tutorial - Complete Guide
 
-Welcome to the complete GUI development tutorial! This guide will teach you how to create user interfaces, menus, and interactive elements for your CyberBasic games.
+Welcome to the complete GUI development tutorial! This guide will teach you how to create user interfaces, menus, and interactive elements for your CyberBASIC2 games.
 
 ## What You'll Build
 
@@ -26,7 +26,7 @@ Before starting, make sure you've completed:
 
 ### Understanding GUI Mode
 
-CyberBasic provides two main approaches to GUI:
+CyberBASIC2 provides two main approaches to GUI:
 1. **Immediate Mode GUI** - Simple, stateless UI elements
 2. **Custom Drawing** - Full control over appearance
 
@@ -309,7 +309,7 @@ WHILE NOT WindowShouldClose()
             
         CASE "credits"
             DrawMenuHeader("CREDITS")
-            DrawText("Game developed with CyberBasic", 200, 220, 20, 255, 255, 255, 255)
+            DrawText("Game developed with CyberBASIC2", 200, 220, 20, 255, 255, 255, 255)
             DrawText("Programming: Your Name", 250, 260, 18, 200, 200, 200, 255)
             DrawText("Graphics: Raylib", 280, 290, 18, 200, 200, 200, 255)
             DrawText("Physics: Box2D & Bullet", 260, 320, 18, 200, 200, 200, 255)
@@ -890,5 +890,7 @@ Congratulations! You've now learned:
 - **Simulation Games**: Dashboard panels, control interfaces, data displays
 
 GUI development is crucial for player experience. A well-designed interface can make the difference between a good game and a great one. Keep experimenting and refining your UI skills!
+
+**See also:** [GUI Guide](GUI_GUIDE.md), [Core Command Reference](CORE_COMMAND_REFERENCE.md) (GUI section).
 
 **Happy coding!**

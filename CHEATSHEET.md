@@ -1,10 +1,32 @@
-# CyberBasic – First 10 lines
+# CyberBASIC2 – First 10 lines
 
 Minimal snippets to get a game running.
 
-## 2D game (move a circle)
+## DBP-style 2D (zero boilerplate)
 
-Use **WHILE NOT WindowShouldClose() ... WEND** (or **REPEAT ... UNTIL WindowShouldClose()**) for the main loop. No auto-wrap; code compiles as written (DBPro-style). **DeltaTime()** for frame delta.
+No `InitWindow`, no `WHILE` loop. See [docs/DBP_PARITY.md](docs/DBP_PARITY.md).
+
+```basic
+VAR x = 400
+VAR y = 300
+
+SUB OnStart()
+  UseUnifiedRenderer
+END SUB
+
+SUB OnUpdate(dt)
+  LET x = x + 100 * dt * GetAxisX()
+  LET y = y + 100 * dt * GetAxisY()
+END SUB
+
+SUB OnDraw()
+  ClearBackground(20, 20, 30, 255)
+  DrawCircle(x, y, 30, 255, 100, 100, 255)
+  SYNC
+END SUB
+```
+
+## Manual 2D game (move a circle)
 
 ```basic
 InitWindow(800, 600, "My Game")
@@ -51,4 +73,4 @@ CloseWindow()
 **Movement:** Use **GetAxisX()** / **GetAxisY()** for -1/0/1, or **GAME.MoveWASD** / **MoveHorizontal2D** for full 2D/3D. **Delta time:** **DeltaTime()** or **GetFrameTime()**; clamp with `IF dt > 0.05 THEN LET dt = 0.016` for physics.  
 **Center screen:** **GetScreenCenterX()**, **GetScreenCenterY()** – center UI or spawn. **Distance:** **Distance2D(x1, y1, x2, y2)** and **Distance3D(x1, y1, z1, x2, y2, z2)** for simple distance.  
 **Multi-window (same .bas):** **IsWindowProcess()**, **SpawnWindow(port, title, w, h)**, **ConnectToParent()**; main uses **AcceptTimeout** to get connection, then **Send**/ **Receive**. See [docs/MULTI_WINDOW.md](docs/MULTI_WINDOW.md).  
-Full 2D/3D command lists: [2D Graphics Guide](docs/2D_GRAPHICS_GUIDE.md#full-2d-command-reference), [3D Graphics Guide](docs/3D_GRAPHICS_GUIDE.md#full-3d-command-reference). See [API_REFERENCE.md](API_REFERENCE.md) and [examples/README.md](examples/README.md).
+**Command reference:** [Core Command Reference](docs/CORE_COMMAND_REFERENCE.md), [2D Game API](docs/2D_GAME_API.md), [3D Game API](docs/3D_GAME_API.md). See [API_REFERENCE.md](API_REFERENCE.md) and [examples/README.md](examples/README.md).

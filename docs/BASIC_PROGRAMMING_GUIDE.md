@@ -1,6 +1,6 @@
 # BASIC Programming Guide
 
-Step-by-step tutorial for CyberBasic: variables, types, I/O, and handling errors. For game-specific topics see [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) and the [Documentation Index](DOCUMENTATION_INDEX.md).
+Step-by-step tutorial for CyberBASIC2: variables, types, I/O, and handling errors. For game-specific topics see [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) and the [Documentation Index](DOCUMENTATION_INDEX.md).
 
 ## 1. Variables and assignment
 
@@ -8,7 +8,7 @@ Use **VAR** to declare and assign in one line, or **DIM** to declare (optionally
 
 ```basic
 VAR x = 10
-VAR name = "CyberBasic"
+VAR name = "CyberBASIC2"
 LET x = 20
 
 DIM y AS Float
@@ -110,7 +110,7 @@ VAR text = ReadFile("config.txt")
 IF text <> Nil THEN
     PRINT text
 ENDIF
-WriteFile("out.txt", "Hello from CyberBasic")
+WriteFile("out.txt", "Hello from CyberBASIC2")
 ```
 
 - **JSON:** **LoadJSON(path)** or **LoadJSONFromString(str)** to load; **GetJSONKey(handle, key)** to read values; **SaveJSON(path, handle)** to save. See [API_REFERENCE.md](../API_REFERENCE.md).
@@ -131,7 +131,7 @@ ENDIF
 - **Nil** / **Null** – literal for “no value”; use **IsNull(value)** to test.
 - Compare with `= Nil` or `<> Nil` when you need an explicit check.
 
-When you call a Sub or Function that might fail (e.g. file or network), check the return value (or use IsNull) and handle the failure in your code; CyberBasic does not have built-in exceptions.
+When you call a Sub or Function that might fail (e.g. file or network), check the return value (or use IsNull) and handle the failure in your code; CyberBASIC2 does not have built-in exceptions.
 
 ## 7. Next steps
 

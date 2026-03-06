@@ -29,6 +29,8 @@ type dbpLight struct {
 	r, g, b    float32
 	intensity  float32
 	range_     float32
+	angle      float32 // cone angle for spot lights (degrees)
+	shadows    bool    // shadow casting enabled
 }
 
 var (
@@ -127,6 +129,60 @@ func registerLighting(v *vm.VM) {
 		}
 		lightsMu.Unlock()
 		return nil, nil
+	})
+
+	v.RegisterForeign("SetLightAngle", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetLightAngle(id, degrees) requires 2 arguments")
+		}
+		id := toInt(args[0])
+		deg := toFloat32(args[1])
+		lightsMu.Lock()
+		if l, ok := lights[id]; ok {
+			l.angle = deg
+		}
+		lightsMu.Unlock()
+		return nil, nil
+	})
+
+	// EnableLightShadows(id): Enables shadow casting for a light. DBP-style; use EnableShadows() for global.
+	v.RegisterForeign("EnableLightShadows", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("EnableLightShadows(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		lightsMu.Lock()
+		if l, ok := lights[id]; ok {
+			l.shadows = true
+		}
+		lightsMu.Unlock()
+		return nil, nil
+	})
+	// DisableLightShadows(id): Disables shadow casting for a light.
+	v.RegisterForeign("DisableLightShadows", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DisableLightShadows(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		lightsMu.Lock()
+		if l, ok := lights[id]; ok {
+			l.shadows = false
+		}
+		lightsMu.Unlock()
+		return nil, nil
+	})
+	// EnableShadows(id) / DisableShadows(id): DBP aliases for per-light shadow control.
+	v.RegisterForeign("EnableShadows", func(args []interface{}) (interface{}, error) {
+		if len(args) >= 1 {
+			return v.CallForeign("EnableLightShadows", args)
+		}
+		return nil, fmt.Errorf("EnableShadows(id) requires 1 argument")
+	})
+	v.RegisterForeign("DisableShadows", func(args []interface{}) (interface{}, error) {
+		if len(args) >= 1 {
+			return v.CallForeign("DisableLightShadows", args)
+		}
+		return nil, fmt.Errorf("DisableShadows(id) requires 1 argument")
 	})
 
 	v.RegisterForeign("DeleteLight", func(args []interface{}) (interface{}, error) {

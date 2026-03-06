@@ -1,18 +1,18 @@
-# CyberBasic Documentation Index
+# CyberBASIC2 Documentation Index
 
-Complete guide to all CyberBasic documentation.
+Complete guide to all CyberBASIC2 documentation.
 
-## Getting Started
+## Entry Points
 
-- **[Quick Start Guide](QUICK_START_GUIDE.md)** - Get running in 5 minutes
-- **[Roadmap (ROADMAP.md)](../ROADMAP.md)** – Planned features and priorities
-- **[Changelog (CHANGELOG.md)](../CHANGELOG.md)** – Version history and release notes
+- **[Quick Start Guide](QUICK_START_GUIDE.md)** – Get running in 5 minutes (DBP-style or manual loop)
+- **[Getting Started](GETTING_STARTED.md)** – Installation, building, running your first program
 - **[Learning Path](LEARNING_PATH.md)** – Complete structured curriculum from beginner to advanced
-- **[Getting Started Guide](GETTING_STARTED.md)** – Installation, building, running your first program
+- **[DBP Parity](DBP_PARITY.md)** – Zero-boilerplate (OnStart/OnUpdate/OnDraw) verification checklist
 - **[Quick Reference](QUICK_REFERENCE.md)** – One-page syntax reference for daily use
-- **[BASIC Programming Guide](BASIC_PROGRAMMING_GUIDE.md)** – Step-by-step tutorial: variables, types, I/O, errors
 - **[FAQ](FAQ.md)** – Hybrid vs manual loop, in-process vs multi-process windows, API and include syntax
 - **[Troubleshooting](TROUBLESHOOTING.md)** – Common errors (compiler not found, parse errors, runtime, multiplayer)
+- **[Roadmap (ROADMAP.md)](../ROADMAP.md)** – Planned features and priorities
+- **[Changelog (CHANGELOG.md)](../CHANGELOG.md)** – Version history and release notes
 
 ## Language Reference
 
@@ -31,7 +31,14 @@ Complete guide to all CyberBasic documentation.
 
 - **[Rendering and the game loop](RENDERING_AND_GAME_LOOP.md)** – Pipeline, manual vs hybrid loop, rule for draw(), diagram
 
-- **[Command Reference](COMMAND_REFERENCE.md)** – Structured command set: window, input, math, camera, 3D, 2D, audio, file, game loop, utility; layers, backgrounds, tilemap, particle emitters, scene save/load 2D, physics 2D helpers, terrain/water physics, vegetation, weather, navigation, indoor, streaming, editor, decals
+- **[Command Reference](COMMAND_REFERENCE.md)** – Broader raylib + physics + utilities. **For DBP-style commands, see [Core Command Reference](CORE_COMMAND_REFERENCE.md).**
+
+## Command Reference (DBP-Style)
+
+- **[Core Command Reference](CORE_COMMAND_REFERENCE.md)** – Primary DBP-style command list (SYNC, LoadObject, MakeCamera, etc.)
+- **[2D Game API](2D_GAME_API.md)** – Detailed 2D API: sprites, spritesheets, tilemaps, physics, collision
+- **[3D Game API](3D_GAME_API.md)** – Detailed 3D API: objects, camera, lighting, physics, levels
+- **[DBP Extended](DBP_EXTENDED.md)** – Module-by-module implementation details (for contributors)
 
 ## Game Development
 
@@ -40,7 +47,7 @@ Complete guide to all CyberBasic documentation.
 - **[3D Games Tutorial](TUTORIAL_3D_GAMES.md)** – Complete 3D game development guide
 - **[GUI Development Tutorial](TUTORIAL_GUI_DEVELOPMENT.md)** – User interfaces and menus
 - **[Multiplayer Tutorial](TUTORIAL_MULTIPLAYER.md)** – Network programming and multiplayer games
-- **[Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)** – Making games with CyberBasic
+- **[Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)** – Making games with CyberBASIC2
   - Game loop, input handling
   - GAME.* helpers (camera, movement, collision)
   - 2D/3D physics (Box2D, Bullet)
@@ -92,6 +99,15 @@ Complete guide to all CyberBasic documentation.
 
 - **[SQL (SQLite)](SQL.md)** – Full SQL guide: OpenDatabase, Exec, Query, parameterized statements, transactions, common patterns
 
+- **[World, Water, Terrain, Clouds](WORLD_WATER_TERRAIN.md)** – Water, terrain, skybox, clouds, sun, time
+- **[Level Loading](LEVEL_LOADING.md)** – Unified 3D loading (LOAD LEVEL loads meshes, materials, textures, lights automatically)
+- **[3D Loading Spec](3D_LOADING_SPEC.md)** – Design goals and safe loading behavior for 3D assets
+
+## Workflows
+
+- **[Blender to CyberBASIC2](BLENDER_WORKFLOW.md)** – Export 3D models (GLTF, FBX, OBJ), PBR materials, animation
+- **[Aseprite to CyberBASIC2](ASEPRITE_WORKFLOW.md)** – Export sprite sheets with JSON, tags, slices
+
 ## API and Reference
 
 - **[API Reference (API_REFERENCE.md)](../API_REFERENCE.md)** – All bindings (raylib, Box2D, Bullet, GAME, ECS, std)
@@ -100,12 +116,13 @@ Complete guide to all CyberBasic documentation.
 
 ## Compatibility
 
-- **[DarkBASIC Pro compatibility (DBP_COMPAT.md)](DBP_COMPAT.md)** – Map DBP commands to CyberBasic (existing or new)
+- **[DarkBASIC Pro compatibility (DBP_COMPAT.md)](DBP_COMPAT.md)** – Map DBP commands to CyberBASIC2 (existing or new)
 - **[DBP gap list (DBP_GAP.md)](DBP_GAP.md)** – Commands added for DBP parity (Left, Right, Mid, Len, Chr, Asc, Str, Val, Rnd, Int, CopyFile, ListDir, ExecuteFile)
 
 ## Examples
 
 - **[Examples README](../examples/README.md)** – Index of example programs
+- **DBP-style (recommended for new users):** [examples/dbp_style/](../examples/dbp_style/) – hello_world, 2d_sprites, 3d_cube_spin, first_person_demo, simple_platformer
 - **Templates:** [2D game](../templates/2d_game.bas), [3D game](../templates/3d_game.bas)
 
 ---
@@ -126,7 +143,9 @@ Complete guide to all CyberBasic documentation.
 | **Use in-process multi-window** | [In-process multi-window](MULTI_WINDOW_INPROCESS.md) |
 | **Use ECS** | [ECS Guide](ECS_GUIDE.md) → [API Reference](../API_REFERENCE.md) |
 | **Look up a function** | [API Reference](../API_REFERENCE.md) |
+| **Look up DBP-style commands** | [Core Command Reference](CORE_COMMAND_REFERENCE.md) → [2D Game API](2D_GAME_API.md) / [3D Game API](3D_GAME_API.md) |
+| **Use zero-boilerplate (OnStart/OnUpdate/OnDraw)** | [DBP Parity](DBP_PARITY.md) → [examples/dbp_style/](../examples/dbp_style/) |
 
-**Full feature set:** CyberBasic supports **full 2D** and **full 3D** graphics, **full 2D physics** (Box2D), **full 3D physics** (Bullet), **full ECS** (entity-component system), **GUI** (BeginUI, Label, Button, Slider, Checkbox, etc.), and **multiplayer** (TCP Connect/Send/Receive, Host/Accept). See the guides above for each area.
+**Full feature set:** CyberBASIC2 supports **full 2D** and **full 3D** graphics, **full 2D physics** (Box2D), **full 3D physics** (Bullet), **full ECS** (entity-component system), **GUI** (BeginUI, Label, Button, Slider, Checkbox, etc.), and **multiplayer** (TCP Connect/Send/Receive, Host/Accept). See the guides above for each area.
 
 All documentation lives in the `docs/` directory and the project root. Start with [Getting Started](GETTING_STARTED.md). For doc conventions (headings, code blocks, links), see [Documentation style](STYLE.md).

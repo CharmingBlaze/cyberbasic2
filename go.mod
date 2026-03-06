@@ -21,6 +21,9 @@ require (
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/oakmound/oak/v2 v2.4.0 // indirect
+	github.com/oakmound/ofbx v0.2.0 // indirect
+	github.com/pkg/errors v0.9.1 // indirect
 	github.com/qmuntal/gltf v0.28.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f // indirect

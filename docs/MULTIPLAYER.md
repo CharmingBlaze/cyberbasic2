@@ -1,6 +1,6 @@
 # Multiplayer (TCP)
 
-CyberBasic includes simple TCP client/server bindings so you can send and receive text messages between programs (e.g. for chat, lobby, or simple game state). No extra libraries; uses Go's standard `net` package. For encrypted channels over the internet, use **ConnectTLS** and **HostTLS**.
+CyberBASIC2 includes simple TCP client/server bindings so you can send and receive text messages between programs (e.g. for chat, lobby, or simple game state). No extra libraries; uses Go's standard `net` package. For encrypted channels over the internet, use **ConnectTLS** and **HostTLS**.
 
 ## Quick pick: choose your multiplayer type
 
@@ -364,6 +364,8 @@ For the complete list of all network commands and signatures see [API Reference]
 
 ## See also
 
-- [API Reference](../API_REFERENCE.md) (section 18) — full network command list
-- [Command Reference](COMMAND_REFERENCE.md) — commands by feature
-- [Getting Started](GETTING_STARTED.md) — setup and first run
+- [Core Command Reference](CORE_COMMAND_REFERENCE.md) – DBP-style commands
+- [2D Game API](2D_GAME_API.md), [3D Game API](3D_GAME_API.md) – Multiplayer-safe commands
+- [API Reference](../API_REFERENCE.md) (section 18) – full network command list
+- [Command Reference](COMMAND_REFERENCE.md) – commands by feature
+- [Getting Started](GETTING_STARTED.md) – setup and first run

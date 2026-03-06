@@ -55,6 +55,14 @@ type compSprite struct {
 }
 type compHealth struct{ Current, Max float64 }
 type compParent struct{ ParentID string }
+type compRender struct {
+	ModelID   string
+	Visible   bool
+	ColorR    uint8
+	ColorG    uint8
+	ColorB    uint8
+	ColorA    uint8
+}
 
 var (
 	worldsMu sync.RWMutex
@@ -83,6 +91,8 @@ func canonicalComponentType(s string) string {
 		return "Health"
 	case "parent":
 		return "Parent"
+	case "render":
+		return "Render"
 	default:
 		return ""
 	}
@@ -94,7 +104,7 @@ func newWorldState() *worldState {
 		comps:     make(map[string]map[string]interface{}),
 		compNames: make(map[string]bool),
 	}
-	for _, n := range []string{"Transform", "Sprite", "Health", "Parent"} {
+	for _, n := range []string{"Transform", "Sprite", "Health", "Parent", "Render"} {
 		ws.compNames[n] = true
 	}
 	return ws

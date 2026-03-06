@@ -1,10 +1,10 @@
 # DarkBASIC Pro parity – gap list
 
-Only DBP commands that have **no** current equivalent in CyberBasic are listed here. These are the ones we implement; all others are skipped (see [DBP_COMPAT.md](DBP_COMPAT.md) for DBP → CyberBasic mapping).
+Only DBP commands that have **no** current equivalent in CyberBASIC2 are listed here. These are the ones we implement; all others are skipped (see [DBP_COMPAT.md](DBP_COMPAT.md) for DBP → CyberBASIC2 mapping).
 
 ## String / math (stdlib)
 
-| DBP command | CyberBasic equivalent (before) | Action |
+| DBP command | CyberBASIC2 equivalent (before) | Action |
 |-------------|--------------------------------|--------|
 | LEFT$(s, n) | — | **Add** Left(s, n) in std |
 | RIGHT$(s, n) | — | **Add** Right(s, n) in std |
@@ -19,7 +19,7 @@ Only DBP commands that have **no** current equivalent in CyberBasic are listed h
 
 ## File / system (stdlib)
 
-| DBP command | CyberBasic equivalent (before) | Action |
+| DBP command | CyberBASIC2 equivalent (before) | Action |
 |-------------|--------------------------------|--------|
 | COPY FILE | — | **Add** CopyFile(src, dst) in std |
 | DIR / directory list | — | **Add** Dir(path) or ListDir(path) in std (return list of names) |

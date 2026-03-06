@@ -2,6 +2,7 @@
 package runtime
 
 import (
+	"cyberbasic/compiler/runtime/time"
 	"cyberbasic/compiler/vm"
 )
 
@@ -20,6 +21,11 @@ func StepFrame(v *vm.VM) error {
 	if err != nil {
 		return err
 	}
+	dtVal := float32(0)
+	if f, ok := dt.(float64); ok {
+		dtVal = float32(f)
+	}
+	time.Update(dtVal)
 	if _, err = v.CallForeign("StepAllPhysics2D", []interface{}{dt}); err != nil {
 		return err
 	}

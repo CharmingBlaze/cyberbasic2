@@ -932,4 +932,6 @@ Congratulations! You've now learned:
 
 Multiplayer development adds complexity but creates engaging social experiences. Start with simple games and gradually add more advanced features as you learn!
 
+**See also:** [Multiplayer Guide](MULTIPLAYER.md), [Core Command Reference](CORE_COMMAND_REFERENCE.md), [2D Game API](2D_GAME_API.md), [3D Game API](3D_GAME_API.md).
+
 **Happy coding!**

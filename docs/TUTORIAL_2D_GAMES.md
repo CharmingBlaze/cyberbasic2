@@ -27,7 +27,7 @@ Before starting, make sure you've completed:
 
 ### Understanding the 2D Coordinate System
 
-In CyberBasic (like most graphics systems), the 2D coordinate system works like this:
+In CyberBASIC2 (like most graphics systems), the 2D coordinate system works like this:
 - **Origin (0,0)** is at the **top-left corner**
 - **X increases** going **right**
 - **Y increases** going **down**
@@ -83,7 +83,7 @@ WHILE NOT WindowShouldClose()
     DrawPixel(500, 80, 255, 255, 255, 255)
     
     // Text rendering
-    DrawText("Hello CyberBasic!", 50, 150, 30, 255, 255, 255, 255)
+    DrawText("Hello CyberBASIC2!", 50, 150, 30, 255, 255, 255, 255)
     DrawText("Small text", 50, 190, 16, 200, 200, 200, 255)
     
     // Outline versions
@@ -409,7 +409,7 @@ Now let's put everything together into a complete platformer game:
 
 ```basic
 // Complete 2D Platformer Game
-InitWindow(1024, 768, "CyberBasic Platformer")
+InitWindow(1024, 768, "CyberBASIC2 Platformer")
 SetTargetFPS(60)
 
 // Game state
@@ -922,6 +922,8 @@ Congratulations! You've now learned:
 - **RPGs**: Stats systems, inventory, dialogue
 - **Racing games**: Lap tracking, checkpoints, AI opponents
 
-Keep practicing and experimenting with these techniques. The more you create, the better you'll become at game development with CyberBasic!
+Keep practicing and experimenting with these techniques. The more you create, the better you'll become at game development with CyberBASIC2!
+
+**See also:** [Aseprite Workflow](ASEPRITE_WORKFLOW.md) for sprite sheet export with tags and slices, [2D Game API](2D_GAME_API.md) for full command reference.
 
 **Happy coding!**

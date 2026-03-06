@@ -1,6 +1,6 @@
 # Libraries and includes
 
-How to structure multi-file CyberBasic projects and reuse `.bas` code as libraries.
+How to structure multi-file CyberBASIC2 projects and reuse `.bas` code as libraries.
 
 ## Table of Contents
 

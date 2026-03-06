@@ -16,6 +16,7 @@ import (
 	"sync"
 	"time"
 
+	"cyberbasic/compiler/runtime/camera"
 	"cyberbasic/compiler/vm"
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -59,8 +60,84 @@ var (
 	lastCamMu                    sync.Mutex
 )
 
-// registerCameraExtras adds CameraFollow, CameraOrbit, CameraShake, CameraSmooth.
+// registerCameraExtras adds CameraFollow, CameraOrbit, CameraShake, CameraSmooth, MAKE CAMERA, etc.
 func registerCameraExtras(v *vm.VM) {
+	// MAKE CAMERA id: Create camera with integer ID.
+	v.RegisterForeign("MakeCamera", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("MakeCamera(id) requires 1 argument")
+		}
+		camera.Make(toInt(args[0]))
+		return nil, nil
+	})
+	v.RegisterForeign("MAKE CAMERA", func(args []interface{}) (interface{}, error) {
+		return v.CallForeign("MakeCamera", args)
+	})
+	// POSITION CAMERA id, x, y, z: Set camera position.
+	v.RegisterForeign("PositionCamera", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("PositionCamera(id, x, y, z) requires 4 arguments")
+		}
+		camera.SetPosition(toInt(args[0]), toFloat32(args[1]), toFloat32(args[2]), toFloat32(args[3]))
+		return nil, nil
+	})
+	v.RegisterForeign("POSITION CAMERA", func(args []interface{}) (interface{}, error) {
+		return v.CallForeign("PositionCamera", args)
+	})
+	// POINT CAMERA id, tx, ty, tz: Set camera target (look-at) for camera by id.
+	v.RegisterForeign("POINT CAMERA", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("POINT CAMERA(id, tx, ty, tz) requires 4 arguments")
+		}
+		camera.SetTarget(toInt(args[0]), toFloat32(args[1]), toFloat32(args[2]), toFloat32(args[3]))
+		return nil, nil
+	})
+	// SET CAMERA ACTIVE id: Use this camera for 3D rendering.
+	v.RegisterForeign("SetCameraActive", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SetCameraActive(id) requires 1 argument")
+		}
+		camera.SetActive(toInt(args[0]))
+		return nil, nil
+	})
+	v.RegisterForeign("SET CAMERA ACTIVE", func(args []interface{}) (interface{}, error) {
+		return v.CallForeign("SetCameraActive", args)
+	})
+	// CameraExists(id): Returns 1 if camera exists.
+	v.RegisterForeign("CameraExists", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("CameraExists(id) requires 1 argument")
+		}
+		if camera.Exists(toInt(args[0])) {
+			return 1, nil
+		}
+		return 0, nil
+	})
+	// DeleteCamera(id): Removes a camera.
+	v.RegisterForeign("DeleteCamera", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteCamera(id) requires 1 argument")
+		}
+		camera.Delete(toInt(args[0]))
+		return nil, nil
+	})
+	// RotateCamera(id, pitch, yaw, roll): Sets camera rotation in degrees.
+	v.RegisterForeign("RotateCamera", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("RotateCamera(id, pitch, yaw, roll) requires 4 arguments")
+		}
+		camera.Rotate(toInt(args[0]), toFloat32(args[1]), toFloat32(args[2]), toFloat32(args[3]))
+		return nil, nil
+	})
+	// AttachCameraToObject(camID, objID): Parents camera to object; camera follows object each frame.
+	v.RegisterForeign("AttachCameraToObject", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("AttachCameraToObject(camID, objID) requires 2 arguments")
+		}
+		camera.SetAttachToObject(toInt(args[0]), toInt(args[1]))
+		return nil, nil
+	})
+
 	// CameraFollow(objectID, distance): Camera follows the object at given distance.
 	v.RegisterForeign("CameraFollow", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {

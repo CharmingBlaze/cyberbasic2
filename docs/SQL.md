@@ -1,6 +1,6 @@
-# SQL (SQLite) in CyberBasic
+# SQL (SQLite) in CyberBASIC2
 
-CyberBasic includes SQLite bindings so you can open a database file, run SQL, and read results. Uses Go's `database/sql` with the pure-Go **modernc.org/sqlite** driver (no CGO). One database file per path; one "current" result set from the last **Query** or **QueryParams**.
+CyberBASIC2 includes SQLite bindings so you can open a database file, run SQL, and read results. Uses Go's `database/sql` with the pure-Go **modernc.org/sqlite** driver (no CGO). One database file per path; one "current" result set from the last **Query** or **QueryParams**.
 
 ## Quick start
 

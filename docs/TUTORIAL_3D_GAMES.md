@@ -962,4 +962,6 @@ Congratulations! You've now learned:
 
 Keep practicing and experimenting with these 3D techniques. The transition from 2D to 3D opens up incredible possibilities for game design and player experiences!
 
+**See also:** [Blender Workflow](BLENDER_WORKFLOW.md) for exporting 3D models (GLTF, FBX, OBJ), [3D Game API](3D_GAME_API.md) for full command reference.
+
 **Happy coding!**

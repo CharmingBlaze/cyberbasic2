@@ -18,7 +18,7 @@ func registerHybrid(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterForeign("FlushRenderQueues", func(args []interface{}) (interface{}, error) {
-		return flushRenderQueues(v)
+		return FlushRenderQueues(v)
 	})
 	v.RegisterForeign("SpriteBatchBegin", func(args []interface{}) (interface{}, error) {
 		spriteBatchActive = true
@@ -108,11 +108,14 @@ func resolveLayerAndZ(name string, args []interface{}) (layerID string, zIndex i
 	}
 }
 
-func flushRenderQueues(v *vm.VM) (interface{}, error) {
-	q2D, q3D, qGUI := v.GetRenderQueues()
-	rl.BeginDrawing()
-	rl.ClearBackground(rl.NewColor(25, 25, 35, 255))
-	// 2D: sort by layer order then z-index, then draw per layer with parallax/scroll
+// FlushRenderQueues draws all queued 2D/3D/GUI items. Exported for runtime override when unified.
+func FlushRenderQueues(v *vm.VM) (interface{}, error) {
+	return flushRenderQueues(v)
+}
+
+// DrawQueues2D draws the 2D queue. Call between frames; sets up 2D camera per layer.
+func DrawQueues2D(v *vm.VM) {
+	q2D, _, _ := v.GetRenderQueues()
 	baseCam := getCurrentCamera2D()
 	sorted := make([]sortable2D, 0, len(q2D))
 	for _, item := range q2D {
@@ -126,7 +129,6 @@ func flushRenderQueues(v *vm.VM) (interface{}, error) {
 		}
 		return sorted[i].zIndex < sorted[j].zIndex
 	})
-	// Draw 2D by layer: for each distinct (order,layerID), if visible, apply camera and draw items
 	var prevOrder int = -1
 	var prevLayerID string = "\x00"
 	var in2D bool
@@ -155,7 +157,6 @@ func flushRenderQueues(v *vm.VM) (interface{}, error) {
 		if in2D {
 			nm := strings.ToLower(sorted[i].item.Name)
 			if nm == "beginmode2d" || nm == "endmode2d" {
-				// Forgiving: engine already does per-layer Begin/End; ignore user calls in draw()
 			} else if nm == "spritebatchend" {
 				flushSpriteBatch(v)
 			} else if nm == "spritebatchbegin" {
@@ -164,7 +165,6 @@ func flushRenderQueues(v *vm.VM) (interface{}, error) {
 			} else if spriteBatchActive && isBatchableDraw(nm) {
 				spriteBatchList = append(spriteBatchList, sorted[i].item)
 			} else if nm == "spritedraw" && len(sorted[i].item.Args) >= 1 && !SpriteInCullingRect(toString(sorted[i].item.Args[0])) {
-				// Skip 2D culling: sprite outside view
 			} else {
 				_, _ = v.CallForeign(sorted[i].item.Name, sorted[i].item.Args)
 			}
@@ -173,22 +173,39 @@ func flushRenderQueues(v *vm.VM) (interface{}, error) {
 	if in2D {
 		rl.EndMode2D()
 	}
-	rl.BeginMode3D(camera3D)
+}
+
+// DrawQueues3D draws the 3D queue. Call between BeginMode3D and EndMode3D.
+func DrawQueues3D(v *vm.VM) {
+	_, q3D, _ := v.GetRenderQueues()
 	for _, item := range q3D {
 		nm := strings.ToLower(item.Name)
 		if nm == "beginmode3d" || nm == "endmode3d" {
-			// Forgiving: engine already wraps 3D block; ignore user calls in draw()
 			continue
 		}
 		_, _ = v.CallForeign(item.Name, item.Args)
 	}
-	rl.EndMode3D()
-	// GUI (raygui) draws in 2D context
+}
+
+// DrawQueuesGUI draws the GUI queue. Sets up 2D camera.
+func DrawQueuesGUI(v *vm.VM) {
+	_, _, qGUI := v.GetRenderQueues()
+	baseCam := getCurrentCamera2D()
 	rl.BeginMode2D(baseCam)
 	for _, item := range qGUI {
 		_, _ = v.CallForeign(item.Name, item.Args)
 	}
 	rl.EndMode2D()
+}
+
+func flushRenderQueues(v *vm.VM) (interface{}, error) {
+	rl.BeginDrawing()
+	rl.ClearBackground(rl.NewColor(25, 25, 35, 255))
+	DrawQueues2D(v)
+	rl.BeginMode3D(camera3D)
+	DrawQueues3D(v)
+	rl.EndMode3D()
+	DrawQueuesGUI(v)
 	rl.EndDrawing()
 	return nil, nil
 }

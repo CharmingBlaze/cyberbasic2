@@ -1,17 +1,32 @@
-# CyberBasic Quick Start Guide
+# CyberBASIC2 Quick Start Guide
 
-Get started with CyberBasic in minutes! This guide will take you from zero to running your first game.
+Get started with CyberBASIC2 in minutes! This guide will take you from zero to running your first game.
 
 ---
 
-## What is CyberBasic?
+## What is CyberBASIC2?
 
-CyberBasic is a modern BASIC-inspired programming language designed specifically for game development. It combines:
+CyberBASIC2 is a modern BASIC-inspired programming language designed specifically for game development. It combines:
 - **Simple BASIC syntax** - Easy to learn and read
 - **Powerful graphics** - Built-in 2D/3D rendering via raylib
 - **Physics engines** - Box2D for 2D, Bullet for 3D
 - **Networking** - Built-in multiplayer support
 - **Cross-platform** - Runs on Windows, Mac, and Linux
+
+---
+
+## Choose Your Style
+
+CyberBASIC2 supports two programming styles:
+
+| Style | When to use | Entry point |
+|-------|-------------|-------------|
+| **DBP-style (zero boilerplate)** | New games, minimal setup | `OnStart`, `OnUpdate`, `OnDraw`; `SYNC`; `UseUnifiedRenderer` |
+| **Manual loop** | Full control, learning, porting | `InitWindow`, `WHILE` loop, `BeginMode3D`/`EndMode3D` or `SYNC` |
+
+**DBP-style** – No `InitWindow`, no `WHILE` loop. Define `OnStart()`, `OnUpdate(dt)`, and `OnDraw()`; the runtime provides the window and loop. See [DBP Parity](DBP_PARITY.md).
+
+**Manual loop** – You write `InitWindow`, `WHILE NOT WindowShouldClose()`, and all drawing. Full control over order of operations.
 
 ---
 
@@ -21,7 +36,7 @@ CyberBasic is a modern BASIC-inspired programming language designed specifically
 
 1. Go to the [GitHub Releases](https://github.com/CharmingBlaze/cyberbasic2/releases)
 2. Download the latest binary for your platform
-3. Extract to a folder (e.g., `C:\CyberBasic` on Windows)
+3. Extract to a folder (e.g., `C:\CyberBASIC2` on Windows)
 4. Add to PATH or run from the folder
 
 ### Option 2: Build from Source
@@ -46,7 +61,7 @@ Let's create a simple window that says "Hello, World!":
 
 ```basic
 // hello.bas
-PRINT "Hello, CyberBasic!"
+PRINT "Hello, CyberBASIC2!"
 ```
 
 Run it:
@@ -58,10 +73,33 @@ cyberbasic hello.bas
 
 ## Your First Graphics Program
 
-Now let's create a window with graphics:
+### Option A: DBP-Style (Zero Boilerplate)
+
+No `InitWindow`, no `WHILE` loop—just define handlers:
 
 ```basic
-// first_graphics.bas
+// first_graphics.bas (DBP-style)
+SUB OnStart()
+  UseUnifiedRenderer
+END SUB
+
+SUB OnUpdate(dt)
+  REM update logic here
+END SUB
+
+SUB OnDraw()
+  ClearBackground(20, 20, 40, 255)
+  DrawCircle(400, 300, 50, 255, 100, 100, 255)
+  SYNC
+END SUB
+```
+
+Run: `cyberbasic examples/dbp_style/2d_sprites.bas` – or save the above and run it.
+
+### Option B: Manual Loop
+
+```basic
+// first_graphics.bas (manual)
 InitWindow(800, 600, "My First Game")
 SetTargetFPS(60)
 
@@ -252,10 +290,14 @@ Once you're comfortable with the basics, try these projects:
 ### Examples
 The `examples/` folder contains working code for every feature:
 ```bash
-# Try some examples
+# DBP-style (recommended for new users)
+cyberbasic examples/dbp_style/hello_world.bas
+cyberbasic examples/dbp_style/2d_sprites.bas
+cyberbasic examples/dbp_style/3d_cube_spin.bas
+
+# Manual loop examples
 cyberbasic examples/first_game.bas
 cyberbasic examples/box2d_demo.bas
-cyberbasic examples/3d_graphics_demo.bas
 cyberbasic examples/gui_demo.bas
 ```
 
@@ -303,6 +345,6 @@ If you're stuck, look at the documentation or ask for help.
 
 ## You're Ready!
 
-You now have everything you need to start making games with CyberBasic. The journey from beginner to game developer starts with a single line of code.
+You now have everything you need to start making games with CyberBASIC2. The journey from beginner to game developer starts with a single line of code.
 
 **Your first game is waiting to be created. Happy coding!**

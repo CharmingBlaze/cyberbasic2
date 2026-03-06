@@ -1,6 +1,6 @@
-# Getting Started with CyberBasic
+# Getting Started with CyberBASIC2
 
-Install, build, and run your first CyberBasic program.
+Install, build, and run your first CyberBASIC2 program.
 
 ## Table of Contents
 

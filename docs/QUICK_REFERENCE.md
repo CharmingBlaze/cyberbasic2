@@ -1,4 +1,4 @@
-# CyberBasic Quick Reference
+# CyberBASIC2 Quick Reference
 
 One-page syntax reference. Names are **case-insensitive**.
 
@@ -122,9 +122,29 @@ Block comment `/* ... */` is supported where available.
 
 Path is relative to the current file; one per line.
 
-## Window and game loop (minimal)
+## Window and game loop
 
-Use **WHILE NOT WindowShouldClose() ... WEND** (or **REPEAT ... UNTIL WindowShouldClose()**) for the main loop. No auto-wrap; code compiles as written (DBPro-style). **DeltaTime()** for frame delta.
+### DBP-style (zero boilerplate)
+
+No `InitWindow`, no `WHILE` loop. Define handlers; runtime provides window and loop. See [DBP Parity](DBP_PARITY.md).
+
+```basic
+SUB OnStart()
+  UseUnifiedRenderer
+END SUB
+
+SUB OnUpdate(dt)
+  REM update logic
+END SUB
+
+SUB OnDraw()
+  ClearBackground(20, 20, 30, 255)
+  DrawCircle(400, 300, 50, 255, 100, 100, 255)
+  SYNC
+END SUB
+```
+
+### Manual loop
 
 ```basic
 InitWindow(800, 600, "Title")
@@ -132,7 +152,7 @@ SetTargetFPS(60)
 
 WHILE NOT WindowShouldClose()
     ClearBackground(20, 20, 30, 255)
-    // draw here; use DeltaTime() for frame-based movement
+    REM draw here; use DeltaTime() for frame-based movement
 WEND
 
 CloseWindow()

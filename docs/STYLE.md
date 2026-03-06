@@ -1,10 +1,10 @@
 # Documentation style guide
 
-Conventions for CyberBasic documentation so all docs feel consistent.
+Conventions for CyberBASIC2 documentation so all docs feel consistent.
 
 ## Heading levels
 
-- **One H1** per document: the main title (e.g. "Getting Started with CyberBasic").
+- **One H1** per document: the main title (e.g. "Getting Started with CyberBASIC2").
 - **##** for major sections (e.g. "Prerequisites", "Build the compiler").
 - **###** for subsections when needed.
 - Do not skip levels (e.g. do not go from ## to ####).
@@ -17,7 +17,7 @@ Conventions for CyberBasic documentation so all docs feel consistent.
 
 ## Code blocks
 
-- Use **` ```basic `** for all CyberBasic source code.
+- Use **` ```basic `** for all CyberBASIC2 source code.
 - Use **` ```bash `** (or no tag) for shell commands when trivial.
 - Keep snippets short and runnable where possible.
 
@@ -29,6 +29,7 @@ Conventions for CyberBasic documentation so all docs feel consistent.
 
 ## Terminology
 
+- **Project name:** Use **CyberBASIC2** for the project and product. Use **CyberBASIC** only when referring to the language generically in prose.
 - **Game loop:** Use "game loop" when referring to `WHILE NOT WindowShouldClose() ... WEND` or `REPEAT ... UNTIL WindowShouldClose()`.
 - **Delta time:** Use "delta time" for frame elapsed time; refer to **DeltaTime()** or **GetFrameTime()**.
 - **Flat API:** Prefer flat names in examples: **InitWindow**, **ClearBackground**, **DrawCircle** (not `RL.InitWindow`). Use namespaced forms only when documenting that API (e.g. **GAME.***). Physics uses flat names (CreateWorld2D, Step3D, …).

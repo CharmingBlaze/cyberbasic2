@@ -1,6 +1,6 @@
-# CyberBasic Learning Path - From Zero to Game Developer
+# CyberBASIC2 Learning Path - From Zero to Game Developer
 
-Welcome to your complete journey into game development with CyberBasic! This guide takes you from absolute beginner to advanced game developer, teaching you everything you need to create 2D games, 3D games, GUI applications, and multiplayer experiences.
+Welcome to your complete journey into game development with CyberBASIC2! This guide takes you from absolute beginner to advanced game developer, teaching you everything you need to create 2D games, 3D games, GUI applications, and multiplayer experiences.
 
 ## What You'll Learn
 
@@ -20,8 +20,8 @@ Welcome to your complete journey into game development with CyberBasic! This gui
 **Goal**: Understand the absolute basics - variables, printing, and simple operations
 
 ```basic
-// Hello World - your first CyberBasic program
-PRINT "Welcome to CyberBasic!"
+// Hello World - your first CyberBASIC2 program
+PRINT "Welcome to CyberBASIC2!"
 PRINT "Let's start game development together!"
 
 // Variables - storing information
@@ -138,6 +138,8 @@ ShowHealth(75, 100)
 
 ### Lesson 2.1: Your First Graphics Window
 **Goal**: Create a window and draw basic shapes
+
+**Tip:** Or use OnStart/OnUpdate/OnDraw for zero boilerplate—see [DBP Parity](DBP_PARITY.md).
 
 ```basic
 // Window setup - every graphics program needs this
@@ -591,12 +593,15 @@ CloseWindow()
 InitWindow(1024, 768, "3D Models and Textures")
 SetTargetFPS(60)
 
-// Load 3D model (you'll need a .obj or .gltf file)
-VAR modelId = LoadModel("models/cube.obj")  // Replace with actual model path
-VAR textureId = LoadTexture("models/texture.png")  // Replace with actual texture
+// Option A: Procedural cube (no file needed)
+MakeCube(1, 2)
+SetObjectTexture(1, "texture.png")  // Or use texture ID from LoadTexture
 
-// Set model texture
-SetModelTexture(modelId, textureId)
+// Option B: Load from file (GLTF, OBJ)
+LoadObjectId(1, "models/cube.gltf")
+SetObjectTexture(1, "models/texture.png")
+
+PositionObject(1, 0, 2, 0)
 
 // Camera orbit around center
 VAR cameraAngle = 0.0
@@ -619,8 +624,8 @@ WHILE NOT WindowShouldClose()
     BeginMode3D()
     ClearBackground(120, 120, 150, 255)
     
-    // Draw loaded model
-    DrawModel(modelId, 0, 2, 0, 1.0)  // Scale = 1.0
+    // Draw object (DBP-style)
+    DrawObject(1)
     
     // Draw some primitive shapes too
     DrawCube(5, 1, 0, 2, 2, 2, 255, 200, 100, 255)
@@ -636,17 +641,17 @@ WHILE NOT WindowShouldClose()
 WEND
 
 // Clean up resources
-UnloadModel(modelId)
-UnloadTexture(textureId)
+DeleteObject(1)
 CloseWindow()
 ```
 
 **What you learned:**
-- Loading 3D models with `LoadModel()`
-- Loading textures with `LoadTexture()`
-- Applying textures to models
-- Resource management (unload when done)
+- Loading 3D models with `LoadObjectId()` or creating primitives with `MakeCube()`
+- Applying textures with `SetObjectTexture(id, path)` or `SetObjectTexture(id, textureID)`
+- Drawing with `DrawObject(id)`
+- Resource management with `DeleteObject()`
 - Camera orbit for model viewing
+- See [Blender Workflow](BLENDER_WORKFLOW.md) for exporting 3D models
 
 ---
 
@@ -915,7 +920,7 @@ WHILE NOT WindowShouldClose()
         CASE "credits"
             Label("=== CREDITS ===")
             Label("")
-            Label("Game developed with CyberBasic")
+            Label("Game developed with CyberBASIC2")
             Label("Graphics: Raylib")
             Label("Physics: Box2D & Bullet")
             Label("")
@@ -1266,7 +1271,7 @@ Now that you've completed all modules, try these capstone projects:
 
 ## Congratulations!
 
-You've completed the CyberBasic Learning Path! You now have:
+You've completed the CyberBASIC2 Learning Path! You now have:
 
 - **Solid programming foundation** with BASIC syntax
 - **2D game development skills** - graphics, input, collision
@@ -1278,4 +1283,4 @@ You've completed the CyberBasic Learning Path! You now have:
 
 You're ready to create amazing games! Start with small projects and gradually work your way up to more complex games. The game development journey is endless - keep learning, keep creating, and most importantly, have fun!
 
-**Happy coding with CyberBasic!**
+**Happy coding with CyberBASIC2!**

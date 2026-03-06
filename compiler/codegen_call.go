@@ -239,6 +239,18 @@ func (c *Compiler) compileCall(call *parser.Call, chunk *vm.Chunk) error {
 		}
 		chunk.Write(byte(vm.OpCloseFile))
 		return nil
+	case "readbyte":
+		if len(call.Arguments) != 1 {
+			return fmt.Errorf("ReadByte(handle) expects 1 argument")
+		}
+		chunk.Write(byte(vm.OpReadByte))
+		return nil
+	case "writebyte":
+		if len(call.Arguments) != 2 {
+			return fmt.Errorf("WriteByte(handle, value) expects 2 arguments")
+		}
+		chunk.Write(byte(vm.OpWriteByte))
+		return nil
 	case "floor":
 		if len(call.Arguments) != 1 {
 			return fmt.Errorf("Floor() expects 1 argument")

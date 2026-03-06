@@ -2,6 +2,7 @@
 package raylib
 
 import (
+	"cyberbasic/compiler/runtime/camera"
 	"cyberbasic/compiler/vm"
 	"fmt"
 	"math"
@@ -65,6 +66,7 @@ func register3D(v *vm.VM) {
 	v.RegisterForeign("SetCameraPosition", func(args []interface{}) (interface{}, error) {
 		if len(args) == 3 {
 			// SetCameraPosition(x, y, z): set global/default camera position
+			camera.ClearOverride()
 			camera3D.Position = rl.Vector3{X: toFloat32(args[0]), Y: toFloat32(args[1]), Z: toFloat32(args[2])}
 			return nil, nil
 		}
@@ -84,6 +86,7 @@ func register3D(v *vm.VM) {
 	})
 	v.RegisterForeign("SetCameraTarget", func(args []interface{}) (interface{}, error) {
 		if len(args) == 3 {
+			camera.ClearOverride()
 			tx, ty, tz := toFloat32(args[0]), toFloat32(args[1]), toFloat32(args[2])
 			camera3D.Target = rl.Vector3{X: tx, Y: ty, Z: tz}
 			orbitStateMu.Lock()
@@ -155,6 +158,7 @@ func register3D(v *vm.VM) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("SetCurrentCamera requires (cameraId)")
 		}
+		camera.ClearOverride()
 		id := toString(args[0])
 		camMu.Lock()
 		c, ok := cameras[id]

@@ -13,6 +13,7 @@ import (
 	"cyberbasic/compiler/bindings/bullet"
 	"cyberbasic/compiler/bindings/dbp"
 	"cyberbasic/compiler/bindings/ecs"
+	"cyberbasic/compiler/runtime/renderer"
 	"cyberbasic/compiler/bindings/game"
 	"cyberbasic/compiler/bindings/indoor"
 	"cyberbasic/compiler/bindings/navigation"
@@ -227,7 +228,11 @@ func main() {
 	rt.GetVM().SetRuntime(rt)
 	// Expose raylib and Bullet as foreign API: RL.*, BULLET.*
 	raylib.RegisterRaylib(rt.GetVM())
+	runtime.RegisterFlushOverride(rt.GetVM())
 	dbp.RegisterDBP(rt.GetVM())
+	renderer.SetDraw3D(dbp.DrawScene3D)
+	renderer.SetPreDraw2D(dbp.UpdateSpriteAnimations)
+	renderer.SetVM(rt.GetVM())
 	bullet.RegisterBullet(rt.GetVM())
 	box2d.RegisterBox2D(rt.GetVM())
 	ecs.RegisterECS(rt.GetVM())

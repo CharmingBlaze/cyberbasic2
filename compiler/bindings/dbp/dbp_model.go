@@ -121,11 +121,35 @@ func BuildModel(m *model.Model, objectIDBase int, basePath string) (*BuildResult
 				t = textures[res.TextureIDs[mat.BaseColorTextureIndex]]
 				texturesMu.Unlock()
 			}
-			m.Maps.Texture = t
-			m.Maps.Color = rl.NewColor(
-				uint8(mat.BaseColorR*255), uint8(mat.BaseColorG*255),
-				uint8(mat.BaseColorB*255), uint8(mat.BaseColorA*255),
-			)
+			rl.SetMaterialTexture(&m, rl.MapAlbedo, t)
+			if albedoMap := m.GetMap(rl.MapAlbedo); albedoMap != nil {
+				albedoMap.Color = rl.NewColor(
+					uint8(mat.BaseColorR*255), uint8(mat.BaseColorG*255),
+					uint8(mat.BaseColorB*255), uint8(mat.BaseColorA*255),
+				)
+			}
+			// Normal map
+			if mat.NormalTextureIndex >= 0 && mat.NormalTextureIndex < len(res.TextureIDs) {
+				texturesMu.Lock()
+				normTex := textures[res.TextureIDs[mat.NormalTextureIndex]]
+				texturesMu.Unlock()
+				rl.SetMaterialTexture(&m, rl.MapNormal, normTex)
+			}
+			// Metallic-roughness (GLTF uses combined texture; set on both slots)
+			if mat.MetallicRoughnessTextureIndex >= 0 && mat.MetallicRoughnessTextureIndex < len(res.TextureIDs) {
+				texturesMu.Lock()
+				mrTex := textures[res.TextureIDs[mat.MetallicRoughnessTextureIndex]]
+				texturesMu.Unlock()
+				rl.SetMaterialTexture(&m, rl.MapMetalness, mrTex)
+				rl.SetMaterialTexture(&m, rl.MapRoughness, mrTex)
+			} else {
+				if metalMap := m.GetMap(rl.MapMetalness); metalMap != nil {
+					metalMap.Value = mat.Metallic
+				}
+				if roughMap := m.GetMap(rl.MapRoughness); roughMap != nil {
+					roughMap.Value = mat.Roughness
+				}
+			}
 			materialsMu.Lock()
 			materials[res.MaterialIDs[i]] = m
 			materialsMu.Unlock()

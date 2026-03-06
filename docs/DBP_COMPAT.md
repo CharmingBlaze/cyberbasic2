@@ -1,10 +1,10 @@
-# DarkBASIC Pro → CyberBasic compatibility
+# DarkBASIC Pro → CyberBASIC2 compatibility
 
-This table maps DarkBASIC Pro commands to CyberBasic equivalents. Use it when porting DBP code. **Bold** = same or very similar name in CyberBasic.
+This table maps DarkBASIC Pro commands to CyberBASIC2 equivalents. Use it when porting DBP code. **Bold** = same or very similar name in CyberBASIC2.
 
 ## Core / language
 
-| DBP | CyberBasic |
+| DBP | CyberBASIC2 |
 |-----|------------|
 | PRINT | **Print** (language built-in) |
 | IF / ELSE / ENDIF | **IF / THEN / ELSE / END IF** |
@@ -19,7 +19,7 @@ This table maps DarkBASIC Pro commands to CyberBasic equivalents. Use it when po
 
 ## Math / string (stdlib)
 
-| DBP | CyberBasic |
+| DBP | CyberBASIC2 |
 |-----|------------|
 | RND | **Rnd()** (0..1 float) or **Rnd(n)** (1..n int) |
 | RANDOMIZE | **SetRandomSeed(seed)** (raylib) |
@@ -37,7 +37,7 @@ This table maps DarkBASIC Pro commands to CyberBasic equivalents. Use it when po
 
 ## File / system
 
-| DBP | CyberBasic |
+| DBP | CyberBASIC2 |
 |-----|------------|
 | FILE EXIST | **FileExists(path)** (raylib core) |
 | OPEN TO READ / READ / CLOSE FILE | **ReadFile(path)** |
@@ -50,7 +50,7 @@ This table maps DarkBASIC Pro commands to CyberBasic equivalents. Use it when po
 
 ## Mouse / keyboard
 
-| DBP | CyberBasic |
+| DBP | CyberBASIC2 |
 |-----|------------|
 | MOUSEX, MOUSEY | **GetMouseX()**, **GetMouseY()** |
 | MOUSECLICK | **IsMouseButtonPressed(MouseButtonLeft)** etc. |
@@ -62,7 +62,7 @@ This table maps DarkBASIC Pro commands to CyberBasic equivalents. Use it when po
 
 ## 2D (sprites / bitmaps)
 
-| DBP | CyberBasic |
+| DBP | CyberBASIC2 |
 |-----|------------|
 | LOAD BITMAP / CREATE BITMAP | **LoadTexture(path)** or **LoadImage** (raylib) |
 | SPRITE / DRAW SPRITE | **LoadTexture** + **DrawTexture(x, y, tint)** |
@@ -72,7 +72,7 @@ This table maps DarkBASIC Pro commands to CyberBasic equivalents. Use it when po
 
 ## 3D (objects / camera / lights)
 
-| DBP | CyberBasic |
+| DBP | CyberBASIC2 |
 |-----|------------|
 | LOAD OBJECT | **LoadModel(path)** |
 | POSITION OBJECT | **DrawModelEx(modelId, x, y, z, rotX, rotY, rotZ, scale, tint)** (set position via draw) or use ECS/Bullet for body position |
@@ -85,7 +85,7 @@ This table maps DarkBASIC Pro commands to CyberBasic equivalents. Use it when po
 
 ## Sound / music
 
-| DBP | CyberBasic |
+| DBP | CyberBASIC2 |
 |-----|------------|
 | LOAD SOUND / PLAY SOUND | **LoadSound(path)**, **PlaySound(soundId)** |
 | LOAD MUSIC / PLAY MUSIC | **LoadMusicStream(path)**, **PlayMusicStream(musicId)**, **UpdateMusicStream(musicId)** |
@@ -93,7 +93,7 @@ This table maps DarkBASIC Pro commands to CyberBasic equivalents. Use it when po
 
 ## Network
 
-| DBP | CyberBasic |
+| DBP | CyberBASIC2 |
 |-----|------------|
 | CREATE NET GAME / JOIN NET GAME | **Host(port)** → serverId; **Connect(host, port)** → connectionId |
 | SEND NET MESSAGE | **Send(connectionId, text)** |
@@ -102,11 +102,11 @@ This table maps DarkBASIC Pro commands to CyberBasic equivalents. Use it when po
 
 ## GUI
 
-| DBP | CyberBasic |
+| DBP | CyberBASIC2 |
 |-----|------------|
 | (dialogs / buttons) | **GuiButton**, **GuiLabel**, **GuiSlider**, etc. (raygui) or **BeginUI** / **Button**, **Label**, etc. (pure-Go UI) |
 
 ## Summary
 
-- **Already in CyberBasic:** Print, file (ReadFile, WriteFile, DeleteFile, FileExists), mouse/keyboard (GetMouseX/Y, IsKeyPressed, etc.), 3D (LoadModel, SetCamera3D, DrawModel, meshes), 2D (DrawTexture, LoadTexture, shapes), audio (LoadSound, PlayMusicStream, etc.), network (Connect, Send, Receive, Host, Accept), collision (CheckCollision*, GetRayCollision*, Box2D, Bullet), GUI (Gui* raygui, BeginUI/EndUI).
+- **Already in CyberBASIC2:** Print, file (ReadFile, WriteFile, DeleteFile, FileExists), mouse/keyboard (GetMouseX/Y, IsKeyPressed, etc.), 3D (LoadModel, SetCamera3D, DrawModel, meshes), 2D (DrawTexture, LoadTexture, shapes), audio (LoadSound, PlayMusicStream, etc.), network (Connect, Send, Receive, Host, Accept), collision (CheckCollision*, GetRayCollision*, Box2D, Bullet), GUI (Gui* raygui, BeginUI/EndUI).
 - **Added for DBP parity:** Left, Right, Mid, Len, Chr, Asc, Str, Val, Rnd, Int (std); CopyFile, ListDir, GetDirItem, ExecuteFile (std). See [DBP_GAP.md](DBP_GAP.md) for the gap list.

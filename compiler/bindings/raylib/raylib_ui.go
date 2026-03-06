@@ -56,6 +56,16 @@ func registerUI(v *vm.VM) {
 		rl.DrawText(text, x, y, 20, rl.LightGray)
 		return nil, nil
 	})
+	v.RegisterForeign("LabelAt", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("LabelAt(x, y, text) requires 3 arguments")
+		}
+		x := int32(toInt32(args[0]))
+		y := int32(toInt32(args[1]))
+		text := fmt.Sprint(args[2])
+		rl.DrawText(text, x, y, 20, rl.LightGray)
+		return nil, nil
+	})
 	v.RegisterForeign("Button", func(args []interface{}) (interface{}, error) {
 		text := fmt.Sprint(args[0])
 		uiMu.Lock()
@@ -80,6 +90,33 @@ func registerUI(v *vm.VM) {
 		rl.DrawRectangleLines(int32(x), int32(y), w, int32(h), rl.LightGray)
 		tx := x + (w-int32(rl.MeasureText(text, 20)))/2
 		ty := y + (int32(h)-20)/2
+		rl.DrawText(text, tx, ty, 20, rl.White)
+		return clicked, nil
+	})
+	v.RegisterForeign("ButtonAt", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("ButtonAt(x, y, w, h, text) requires 5 arguments")
+		}
+		x := int32(toInt32(args[0]))
+		y := int32(toInt32(args[1]))
+		w := int32(toInt32(args[2]))
+		h := int32(toInt32(args[3]))
+		text := fmt.Sprint(args[4])
+		if w < uiMinBtnW {
+			w = uiMinBtnW
+		}
+		mx := rl.GetMouseX()
+		my := rl.GetMouseY()
+		hit := mx >= x && mx <= x+w && my >= y && my <= y+h
+		clicked := hit && rl.IsMouseButtonPressed(rl.MouseButtonLeft)
+		if hit {
+			rl.DrawRectangle(x, y, w, h, rl.DarkGray)
+		} else {
+			rl.DrawRectangle(x, y, w, h, rl.Gray)
+		}
+		rl.DrawRectangleLines(x, y, w, h, rl.LightGray)
+		tx := x + (w-int32(rl.MeasureText(text, 20)))/2
+		ty := y + (h-20)/2
 		rl.DrawText(text, tx, ty, 20, rl.White)
 		return clicked, nil
 	})
@@ -160,6 +197,70 @@ func registerUI(v *vm.VM) {
 			return 1, nil
 		}
 		return 0, nil
+	})
+	v.RegisterForeign("CheckboxAt", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("CheckboxAt(x, y, label, checked) requires 4 arguments")
+		}
+		x := int32(toInt32(args[0]))
+		y := int32(toInt32(args[1]))
+		text := fmt.Sprint(args[2])
+		checked := toInt32(args[3]) != 0
+		mx := rl.GetMouseX()
+		my := rl.GetMouseY()
+		hit := mx >= x && mx <= x+uiCheckBoxW+int32(rl.MeasureText(text, 18))+8 && my >= y && my <= y+uiCheckBoxW
+		if hit && rl.IsMouseButtonPressed(rl.MouseButtonLeft) {
+			checked = !checked
+		}
+		rl.DrawRectangle(x, y, uiCheckBoxW, uiCheckBoxW, rl.Gray)
+		if checked {
+			rl.DrawRectangle(x+4, y+4, uiCheckBoxW-8, uiCheckBoxW-8, rl.White)
+		}
+		rl.DrawRectangleLines(x, y, uiCheckBoxW, uiCheckBoxW, rl.LightGray)
+		rl.DrawText(text, x+uiCheckBoxW+8, y+2, 18, rl.LightGray)
+		if checked {
+			return 1, nil
+		}
+		return 0, nil
+	})
+	v.RegisterForeign("SliderAt", func(args []interface{}) (interface{}, error) {
+		if len(args) < 6 {
+			return nil, fmt.Errorf("SliderAt(x, y, width, min, max, value) requires 6 arguments")
+		}
+		x := int32(toInt32(args[0]))
+		y := int32(toInt32(args[1]))
+		barW := int32(toInt32(args[2]))
+		minV := toFloat64(args[3])
+		maxV := toFloat64(args[4])
+		val := toFloat64(args[5])
+		if maxV <= minV {
+			maxV = minV + 1
+		}
+		norm := (val - minV) / (maxV - minV)
+		if norm < 0 {
+			norm = 0
+		}
+		if norm > 1 {
+			norm = 1
+		}
+		mx := rl.GetMouseX()
+		my := rl.GetMouseY()
+		dragging := rl.IsMouseButtonDown(rl.MouseButtonLeft) && mx >= x && mx <= x+barW && my >= y && my <= y+int32(uiSliderH)
+		if dragging {
+			norm = float64(mx-x) / float64(barW-12)
+			if norm < 0 {
+				norm = 0
+			}
+			if norm > 1 {
+				norm = 1
+			}
+			val = minV + norm*(maxV-minV)
+		}
+		rl.DrawRectangle(x, y, barW, int32(uiSliderH), rl.DarkGray)
+		thumbX := x + int32(float64(barW-12)*norm)
+		rl.DrawRectangle(thumbX, y, 12, int32(uiSliderH), rl.Gray)
+		rl.DrawRectangleLines(x, y, barW, int32(uiSliderH), rl.LightGray)
+		return val, nil
 	})
 
 	// TextBox(id, text) -> text (edited)

@@ -1,6 +1,6 @@
 # 2D Graphics Guide
 
-Complete guide to 2D graphics in CyberBasic using the raylib API.
+Complete guide to 2D graphics in CyberBASIC2 using the raylib API.
 
 ## Table of Contents
 

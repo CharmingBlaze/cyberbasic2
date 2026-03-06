@@ -1,6 +1,6 @@
 # 3D Physics Guide (Bullet)
 
-Complete guide to 3D physics in CyberBasic using Bullet: worlds, gravity, rigid bodies, shapes, position/rotation, velocity and forces, raycast, and integration with the hybrid loop and GAME.* helpers.
+Complete guide to 3D physics in CyberBASIC2 using Bullet: worlds, gravity, rigid bodies, shapes, position/rotation, velocity and forces, raycast, and integration with the hybrid loop and GAME.* helpers.
 
 ## Table of Contents
 

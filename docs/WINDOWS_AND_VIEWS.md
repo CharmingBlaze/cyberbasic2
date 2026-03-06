@@ -1,6 +1,6 @@
 # Windows, Scaling, and Splitscreen
 
-Guide to window commands, DPI/scaling, and view-based splitscreen (view-to-view) in CyberBasic.
+Guide to window commands, DPI/scaling, and view-based splitscreen (view-to-view) in CyberBASIC2.
 
 ---
 

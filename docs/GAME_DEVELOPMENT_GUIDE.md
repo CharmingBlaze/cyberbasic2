@@ -1,6 +1,6 @@
 # Game Development Guide
 
-Complete guide to making games with CyberBasic: game loop, input, GAME.* helpers, 2D/3D physics, ECS, and best practices.
+Complete guide to making games with CyberBASIC2: game loop, input, GAME.* helpers, 2D/3D physics, ECS, and best practices.
 
 ## Table of Contents
 
@@ -220,7 +220,7 @@ END SUB
 
 ## ECS (Entity-Component System)
 
-CyberBasic provides ECS via a library binding. You create worlds, entities, add/get/remove components, and query entities by component type. Use it for organizing many game objects (enemies, projectiles, props) with shared logic.
+CyberBASIC2 provides ECS via a library binding. You create worlds, entities, add/get/remove components, and query entities by component type. Use it for organizing many game objects (enemies, projectiles, props) with shared logic.
 
 - **Create world:** `ECS.CreateWorld()` → worldId  
 - **Create entity:** `ECS.CreateEntity(worldId)` → entityId  
@@ -248,7 +248,7 @@ Use **BeginUI()** … **EndUI()** each frame and add widgets: **Label**, **Butto
 
 ## State machines
 
-CyberBasic does not have built-in STATE/TRANSITION syntax. You can implement a state machine with a variable and **SELECT CASE**, or by calling different Subs per state:
+CyberBASIC2 does not have built-in STATE/TRANSITION syntax. You can implement a state machine with a variable and **SELECT CASE**, or by calling different Subs per state:
 
 **Using a state variable and SELECT CASE:**
 

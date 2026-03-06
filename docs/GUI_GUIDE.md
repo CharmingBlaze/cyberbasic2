@@ -1,6 +1,6 @@
 # GUI Guide
 
-CyberBasic provides two UI options:
+CyberBASIC2 provides two UI options:
 
 1. **Full raygui** (recommended when using CGO): the real [raygui](https://github.com/raysan5/raygui) library via **Gui*** functions. You place controls by (x, y, w, h). Requires CGO (gen2brain/raylib-go/raygui).
 2. **Pure-Go layout UI**: **BeginUI()** / **EndUI()** with a vertical cursor; widgets (Label, Button, Slider, etc.) advance the layout. No CGO; use when building with CGO_ENABLED=0.
@@ -143,8 +143,9 @@ WEND
 
 ## See also
 
-- [API Reference](../API_REFERENCE.md) (section 20) — full list of GUI and raygui functions
-- [Command Reference](COMMAND_REFERENCE.md) — commands by feature
-- [Program Structure](PROGRAM_STRUCTURE.md) — hybrid update/draw loop
+- [Core Command Reference](CORE_COMMAND_REFERENCE.md) – GUI section (BeginUI, EndUI, Label, Button, etc.)
+- [API Reference](../API_REFERENCE.md) (section 20) – full list of GUI and raygui functions
+- [Command Reference](COMMAND_REFERENCE.md) – commands by feature
+- [Program Structure](PROGRAM_STRUCTURE.md) – hybrid update/draw loop
 - [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)
 - [Documentation Index](DOCUMENTATION_INDEX.md)

@@ -1,8 +1,12 @@
 # Rendering and the Game Loop
 
-This document explains how drawing and the game loop work in CyberBasic: the two modes (manual vs hybrid), the pipeline when using `update`/`draw`, and the rule for what to call inside `draw()`.
+This document explains how drawing and the game loop work in CyberBASIC2: the three modes (DBP-style, manual, hybrid), the pipeline when using `update`/`draw` or `OnStart`/`OnUpdate`/`OnDraw`, and the rule for what to call inside `draw()`.
 
-## Two modes
+## Three modes
+
+### DBP-style (OnStart/OnUpdate/OnDraw)
+
+**Zero boilerplate:** Define `OnStart()`, `OnUpdate(dt)`, and `OnDraw()`. No `InitWindow`, no `WHILE` loop. Call `UseUnifiedRenderer` in `OnStart()` and `SYNC` at the end of `OnDraw()`. The engine handles 3D→2D→GUI order automatically. See [DBP Parity](DBP_PARITY.md).
 
 ### Manual loop
 
@@ -62,8 +66,13 @@ WEND
 
 See **examples/hybrid_update_draw_demo.bas**.
 
+## SYNC and UseUnifiedRenderer
+
+When using **UseUnifiedRenderer**, call **SYNC** at the end of each frame. SYNC replaces manual `Start3D`/`End3D`—the engine handles 3D→2D→GUI order. Use `SYNC` in `OnDraw()` for DBP-style programs.
+
 ## See also
 
+- [DBP Parity](DBP_PARITY.md) — Zero-boilerplate (OnStart/OnUpdate/OnDraw)
 - [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop)
 - [FAQ](FAQ.md) — Hybrid vs manual loop
 - [Command Reference](COMMAND_REFERENCE.md) — ClearRenderQueues, FlushRenderQueues

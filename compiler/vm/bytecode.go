@@ -180,6 +180,8 @@ const (
 	OpReadLine  // handle -> string
 	OpWriteLine // handle, text
 	OpCloseFile // handle
+	OpReadByte  // handle -> byte (0-255)
+	OpWriteByte // handle, value
 
 	// Arrays (multidimensional)
 	OpCreateArray // nDims, constIdx..., varIndex -> allocate and store

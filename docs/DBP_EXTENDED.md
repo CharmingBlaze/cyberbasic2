@@ -2,6 +2,8 @@
 
 This document lists all DarkBASIC Pro-style high-level commands in CyberBASIC2, organized by module.
 
+**See [CORE_COMMAND_REFERENCE.md](CORE_COMMAND_REFERENCE.md) for the complete required command set with status.**
+
 ## Package Structure
 
 The DBP bindings are split into modular files under `compiler/bindings/dbp/`:
@@ -26,10 +28,10 @@ The DBP bindings are split into modular files under `compiler/bindings/dbp/`:
 | `dbp_file.go` | SaveString, LoadString, SaveValue, LoadValue |
 | `dbp_runtime.go` | StopTask, PauseTask, ResumeTask, FixedUpdate, OnFixedUpdate |
 | `dbp_replication.go` | Replication (from game package) |
-| `dbp_2d.go` | 2D Game API: drawing, sprites, spritesheets, tilemaps, camera, collision, physics, objects, particles |
+| `dbp_2d.go` | 2D Game API: drawing, sprites, spritesheets (Aseprite + grid), tilemaps, camera, collision, physics, objects, particles |
 | `dbp_3d.go` | 3D Game API: window, camera, objects, mesh, animation, terrain, math, replication |
 | `dbp_mesh.go` | LoadMesh, GetModelBounds, GetMeshVertexCount, GetMeshTriangleCount |
-| `dbp_animation.go` | LoadAnimation, PlayAnimation, SetAnimationFrame, GetAnimationFrame, GetAnimationLength, GetAnimationName |
+| `dbp_animation.go` | LoadAnimation, PlayAnimation (multi-clip), StopAnimation, SetAnimationSpeed, SetAnimationLoop, ResetBones, LoadMeshAnimation, PlayMeshAnimation, SetMeshAnimationFrame |
 | `dbp_level.go` | LoadLevel, DrawLevel, UnloadLevel, LoadLevelCollision, GetLevelColliderCount, GetLevelCollider, GetLevelObjectCount, GetLevelObject |
 | `dbp_prefab.go` | LoadPrefab, SpawnPrefab |
 | `dbp_ik.go` | IKEnable, IKSolveTwoBone |
@@ -66,7 +68,8 @@ The DBP bindings are split into modular files under `compiler/bindings/dbp/`:
 - `FixObject(id)` / `UnfixObject(id)` - Fixed/kinematic flag
 - `SetObjectColor(id, r, g, b)` - Tint color
 - `SetObjectAlpha(id, value)` - Alpha
-- `SetObjectTexture(id, textureID)` - Apply texture
+- `SetObjectTexture(id, textureID)` or `(id, "path.png")` - Apply texture
+- `SetObjectNormalmap(id, path)` / `SetObjectRoughness(id, value)` / `SetObjectMetallic(id, value)` / `SetObjectEmissive(id, r, g, b)` - PBR material
 - `SetObjectShader(id, shaderID)` - Store shader for object (custom draw)
 - `SetObjectWireframe(id, onOff)` - Wireframe mode
 - `SetObjectCollision(id, onOff)` - Collision flag
@@ -76,11 +79,16 @@ The DBP bindings are split into modular files under `compiler/bindings/dbp/`:
 - `DrawGrid(size, spacing)` - Draw grid
 - `Clear(r, g, b)` - ClearBackground
 - `BackgroundColor(r, g, b)` - Alias for Clear
+- `SetClearColor(r, g, b)` - Set unified renderer clear color
+- `SetVsync(onOff)` - Enable/disable VSync (call before InitWindow)
+- `SetFramerate(cap)` - Target framerate (0 = uncapped)
 
 ### Input
 - `KeyDown(key)` / `KeyHit(key)` / `KeyUp(key)`
 - `MouseX` / `MouseY` / `MouseMoveX` / `MouseMoveY`
 - `MouseButtonDown(btn)` / `MouseButtonHit(btn)` / `MouseButtonUp(btn)`
+- `MouseClick(button)` - Alias for click this frame
+- `GamepadAxis(pad, axis)` / `GamepadButton(pad, button)` - Gamepad input
 - `HideMouse` / `ShowMouse` / `LockMouse` / `UnlockMouse`
 
 ### Time & Math
@@ -90,7 +98,19 @@ The DBP bindings are split into modular files under `compiler/bindings/dbp/`:
 
 ### Game Loop
 - `StartDraw` / `EndDraw` - BeginDrawing / EndDrawing
-- `Sync` / `SYNC` - End frame
+- `Sync` / `SYNC` - End frame (when UseUnifiedRenderer: full frame)
+- `UseUnifiedRenderer` - Enable unified pipeline (3D→2D→GUI, auto water/terrain)
+- `SetUseUnifiedRenderer`(enabled) - Toggle unified renderer
+- `DeltaTime` - Scaled frame delta (GetFrameTime * TimeScale)
+- `FixedDeltaTime` - Fixed physics timestep (1/60)
+- `SetTimeScale`(value) / `GetTimeScale` - Time multiplier
+- `GetFrameCounter` - Frame count
+- `LASTERROR$` - Last error message
+- `MakeCamera`(id) / `MAKE CAMERA` - Create camera
+- `DeleteCamera`(id) / `RotateCamera`(id, pitch, yaw, roll) / `AttachCameraToObject`(camID, objID)
+- `PositionCamera`(id,x,y,z) / `POSITION CAMERA` - Set camera position
+- `POINT CAMERA`(id,tx,ty,tz) - Set camera target
+- `SetCameraActive`(id) / `SET CAMERA ACTIVE` - Use camera for 3D
 - `EscapeKey` - IsKeyDown(KEY_ESCAPE)
 
 ### FPS Camera
@@ -100,7 +120,7 @@ The DBP bindings are split into modular files under `compiler/bindings/dbp/`:
 - `FpsUpdate` - Update camera from mouse/WASD
 
 ### Audio (Sounds)
-- `LoadSound(id, path)` / `PlaySound(id)` / `StopSound(id)` / `SetSoundVolume(id, value)`
+- `LoadSound(id, path)` / `PlaySound(id)` / `StopSound(id)` / `PauseSound(id)` / `SetSoundVolume(id, value)` / `SetSoundLoop(id, onOff)`
 
 ## Textures (dbp_textures.go)
 - `LoadTexture(id, path)` - Load texture at id
@@ -116,6 +136,7 @@ The DBP bindings are split into modular files under `compiler/bindings/dbp/`:
 - `MaterialExists(id)` - Returns 1 if exists, 0 otherwise
 
 ## Camera Extras (dbp_camera.go)
+- `DeleteCamera(id)` / `RotateCamera(id, pitch, yaw, roll)` / `AttachCameraToObject(camID, objID)`
 - `CameraFollow(objectID, distance)` - Follow object
 - `CameraOrbit(x, y, z, angle, pitch, distance)` - Orbit around point
 - `CameraShake(amount, duration)` - Screen shake
@@ -124,6 +145,7 @@ The DBP bindings are split into modular files under `compiler/bindings/dbp/`:
 
 ## World (dbp_world.go)
 - `SetSkybox(path)` - Load skybox (fallback: solid color if missing)
+- `SetSkyboxCubemap(right, left, top, bottom, front, back)` - 6-face cubemap
 - `SetAmbientLight(r, g, b)` - Ambient color
 - `SetFog(onOff)` / `SetFogOff` / `SetFogColor(r, g, b)` / `SetFogRange(near, far)`
 - **Clouds:** `SetCloudsOn` / `SetCloudsOff` / `SetCloudTexture(path)` / `SetCloudSpeed(value)` / `SetCloudDensity(value)` / `SetCloudHeight(value)` / `SetCloudColor(r, g, b)`
@@ -158,7 +180,7 @@ All entity types support lifecycle operations. Use `XExists(id)` to check validi
 - `MakeWater(id, width, depth)` - Create water plane
 - `SetWaterTexture(id, path)` / `PositionWater(id, x, y, z)` / `SetWaterLevel(id, height)` / `SetWaterColor(id, r, g, b)`
 - `SetWaterScroll(id, uSpeed, vSpeed)` - UV scroll
-- `SetWaterWaveStrength(id, value)` / `SetWaterWaveSpeed(id, value)`
+- `SetWaterWave(id, strength)` / `SetWaterWaveStrength(id, value)` / `SetWaterWaveSpeed(id, value)`
 - `SetWaterReflection(id, onOff)` / `SetWaterRefraction(id, onOff)`
 - `SetWaterNormalmap(id, path)` / `SetWaterFoamTexture(id, path)` / `SetWaterDepthColor(id, r, g, b)` / `SetWaterShallowColor(id, r, g, b)`
 - `DrawWater(id)` - Draw at stored position
@@ -191,6 +213,7 @@ See [docs/WORLD_WATER_TERRAIN.md](WORLD_WATER_TERRAIN.md) for full reference and
 
 ## Physics (dbp_physics.go)
 - **3D (Bullet):** `PhysicsOn` / `PhysicsOff` - Enable/disable default world
+- `SetAngularVelocity(id, x, y, z)` - Set rigid body angular velocity
 - `SetGravity(x, y, z)` - Set 3D gravity
 - `PhysicsStep(dt)` - Step all 3D worlds
 - `MakeRigidBody(bodyId$, x, y, z, mass)` - Create sphere rigid body
@@ -227,7 +250,9 @@ See [docs/WORLD_WATER_TERRAIN.md](WORLD_WATER_TERRAIN.md) for full reference and
 - `NetPing(connectionId$)` / `NetLatency(connectionId$)` - RTT in ms
 - `Host(port)` / `Accept(serverId$)` - Server API
 
-## File I/O (dbp_file.go)
+## File I/O (VM + dbp_file.go)
+- `OpenFile(path, mode)` / `ReadLine(handle)` / `WriteLine(handle, text)` / `CloseFile(handle)` - VM built-ins
+- `ReadByte(handle)` / `WriteByte(handle, value)` - Byte I/O
 - `SaveString(path, text)` - Write string to file
 - `LoadString(path)` - Read file as string
 - `SaveValue(path, value)` - Save number or string
@@ -243,7 +268,8 @@ See [docs/WORLD_WATER_TERRAIN.md](WORLD_WATER_TERRAIN.md) for full reference and
 
 ## Lighting (dbp_lighting.go)
 - `MakeLight(id, type)` / `PositionLight(id, x, y, z)` / `RotateLight(id, pitch, yaw, roll)`
-- `SetLightColor(id, r, g, b)` / `SetLightIntensity(id, value)` / `SetLightRange(id, value)`
+- `SetLightColor(id, r, g, b)` / `SetLightIntensity(id, value)` / `SetLightRange(id, value)` / `SetLightAngle(id, degrees)` (spot)
+- `EnableShadows(id)` / `DisableShadows(id)` - Per-light shadow flag
 - `DeleteLight(id)` / `SyncLight(id)`
 
 Note: Raylib has no built-in dynamic lights. The light registry stores state; visual effect requires a custom shader.
@@ -257,10 +283,10 @@ Note: Raylib has no built-in dynamic lights. The light registry stores state; vi
 - `DrawTriangle(x1,y1, x2,y2, x3,y3, r,g,b)`
 
 ### Sprites
-- `DeleteSprite(id)` / `DrawSpriteRotated(id, x, y, angle)` / `DrawSpriteScaled(id, x, y, sx, sy)` / `DrawSpriteTint(id, x, y, r, g, b)`
+- `DeleteSprite(id)` / `SetSpriteColor(id, r, g, b, a)` / `DrawSpriteRotated(id, x, y, angle)` / `DrawSpriteScaled(id, x, y, sx, sy)` / `DrawSpriteTint(id, x, y, r, g, b)`
 
 ### Spritesheets
-- `LoadSpritesheet(id, path, frameW, frameH)` / `SetSpriteFrame(id, frame)` / `NextSpriteFrame(id)`
+- `LoadSpritesheet(id, pngPath, jsonPath)` or `(id, path, frameW, frameH)` / `PlaySpriteAnimation(id, tagName, speed)` / `GetSliceRect(id, sliceName)` / `GetAnimationLength(id, tagName)`
 - `DrawSpriteFrame(id, frame, x, y)` / `AnimateSprite(id, startFrame, endFrame, speed)`
 
 ### Tilemaps
@@ -340,7 +366,7 @@ Note: Raylib has no built-in dynamic lights. The light registry stores state; vi
 
 ### Model / Mesh / Animation
 - `LoadMesh(id, path)` / `GetModelBounds(objectID)` / `GetMeshVertexCount(id)` / `GetMeshTriangleCount(id)`
-- `LoadAnimation(id, path)` / `PlayAnimation(objectID, animID, speed)` / `SetAnimationFrame(objectID, frame)`
+- `LoadAnimation(id, path)` / `PlayAnimation(objectID, animID, clipIndex, speed)` / `SetAnimationFrame(objectID, frame)` / `GetAnimationLength(animID, clipIndex)`
 - `GetAnimationFrame(objectID)` / `GetAnimationLength(animID)` / `GetAnimationName(animID)` (graceful when no anim)
 
 ### Light / Skybox Queries
@@ -382,6 +408,7 @@ Note: Raylib has no built-in dynamic lights. The light registry stores state; vi
 
 ## UI
 - `UIButton(id, x, y, w, h, text$)` / `UILabel(x, y, text$)` / `UICheckbox(id, x, y, text$)` / `UISlider(id, x, y, w, min, max, value)`
+- `LabelAt(x, y, text)` / `ButtonAt(x, y, w, h, text)` / `CheckboxAt(x, y, label, checked)` / `SliderAt(x, y, width, min, max, value)` - Explicit layout
 
 ## Debug
 - `DebugLog(text$)` / `DebugDrawLine(x1,y1,z1, x2,y2,z2)` / `DebugDrawBox(x, y, z, size)`

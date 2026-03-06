@@ -1,6 +1,10 @@
-# CyberBasic – Complete Command Reference
+# CyberBASIC2 – Complete Command Reference
 
-Structured command set for window, input, math, camera, 3D, 2D, audio, file, game loop, and utilities. All names are **case-insensitive**. For the complete list of all bindings and source files, see [API Reference](../API_REFERENCE.md).
+Structured command set for window, input, math, camera, 3D, 2D, audio, file, game loop, and utilities. All names are **case-insensitive**.
+
+**For DBP-style commands** (LoadObject, MakeCamera, SYNC, spritesheets, etc.), see [Core Command Reference](CORE_COMMAND_REFERENCE.md), [2D Game API](2D_GAME_API.md), and [3D Game API](3D_GAME_API.md).
+
+For the complete list of all bindings and source files, see [API Reference](../API_REFERENCE.md).
 
 ---
 

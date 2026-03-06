@@ -1,6 +1,6 @@
 # 3D Game API Reference
 
-Complete reference for the CyberBasic 3D game API: FPS, RPGs, sandbox, survival, and multiplayer worlds. All commands use PascalCase and integer IDs where applicable.
+Complete reference for the CyberBASIC2 3D game API: FPS, RPGs, sandbox, survival, and multiplayer worlds. All commands use PascalCase and integer IDs where applicable.
 
 **Multiplayer-safe?** Commands marked with ✓ are safe to use in networked games. Camera and UI are local-only. Physics and object transforms need replication for sync.
 
@@ -34,6 +34,8 @@ The 3D API is organized across multiple modules:
 | `EndDraw` | () | EndDrawing |
 | `Start3D` | () | BeginMode3D |
 | `End3D` | () | EndMode3D |
+
+**When using UseUnifiedRenderer:** Call **SYNC** instead of Start3D/End3D. The engine handles 3D→2D→GUI order automatically. Use `SYNC` at the end of `OnDraw()` for DBP-style programs.
 
 **Example:**
 ```basic
@@ -267,14 +269,19 @@ tag$ = GetObjectTag 1
 
 | Command | Args | Description |
 |---------|------|-------------|
-| `LoadAnimation` | (id, path) | Load animations from file (succeeds with 0 anims if file has none) |
-| `PlayAnimation` | (objectID, animID, speed) | Start playing animation |
+| `LoadAnimation` | (id, path) | Load all animation clips from file |
+| `PlayAnimation` | (objectID, animID, speed) or (objectID, animID, clipIndex, speed) | Start playing animation |
+| `StopAnimation` | (objectID) | Stop animation |
 | `SetAnimationFrame` | (objectID, frame) | Set current frame |
+| `SetAnimationSpeed` | (objectID, speed) | Playback speed |
+| `SetAnimationLoop` | (objectID, onOff) | Loop on/off |
 | `GetAnimationFrame` | (objectID) | Current frame |
-| `GetAnimationLength` | (animID) | Frame count (0 if no anim) |
-| `GetAnimationName` | (animID) | Animation name |
+| `GetAnimationLength` | (animID) or (animID, clipIndex) | Frame count |
+| `GetAnimationName` | (animID) or (animID, clipIndex) | Clip name |
 
 **Graceful:** LoadAnimation succeeds even when the file has no animations. GetAnimationLength returns 0. PlayAnimation and SetAnimationFrame no-op when anim not found.
+
+**Blender workflow:** See [BLENDER_WORKFLOW.md](BLENDER_WORKFLOW.md).
 
 ---
 
@@ -640,3 +647,10 @@ Wend
 FpsCameraOff
 CloseWindow
 ```
+
+---
+
+## See also
+
+- [Core Command Reference](CORE_COMMAND_REFERENCE.md) – DBP-style command list
+- [Blender Workflow](BLENDER_WORKFLOW.md) – Export 3D models (GLTF, FBX, OBJ)

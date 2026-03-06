@@ -18,11 +18,13 @@ type Model struct {
 
 // Mesh holds vertex data for one mesh.
 type Mesh struct {
-	Vertices []float32 // x,y,z per vertex
-	Normals  []float32 // x,y,z per vertex
-	Texcoords []float32 // u,v per vertex
-	Indices   []uint32
-	MaterialIndex int // -1 if none
+	Vertices    []float32 // x,y,z per vertex
+	Normals     []float32 // x,y,z per vertex
+	Texcoords   []float32 // u,v per vertex
+	Indices     []uint32
+	MaterialIndex int   // -1 if none
+	BoneIndices []uint8  // 4 per vertex, for skinning
+	BoneWeights []float32 // 4 per vertex, for skinning
 }
 
 // Material holds PBR material properties.
@@ -33,6 +35,8 @@ type Material struct {
 	BaseColorTextureIndex                          int // -1 if none
 	NormalTextureIndex                             int
 	MetallicRoughnessTextureIndex                  int
+	EmissiveFactorR, EmissiveFactorG, EmissiveFactorB float32
+	EmissiveTextureIndex                           int // -1 if none
 }
 
 // Texture references an image file path (resolved relative to model).

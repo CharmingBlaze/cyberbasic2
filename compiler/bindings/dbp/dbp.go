@@ -29,10 +29,18 @@ import (
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
 	"cyberbasic/compiler/bindings/model"
+	"cyberbasic/compiler/bindings/terrain"
+	"cyberbasic/compiler/bindings/water"
+	"cyberbasic/compiler/runtime"
+	"cyberbasic/compiler/runtime/camera"
+	"cyberbasic/compiler/runtime/errors"
+	"cyberbasic/compiler/runtime/renderer"
+	gametime "cyberbasic/compiler/runtime/time"
 	"cyberbasic/compiler/vm"
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
@@ -41,11 +49,17 @@ var (
 	images   = make(map[int]rl.Texture2D)
 	imagesMu sync.Mutex
 
+	spriteColors   = make(map[int]rl.Color)
+	spriteColorsMu sync.Mutex
+
 	objects   = make(map[int]*dbpObject)
 	objectsMu sync.Mutex
 
 	sounds   = make(map[int]rl.Sound)
 	soundsMu sync.Mutex
+
+	soundLoop   = make(map[int]bool)
+	soundLoopMu sync.Mutex
 
 	fonts   = make(map[int]rl.Font)
 	fontsMu sync.Mutex
@@ -82,7 +96,8 @@ type dbpObject struct {
 	colorB      uint8
 	colorA      uint8
 	textureId   int
-	shaderId    int // For custom shaders; DrawModelEx doesn't take shader
+	normalMapId int   // For SetObjectNormalmap
+	shaderId    int   // For custom shaders; DrawModelEx doesn't take shader
 	wireframe   bool
 	collision   bool
 	fixed       bool
@@ -90,6 +105,22 @@ type dbpObject struct {
 	tag         string
 	ownerID     int   // For multiplayer: player who owns this object
 	syncMe      bool  // Mark for replication
+	roughness   float32 // PBR; stored for shader use
+	metallic    float32
+	emissiveR   uint8
+	emissiveG   uint8
+	emissiveB   uint8
+}
+
+// getSpriteColor returns the stored tint for a sprite, or White if not set.
+func getSpriteColor(id int) rl.Color {
+	spriteColorsMu.Lock()
+	c, ok := spriteColors[id]
+	spriteColorsMu.Unlock()
+	if !ok {
+		return rl.White
+	}
+	return c
 }
 
 func newDbpObject(model rl.Model) *dbpObject {
@@ -172,8 +203,129 @@ func getObjectWorldTransform(id int) (x, y, z, pitch, yaw, roll, scaleX, scaleY,
 	return x, y, z, pitch, yaw, roll, scaleX, scaleY, scaleZ
 }
 
+// DrawScene3D draws the full 3D scene: sky, terrain, water, clouds, objects.
+// Used by the unified renderer when UseUnifiedRenderer is enabled.
+func DrawScene3D() {
+	DrawSky()
+	DrawAllTerrains()
+	DrawAllWaters()
+	DrawClouds()
+	DrawAllDBPObjects()
+}
+
+// DrawSky draws the skybox if loaded. Raylib-go may not have DrawSkybox; clear color handles background otherwise.
+func DrawSky() {
+	_, ok := SkyboxTex()
+	if ok {
+		// Skybox loaded: raylib-go DrawSkybox takes Model; dbp stores Texture2D.
+		// For now skip - clear color provides background. Full skybox in future.
+	}
+}
+
+// DrawAllTerrains draws all visible DBP terrains.
+func DrawAllTerrains() {
+	v := renderer.VM()
+	if v == nil {
+		return
+	}
+	idToTerrainMu.Lock()
+	ids := make([]int, 0, len(idToTerrain))
+	for id := range idToTerrain {
+		ids = append(ids, id)
+	}
+	idToTerrainMu.Unlock()
+	for _, id := range ids {
+		idToTerrainMu.Lock()
+		internalID, ok := idToTerrain[id]
+		idToTerrainMu.Unlock()
+		if !ok {
+			continue
+		}
+		ts := terrain.GetTerrainState(internalID)
+		if ts == nil || !ts.Visible {
+			continue
+		}
+		_ = terrain.DrawTerrain(v, internalID, ts.PosX, ts.PosY, ts.PosZ)
+	}
+}
+
+// DrawAllWaters draws all visible DBP waters. Requires VM for DrawWater.
+func DrawAllWaters() {
+	v := renderer.VM()
+	if v == nil {
+		return
+	}
+	idToWaterMu.Lock()
+	ids := make([]int, 0, len(idToWater))
+	for id := range idToWater {
+		ids = append(ids, id)
+	}
+	idToWaterMu.Unlock()
+	for _, id := range ids {
+		idToWaterMu.Lock()
+		internalID, ok := idToWater[id]
+		idToWaterMu.Unlock()
+		if !ok {
+			continue
+		}
+		w := water.GetWaterByID(internalID)
+		if w == nil || !w.Visible {
+			continue
+		}
+		_, _ = v.CallForeign("DrawWater", []interface{}{internalID, w.PosX, w.PosY, w.PosZ})
+	}
+}
+
+// DrawClouds draws clouds if enabled. Placeholder: cloud layer not yet implemented.
+func DrawClouds() {
+	if !CloudsOn() {
+		return
+	}
+	// Clouds: could draw billboard layer at cloudHeight; for now no-op
+}
+
+// DrawAllDBPObjects draws all visible DBP objects. Call between BeginMode3D and EndMode3D.
+// Used by the unified renderer when UseUnifiedRenderer is enabled.
+func DrawAllDBPObjects() {
+	objectsMu.Lock()
+	ids := make([]int, 0, len(objects))
+	for id := range objects {
+		ids = append(ids, id)
+	}
+	objectsMu.Unlock()
+	for _, id := range ids {
+		objectsMu.Lock()
+		obj, ok := objects[id]
+		objectsMu.Unlock()
+		if !ok || !obj.visible {
+			continue
+		}
+		UpdateObjectAnimation(id, obj)
+		UpdateMeshAnimation(id)
+		drawModel := &obj.model
+		if meshModel := GetMeshAnimationModel(id); meshModel != nil {
+			drawModel = meshModel
+		}
+		wx, wy, wz, _, wyaw, _, wsx, wsy, wsz := getObjectWorldTransform(id)
+		pos := rl.Vector3{X: wx, Y: wy, Z: wz}
+		rotAxis := rl.Vector3{X: 0, Y: 1, Z: 0}
+		rotAngle := wyaw * math.Pi / 180
+		scale := rl.Vector3{X: wsx, Y: wsy, Z: wsz}
+		tint := rl.NewColor(obj.colorR, obj.colorG, obj.colorB, obj.colorA)
+		if obj.wireframe {
+			rl.DrawModelWiresEx(*drawModel, pos, rotAxis, rotAngle, scale, tint)
+		} else {
+			rl.DrawModelEx(*drawModel, pos, rotAxis, rotAngle, scale, tint)
+		}
+	}
+}
+
 // RegisterDBP registers DBP-style commands with the VM.
 func RegisterDBP(v *vm.VM) {
+	camera.SetObjectPositionGetter(func(id int) (float32, float32, float32) {
+		x, y, z, _, _, _, _, _, _ := getObjectWorldTransform(id)
+		return x, y, z
+	})
 	registerTextures(v)
 	registerMaterials(v)
 	registerCameraExtras(v)
@@ -224,9 +376,12 @@ func RegisterDBP(v *vm.VM) {
 		if !ok {
 			return nil, fmt.Errorf("LoadImage: unknown image id %d", id)
 		}
-		inkMu.Lock()
-		c := rl.NewColor(inkR, inkG, inkB, inkA)
-		inkMu.Unlock()
+		c := getSpriteColor(id)
+		if c.R == 255 && c.G == 255 && c.B == 255 && c.A == 255 {
+			inkMu.Lock()
+			c = rl.NewColor(inkR, inkG, inkB, inkA)
+			inkMu.Unlock()
+		}
 		rl.DrawTexture(tex, int32(x), int32(y), c)
 		return nil, nil
 	})
@@ -268,12 +423,25 @@ func RegisterDBP(v *vm.VM) {
 		return nil, nil
 	})
 	// LoadObject(id, path): DBP arg order - id first, then path. Uses unified importer pipeline.
+	// For .gltf/.glb with animations: use rl.LoadModel (raylib loads bones) so PlayAnimation works.
 	v.RegisterForeign("LoadObjectId", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
 			return nil, fmt.Errorf("LoadObject(id, path) requires 2 arguments")
 		}
 		id := toInt(args[0])
 		path := toString(args[1])
+		ext := strings.ToLower(filepath.Ext(path))
+		if ext == ".gltf" || ext == ".glb" {
+			m, err := model.Load(path)
+			if err == nil && len(m.Animations) > 0 {
+				// Animated GLTF: use raylib for bones + animation support
+				rlModel := rl.LoadModel(path)
+				objectsMu.Lock()
+				objects[id] = newDbpObject(rlModel)
+				objectsMu.Unlock()
+				return nil, nil
+			}
+		}
 		m, err := model.Load(path)
 		if err != nil {
 			return nil, fmt.Errorf("LoadObject: %w", err)
@@ -666,15 +834,22 @@ func RegisterDBP(v *vm.VM) {
 	})
 	v.RegisterForeign("SetObjectTexture", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
-			return nil, fmt.Errorf("SetObjectTexture(id, textureID) requires 2 arguments")
+			return nil, fmt.Errorf("SetObjectTexture(id, textureID_or_path) requires 2 arguments")
 		}
 		id := toInt(args[0])
-		texID := toInt(args[1])
-		texturesMu.Lock()
-		tex, texOk := textures[texID]
-		texturesMu.Unlock()
-		if !texOk {
-			return nil, fmt.Errorf("unknown texture id %d", texID)
+		var tex rl.Texture2D
+		var texID int
+		if path, ok := args[1].(string); ok {
+			texID, tex = LoadTextureFromPath(path)
+		} else {
+			texID = toInt(args[1])
+			texturesMu.Lock()
+			t, texOk := textures[texID]
+			texturesMu.Unlock()
+			if !texOk {
+				return nil, fmt.Errorf("unknown texture id %d", texID)
+			}
+			tex = t
 		}
 		objectsMu.Lock()
 		obj, ok := objects[id]
@@ -688,6 +863,64 @@ func RegisterDBP(v *vm.VM) {
 		if !ok {
 			return nil, fmt.Errorf("unknown object id %d", id)
 		}
+		return nil, nil
+	})
+	v.RegisterForeign("SetObjectNormalmap", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetObjectNormalmap(id, path) requires 2 arguments")
+		}
+		id := toInt(args[0])
+		path := toString(args[1])
+		texID, _ := LoadTextureFromPath(path)
+		objectsMu.Lock()
+		obj, ok := objects[id]
+		if ok {
+			obj.normalMapId = texID
+			// raylib Material.Maps is typically diffuse only; normal map stored for custom shader use
+		}
+		objectsMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown object id %d", id)
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("SetObjectRoughness", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetObjectRoughness(id, value) requires 2 arguments")
+		}
+		id := toInt(args[0])
+		val := toFloat32(args[1])
+		objectsMu.Lock()
+		if obj, ok := objects[id]; ok {
+			obj.roughness = val
+		}
+		objectsMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetObjectMetallic", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetObjectMetallic(id, value) requires 2 arguments")
+		}
+		id := toInt(args[0])
+		val := toFloat32(args[1])
+		objectsMu.Lock()
+		if obj, ok := objects[id]; ok {
+			obj.metallic = val
+		}
+		objectsMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SetObjectEmissive", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetObjectEmissive(id, r, g, b) requires 4 arguments")
+		}
+		id := toInt(args[0])
+		r, g, b := toInt(args[1])&0xff, toInt(args[2])&0xff, toInt(args[3])&0xff
+		objectsMu.Lock()
+		if obj, ok := objects[id]; ok {
+			obj.emissiveR, obj.emissiveG, obj.emissiveB = uint8(r), uint8(g), uint8(b)
+		}
+		objectsMu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("SetObjectShader", func(args []interface{}) (interface{}, error) {
@@ -774,6 +1007,27 @@ func RegisterDBP(v *vm.VM) {
 	v.RegisterForeign("BackgroundColor", func(args []interface{}) (interface{}, error) {
 		return v.CallForeign("Clear", args)
 	})
+	// SetClearColor(r, g, b): Sets the background clear color for the unified renderer.
+	v.RegisterForeign("SetClearColor", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("SetClearColor(r, g, b) requires 3 arguments")
+		}
+		r, g, b := toInt(args[0])&0xff, toInt(args[1])&0xff, toInt(args[2])&0xff
+		renderer.Default().SetClearColor(rl.NewColor(uint8(r), uint8(g), uint8(b), 255))
+		return nil, nil
+	})
+	// SetVsync(onOff): Enables (1) or disables (0) vertical sync. Call before InitWindow.
+	v.RegisterForeign("SetVsync", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SetVsync(onOff) requires 1 argument")
+		}
+		flags := 0
+		if toInt(args[0]) != 0 {
+			flags = int(rl.FlagVsyncHint)
+		}
+		_, err := v.CallForeign("SetConfigFlags", []interface{}{flags})
+		return nil, err
+	})
 
 	// --- Input aliases ---
 	v.RegisterForeign("KeyDown", func(args []interface{}) (interface{}, error) {
@@ -824,6 +1078,27 @@ func RegisterDBP(v *vm.VM) {
 		}
 		return v.CallForeign("IsMouseButtonReleased", args)
 	})
+	// MouseClick(button): Returns non-zero if mouse button was clicked this frame. Alias for MouseButtonHit.
+	v.RegisterForeign("MouseClick", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("MouseClick(button) requires 1 argument")
+		}
+		return v.CallForeign("IsMouseButtonPressed", args)
+	})
+	// GamepadAxis(pad, axis): Returns gamepad axis value (-1 to 1).
+	v.RegisterForeign("GamepadAxis", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("GamepadAxis(pad, axis) requires 2 arguments")
+		}
+		return v.CallForeign("GetGamepadAxis", args)
+	})
+	// GamepadButton(pad, button): Returns non-zero if gamepad button is pressed this frame.
+	v.RegisterForeign("GamepadButton", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("GamepadButton(pad, button) requires 2 arguments")
+		}
+		return v.CallForeign("IsGamepadButtonPressed", args)
+	})
 	v.RegisterForeign("HideMouse", func(args []interface{}) (interface{}, error) {
 		_, err := v.CallForeign("DisableCursor", nil)
 		return nil, err
@@ -843,7 +1118,29 @@ func RegisterDBP(v *vm.VM) {
 
 	// --- Time ---
 	v.RegisterForeign("DeltaTime", func(args []interface{}) (interface{}, error) {
-		return v.CallForeign("GetFrameTime", nil)
+		return float64(gametime.DeltaTime()), nil
+	})
+	v.RegisterForeign("FixedDeltaTime", func(args []interface{}) (interface{}, error) {
+		return float64(gametime.GetFixedDeltaTime()), nil
+	})
+	v.RegisterForeign("SetTimeScale", func(args []interface{}) (interface{}, error) {
+		if len(args) >= 1 {
+			gametime.SetTimeScale(toFloat32(args[0]))
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("GetTimeScale", func(args []interface{}) (interface{}, error) {
+		return float64(gametime.GetTimeScale()), nil
+	})
+	v.RegisterForeign("GetFrameCounter", func(args []interface{}) (interface{}, error) {
+		return int64(gametime.GetFrameCounter()), nil
+	})
+	// LASTERROR$: Returns last error message from runtime errors.
+	v.RegisterForeign("LASTERROR$", func(args []interface{}) (interface{}, error) {
+		return errors.LastError(), nil
+	})
+	v.RegisterForeign("LastError$", func(args []interface{}) (interface{}, error) {
+		return errors.LastError(), nil
 	})
 	v.RegisterForeign("FPS", func(args []interface{}) (interface{}, error) {
 		return v.CallForeign("GetFPS", nil)
@@ -1184,6 +1481,20 @@ func RegisterDBP(v *vm.VM) {
 		rl.StopSound(snd)
 		return nil, nil
 	})
+	v.RegisterForeign("PauseSound", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("PauseSound(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		soundsMu.Lock()
+		snd, ok := sounds[id]
+		soundsMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown sound id %d", id)
+		}
+		rl.PauseSound(snd)
+		return nil, nil
+	})
 	v.RegisterForeign("SetSoundVolume", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
 			return nil, fmt.Errorf("SetSoundVolume(id, value) requires 2 arguments")
@@ -1197,6 +1508,24 @@ func RegisterDBP(v *vm.VM) {
 			return nil, fmt.Errorf("unknown sound id %d", id)
 		}
 		rl.SetSoundVolume(snd, vol)
+		return nil, nil
+	})
+	v.RegisterForeign("SetSoundLoop", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetSoundLoop(id, onOff) requires 2 arguments")
+		}
+		id := toInt(args[0])
+		onOff := toInt(args[1]) != 0
+		soundsMu.Lock()
+		_, ok := sounds[id]
+		soundsMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown sound id %d", id)
+		}
+		soundLoopMu.Lock()
+		soundLoop[id] = onOff
+		soundLoopMu.Unlock()
+		// raylib-go Sound does not have SetSoundLoop; store for future/PlaySound loop behavior
 		return nil, nil
 	})
 	v.RegisterForeign("DeleteSound", func(args []interface{}) (interface{}, error) {
@@ -1341,13 +1670,25 @@ func RegisterDBP(v *vm.VM) {
 	})
 
 	// --- Frame sync and input ---
-	// Sync: end frame and present (user calls BeginDrawing + draw calls before Sync)
+	// Sync: end frame and present. When UseUnifiedRenderer is enabled, runs full unified frame.
 	v.RegisterForeign("Sync", func(args []interface{}) (interface{}, error) {
-		rl.EndDrawing()
+		runtime.SyncFrame()
 		return nil, nil
 	})
 	v.RegisterForeign("SYNC", func(args []interface{}) (interface{}, error) {
-		rl.EndDrawing()
+		runtime.SyncFrame()
+		return nil, nil
+	})
+	// UseUnifiedRenderer: enable unified render pipeline. SYNC then does full frame (3D→2D→GUI).
+	v.RegisterForeign("UseUnifiedRenderer", func(args []interface{}) (interface{}, error) {
+		renderer.SetUseUnified(true)
+		return nil, nil
+	})
+	v.RegisterForeign("SetUseUnifiedRenderer", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SetUseUnifiedRenderer(enabled) requires 1 argument")
+		}
+		renderer.SetUseUnified(toInt(args[0]) != 0)
 		return nil, nil
 	})
 	v.RegisterForeign("EscapeKey", func(args []interface{}) (interface{}, error) {

@@ -320,6 +320,18 @@ func registerPhysics(v *vm.VM) {
 			defaultPhysicsWorld3D, bid, toFloat64Physics(args[1]), toFloat64Physics(args[2]), toFloat64Physics(args[3]),
 		})
 	})
+	v.RegisterForeign("SetAngularVelocity", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetAngularVelocity(id, x, y, z) requires 4 arguments")
+		}
+		bid := physicsBodyId(toInt(args[0]))
+		if bid == "" {
+			return nil, nil
+		}
+		return v.CallForeign("SetAngularVelocity3D", []interface{}{
+			defaultPhysicsWorld3D, bid, toFloat64Physics(args[1]), toFloat64Physics(args[2]), toFloat64Physics(args[3]),
+		})
+	})
 	v.RegisterForeign("GetRigidBodyX", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return 0.0, nil

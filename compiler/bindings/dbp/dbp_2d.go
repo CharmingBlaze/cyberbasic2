@@ -6,23 +6,29 @@ import (
 	"math"
 	"math/rand"
 	"strconv"
+	"strings"
 	"sync"
 
+	"cyberbasic/compiler/bindings/aseprite"
 	"cyberbasic/compiler/vm"
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // --- Spritesheet registry ---
 type spritesheetEntry struct {
-	tex        rl.Texture2D
-	frameW     int
-	frameH     int
-	frameCount int
+	tex          rl.Texture2D
+	frameW       int
+	frameH       int
+	frameCount   int
 	currentFrame int
-	animStart  int
-	animEnd    int
-	animSpeed  float32
-	animAccum  float32
+	animStart    int
+	animEnd      int
+	animSpeed    float32
+	animAccum    float32
+	playing      bool
+	// Aseprite mode: non-nil when loaded from JSON
+	aseprite   *aseprite.Sheet
+	currentTag string // tag name when playing
 }
 
 var (
@@ -155,6 +161,17 @@ func register2DDrawing(v *vm.VM) {
 }
 
 func register2DSprites(v *vm.VM) {
+	v.RegisterForeign("SetSpriteColor", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("SetSpriteColor(id, r, g, b, a) requires 5 arguments")
+		}
+		id := toInt(args[0])
+		r, g, b, a := toInt(args[1])&0xff, toInt(args[2])&0xff, toInt(args[3])&0xff, toInt(args[4])&0xff
+		spriteColorsMu.Lock()
+		spriteColors[id] = rl.NewColor(uint8(r), uint8(g), uint8(b), uint8(a))
+		spriteColorsMu.Unlock()
+		return nil, nil
+	})
 	v.RegisterForeign("DeleteSprite", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("DeleteSprite(id) requires 1 argument")
@@ -167,6 +184,9 @@ func register2DSprites(v *vm.VM) {
 			delete(images, id)
 		}
 		imagesMu.Unlock()
+		spriteColorsMu.Lock()
+		delete(spriteColors, id)
+		spriteColorsMu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("DrawSpriteRotated", func(args []interface{}) (interface{}, error) {
@@ -183,7 +203,7 @@ func register2DSprites(v *vm.VM) {
 			return nil, fmt.Errorf("unknown sprite id %d", id)
 		}
 		pos := rl.Vector2{X: x, Y: y}
-		rl.DrawTextureEx(tex, pos, angle, 1, rl.White)
+		rl.DrawTextureEx(tex, pos, angle, 1, getSpriteColor(id))
 		return nil, nil
 	})
 	v.RegisterForeign("DrawSpriteScaled", func(args []interface{}) (interface{}, error) {
@@ -201,7 +221,7 @@ func register2DSprites(v *vm.VM) {
 		}
 		src := rl.Rectangle{X: 0, Y: 0, Width: float32(tex.Width), Height: float32(tex.Height)}
 		dest := rl.Rectangle{X: x, Y: y, Width: float32(tex.Width) * sx, Height: float32(tex.Height) * sy}
-		rl.DrawTexturePro(tex, src, dest, rl.Vector2{}, 0, rl.White)
+		rl.DrawTexturePro(tex, src, dest, rl.Vector2{}, 0, getSpriteColor(id))
 		return nil, nil
 	})
 	v.RegisterForeign("DrawSpriteTint", func(args []interface{}) (interface{}, error) {
@@ -224,11 +244,49 @@ func register2DSprites(v *vm.VM) {
 
 func register2DSpritesheets(v *vm.VM) {
 	v.RegisterForeign("LoadSpritesheet", func(args []interface{}) (interface{}, error) {
-		if len(args) < 5 {
-			return nil, fmt.Errorf("LoadSpritesheet(id, path, frameW, frameH) requires 5 arguments")
+		if len(args) < 3 {
+			return nil, fmt.Errorf("LoadSpritesheet(id, pngPath, jsonPath) or (id, path, frameW, frameH) requires 3-4 arguments")
 		}
 		id := toInt(args[0])
 		path := toString(args[1])
+		tex := rl.LoadTexture(path)
+		if tex.ID == 0 {
+			return nil, fmt.Errorf("LoadSpritesheet: failed to load texture %s", path)
+		}
+		// 3 args: (id, pngPath, jsonPath) - Aseprite mode
+		if len(args) == 3 {
+			jsonPath := toString(args[2])
+			if strings.HasSuffix(strings.ToLower(jsonPath), ".json") {
+				sheet, err := aseprite.Load(jsonPath)
+				if err != nil {
+					rl.UnloadTexture(tex)
+					return nil, fmt.Errorf("LoadSpritesheet: %w", err)
+				}
+				frameCount := len(sheet.Frames)
+				if frameCount == 0 {
+					rl.UnloadTexture(tex)
+					return nil, fmt.Errorf("LoadSpritesheet: no frames in %s", jsonPath)
+				}
+				spritesheetsMu.Lock()
+				spritesheets[id] = &spritesheetEntry{
+					tex:          tex,
+					frameCount:   frameCount,
+					aseprite:     sheet,
+					frameW:       0, // per-frame in aseprite
+					frameH:       0,
+				}
+				spritesheetsMu.Unlock()
+				spritesheetTexMu.Lock()
+				spritesheetTexRefs[tex.ID]++
+				spritesheetTexMu.Unlock()
+				return nil, nil
+			}
+		}
+		// 4 args: (id, path, frameW, frameH) - grid mode
+		if len(args) < 4 {
+			rl.UnloadTexture(tex)
+			return nil, fmt.Errorf("LoadSpritesheet(id, path, frameW, frameH) requires 4 arguments for grid mode")
+		}
 		fw, fh := toInt(args[2]), toInt(args[3])
 		if fw <= 0 {
 			fw = 32
@@ -236,7 +294,6 @@ func register2DSpritesheets(v *vm.VM) {
 		if fh <= 0 {
 			fh = 32
 		}
-		tex := rl.LoadTexture(path)
 		cols := int(tex.Width) / fw
 		rows := int(tex.Height) / fh
 		count := cols * rows
@@ -291,14 +348,26 @@ func register2DSpritesheets(v *vm.VM) {
 		if frame < 0 || frame >= s.frameCount {
 			return nil, nil
 		}
-		cols := int(s.tex.Width) / s.frameW
-		col := frame % cols
-		row := frame / cols
-		src := rl.Rectangle{
-			X:      float32(col * s.frameW),
-			Y:      float32(row * s.frameH),
-			Width:  float32(s.frameW),
-			Height: float32(s.frameH),
+		var src rl.Rectangle
+		if s.aseprite != nil && frame < len(s.aseprite.Frames) {
+			fr := s.aseprite.Frames[frame]
+			src = rl.Rectangle{
+				X: float32(fr.X), Y: float32(fr.Y),
+				Width: float32(fr.W), Height: float32(fr.H),
+			}
+		} else {
+			cols := int(s.tex.Width) / s.frameW
+			if cols <= 0 {
+				cols = 1
+			}
+			col := frame % cols
+			row := frame / cols
+			src = rl.Rectangle{
+				X:      float32(col * s.frameW),
+				Y:      float32(row * s.frameH),
+				Width:  float32(s.frameW),
+				Height: float32(s.frameH),
+			}
 		}
 		pos := rl.Vector2{X: x, Y: y}
 		rl.DrawTextureRec(s.tex, src, pos, rl.White)
@@ -367,6 +436,7 @@ func register2DSpritesheets(v *vm.VM) {
 			animEnd:      src.animEnd,
 			animSpeed:    src.animSpeed,
 			animAccum:    src.animAccum,
+			aseprite:     src.aseprite,
 		}
 		spritesheets[newID] = clone
 		spritesheetsMu.Unlock()
@@ -388,6 +458,141 @@ func register2DSpritesheets(v *vm.VM) {
 		}
 		return 0, nil
 	})
+	// PlaySpriteAnimation(id, tagName, speed): Play animation by tag (Aseprite).
+	v.RegisterForeign("PlaySpriteAnimation", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("PlaySpriteAnimation(id, tagName, speed) requires 3 arguments")
+		}
+		id := toInt(args[0])
+		tagName := toString(args[1])
+		speed := toFloat32(args[2])
+		spritesheetsMu.Lock()
+		ss, ok := spritesheets[id]
+		if !ok || ss.aseprite == nil {
+			spritesheetsMu.Unlock()
+			return nil, nil
+		}
+		from, to, ok := ss.aseprite.GetTagFrameRange(tagName, ss.frameCount)
+		if !ok {
+			spritesheetsMu.Unlock()
+			return nil, nil
+		}
+		ss.animStart = from
+		ss.animEnd = to
+		ss.currentFrame = from
+		ss.animSpeed = speed
+		ss.playing = true
+		ss.animAccum = 0
+		ss.currentTag = tagName
+		spritesheetsMu.Unlock()
+		return nil, nil
+	})
+	// StopSpriteAnimation(id): Stop sprite animation.
+	v.RegisterForeign("StopSpriteAnimation", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("StopSpriteAnimation(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		spritesheetsMu.Lock()
+		if ss, ok := spritesheets[id]; ok {
+			ss.playing = false
+		}
+		spritesheetsMu.Unlock()
+		return nil, nil
+	})
+	// GetSpriteFrame(id): Return current frame index.
+	v.RegisterForeign("GetSpriteFrame", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return 0, nil
+		}
+		id := toInt(args[0])
+		spritesheetsMu.Lock()
+		ss, ok := spritesheets[id]
+		spritesheetsMu.Unlock()
+		if !ok {
+			return 0, nil
+		}
+		return ss.currentFrame, nil
+	})
+	// GetSliceRect(id, sliceName): Return "x,y,w,h" for slice bounds at current frame. (BASIC: no byref; use string)
+	v.RegisterForeign("GetSliceRect", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return "0,0,0,0", nil
+		}
+		id := toInt(args[0])
+		sliceName := toString(args[1])
+		spritesheetsMu.Lock()
+		ss, ok := spritesheets[id]
+		spritesheetsMu.Unlock()
+		if !ok || ss.aseprite == nil {
+			return "0,0,0,0", nil
+		}
+		x, y, w, h := ss.aseprite.GetSliceBounds(sliceName, ss.currentFrame)
+		return fmt.Sprintf("%d,%d,%d,%d", x, y, w, h), nil
+	})
+	// GetAnimationLength(id, tagName): Return frame count for tag (Aseprite).
+	v.RegisterForeign("GetAnimationLength", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return 0, nil
+		}
+		id := toInt(args[0])
+		tagName := toString(args[1])
+		spritesheetsMu.Lock()
+		ss, ok := spritesheets[id]
+		spritesheetsMu.Unlock()
+		if !ok || ss.aseprite == nil {
+			return 0, nil
+		}
+		from, to, ok := ss.aseprite.GetTagFrameRange(tagName, ss.frameCount)
+		if !ok {
+			return 0, nil
+		}
+		return to - from + 1, nil
+	})
+}
+
+// UpdateSpriteAnimations advances time for all playing Aseprite sprite animations.
+// Called from renderer pre-2D pass each frame.
+func UpdateSpriteAnimations() {
+	dt := float32(0.016)
+	if rl.IsWindowReady() {
+		dt = rl.GetFrameTime()
+	}
+	spritesheetsMu.Lock()
+	defer spritesheetsMu.Unlock()
+	for _, ss := range spritesheets {
+		if !ss.playing || ss.aseprite == nil || len(ss.aseprite.Frames) == 0 {
+			continue
+		}
+		frameIdx := ss.currentFrame
+		if frameIdx < 0 || frameIdx >= len(ss.aseprite.Frames) {
+			continue
+		}
+		durMs := ss.aseprite.Frames[frameIdx].DurationMs
+		if durMs <= 0 {
+			durMs = 100
+		}
+		ss.animAccum += dt * 1000 * ss.animSpeed
+		for ss.animAccum >= float32(durMs) {
+			ss.animAccum -= float32(durMs)
+			from, to := ss.animStart, ss.animEnd
+			dir := "forward"
+			if t, ok := ss.aseprite.Tags[ss.currentTag]; ok {
+				dir = t.Direction
+			}
+			if dir == "reverse" {
+				ss.currentFrame--
+				if ss.currentFrame < from {
+					ss.currentFrame = to
+				}
+			} else {
+				ss.currentFrame++
+				if ss.currentFrame > to {
+					ss.currentFrame = from
+				}
+			}
+		}
+	}
 }
 
 func register2DTilemaps(v *vm.VM) {

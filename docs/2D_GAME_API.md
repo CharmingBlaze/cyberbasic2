@@ -1,6 +1,6 @@
 # 2D Game API Reference
 
-Complete reference for the CyberBasic 2D game API: platformers, RPGs, shooters, UI, and multiplayer. All commands use PascalCase and integer IDs where applicable.
+Complete reference for the CyberBASIC2 2D game API: platformers, RPGs, shooters, UI, and multiplayer. All commands use PascalCase and integer IDs where applicable.
 
 **Multiplayer-safe?** Commands marked with ✓ are safe to use in networked games (no server state or deterministic). Commands that modify shared state may need replication.
 
@@ -60,6 +60,7 @@ DrawRectOutline 250, 250, 40, 40
 | `DrawSpriteRotated` | (id, x, y, angle) | Draw with rotation (degrees) |
 | `DrawSpriteScaled` | (id, x, y, sx, sy) | Draw with scale |
 | `DrawSpriteTint` | (id, x, y, r, g, b) | Draw with tint color |
+| `SetSpriteColor` | (id, r, g, b, a) | Set persistent tint for sprite (used by Sprite, DrawSpriteRotated, DrawSpriteScaled) |
 
 **Multiplayer-safe?** ✓ Draw commands are safe. LoadImage/DeleteSprite are typically client-local.
 
@@ -77,27 +78,36 @@ DrawSpriteScaled 1, 200, 200, 2, 2
 
 | Command | Args | Description |
 |---------|------|-------------|
-| `LoadSpritesheet` | (id, path, frameW, frameH) | Load spritesheet with frame dimensions |
+| `LoadSpritesheet` | (id, pngPath, jsonPath) or (id, path, frameW, frameH) | Load Aseprite (PNG+JSON) or grid spritesheet |
+| `PlaySpriteAnimation` | (id, tagName, speed) | Play animation by tag (Aseprite) |
+| `StopSpriteAnimation` | (id) | Stop sprite animation |
 | `SetSpriteFrame` | (id, frame) | Set current frame index |
+| `GetSpriteFrame` | (id) | Current frame index |
 | `NextSpriteFrame` | (id) | Advance to next frame (wraps) |
 | `DrawSpriteFrame` | (id, frame, x, y) | Draw specific frame |
-| `AnimateSprite` | (id, startFrame, endFrame, speed) | Configure animation range and speed |
+| `AnimateSprite` | (id, startFrame, endFrame, speed) | Configure animation range (grid mode) |
+| `GetSliceRect` | (id, sliceName) | Returns "x,y,w,h" for slice at current frame |
+| `GetAnimationLength` | (id, tagName) | Frame count for tag |
 | `DeleteSpritesheet` | (id) | Unload spritesheet |
 | `CloneSpritesheet` | (newID, sourceID) | Duplicate spritesheet (shares texture) |
 | `SpritesheetExists` | (id) | Returns 1 if exists, 0 otherwise |
 
-**Multiplayer-safe?** ✓ Yes (draw-only).
+**Aseprite workflow:** See [ASEPRITE_WORKFLOW.md](ASEPRITE_WORKFLOW.md).
 
-**Example:**
+**Example (Aseprite):**
+```basic
+LoadSpritesheet 1, "character.png", "character.json"
+PlaySpriteAnimation 1, "walk", 1.0
+' In draw loop (SYNC advances animation):
+DrawSpriteFrame 1, GetSpriteFrame 1, 100, 100
+```
+
+**Example (grid):**
 ```basic
 LoadSpritesheet 1, "hero.png", 32, 32
 AnimateSprite 1, 0, 8, 10
-' In draw loop:
 NextSpriteFrame 1
-DrawSpriteFrame 1, 0, 100, 100
-' Or set frame explicitly:
-SetSpriteFrame 1, 3
-DrawSpriteFrame 1, 3, 100, 100
+DrawSpriteFrame 1, GetSpriteFrame 1, 100, 100
 ```
 
 ---
@@ -382,3 +392,10 @@ See `docs/DBP_EXTENDED.md` and the replication module for full setup.
 | Math | AngleBetween2D, Distance2D, Normalize2D, Dot2D |
 | Particles | MakeParticles2D, EmitParticles2D, DrawParticles2D |
 | Tasks | StartTask, WaitSeconds, WaitFrames, Yield |
+
+---
+
+## See also
+
+- [Core Command Reference](CORE_COMMAND_REFERENCE.md) – DBP-style command list
+- [Aseprite Workflow](ASEPRITE_WORKFLOW.md) – Sprite sheet export with tags and slices

@@ -1,6 +1,6 @@
 # 2D Physics Guide (Box2D)
 
-Complete guide to 2D physics in CyberBasic using Box2D: worlds, bodies, shapes, joints, raycast, collision, and integration with the hybrid loop and GAME.* helpers.
+Complete guide to 2D physics in CyberBASIC2 using Box2D: worlds, bodies, shapes, joints, raycast, collision, and integration with the hybrid loop and GAME.* helpers.
 
 ## Table of Contents
 
