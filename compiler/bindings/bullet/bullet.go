@@ -711,6 +711,16 @@ func registerFlat3D(v *vm.VM) {
 		b.mass = toFloat64(args[2])
 		return nil, nil
 	})
+	v.RegisterForeign("GetMass3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return 0.0, nil
+		}
+		b := getBody(getWorld(toString(args[0])), toString(args[1]))
+		if b == nil {
+			return 0.0, nil
+		}
+		return b.mass, nil
+	})
 	v.RegisterForeign("SetLinearFactor3D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 5 {
 			return nil, fmt.Errorf("SetLinearFactor3D requires (worldId, bodyId, fx, fy, fz)")

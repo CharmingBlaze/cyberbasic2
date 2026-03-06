@@ -18,6 +18,8 @@ type Runtime struct {
 	sounds   map[string]*Sound
 	physics  *PhysicsEngine
 	graphics *GraphicsEngine
+	textures map[string]rl.Texture2D // filename -> texture for LOADIMAGE/CREATESPRITE/DRAWSPRITE
+	models3D map[string]rl.Model     // filename -> model for LOADMODEL/DRAWMODEL
 }
 
 // Sprite represents a 2D sprite
@@ -93,11 +95,13 @@ type PhysicsEngine struct {
 // NewRuntime creates a new runtime instance
 func NewRuntime() *Runtime {
 	return &Runtime{
-		vm:      vm.NewVM(),
-		sprites: make(map[string]*Sprite),
-		models:  make(map[string]*Model),
-		cameras: make(map[string]*Camera),
-		sounds:  make(map[string]*Sound),
+		vm:       vm.NewVM(),
+		sprites:  make(map[string]*Sprite),
+		models:   make(map[string]*Model),
+		cameras:  make(map[string]*Camera),
+		sounds:   make(map[string]*Sound),
+		textures:  make(map[string]rl.Texture2D),
+		models3D:  make(map[string]rl.Model),
 		graphics: &GraphicsEngine{
 			screenWidth:  800,
 			screenHeight: 600,
@@ -111,26 +115,30 @@ func NewRuntime() *Runtime {
 	}
 }
 
-// LoadImage loads an image file
+// LoadImage loads an image file as a texture (for use with CreateSprite/DrawSprite)
 func (r *Runtime) LoadImage(filename string) error {
-	fmt.Printf("Loading image: %s\n", filename)
-	// In a real implementation, this would use Raylib to load the image
+	tex := rl.LoadTexture(filename)
+	r.textures[filename] = tex
 	return nil
 }
 
-// CreateSprite creates a new sprite
+// CreateSprite creates a new sprite (image = filename from LoadImage)
 func (r *Runtime) CreateSprite(id, image string, x, y float64) error {
+	tex, ok := r.textures[image]
+	w, h := float64(64), float64(64)
+	if ok && tex.ID != 0 {
+		w, h = float64(tex.Width), float64(tex.Height)
+	}
 	sprite := &Sprite{
 		ID:      id,
 		Image:   image,
 		X:       x,
 		Y:       y,
-		Width:   64,
-		Height:  64,
+		Width:   w,
+		Height:  h,
 		Visible: true,
 	}
 	r.sprites[id] = sprite
-	fmt.Printf("Created sprite '%s' at (%.1f, %.1f)\n", id, x, y)
 	return nil
 }
 
@@ -142,7 +150,6 @@ func (r *Runtime) SetSpritePosition(id string, x, y float64) error {
 	}
 	sprite.X = x
 	sprite.Y = y
-	fmt.Printf("Set sprite '%s' position to (%.1f, %.1f)\n", id, x, y)
 	return nil
 }
 
@@ -155,14 +162,19 @@ func (r *Runtime) DrawSprite(id string) error {
 	if !sprite.Visible {
 		return nil
 	}
-	fmt.Printf("Drawing sprite '%s' at (%.1f, %.1f)\n", id, sprite.X, sprite.Y)
-	// In a real implementation, this would use Raylib to draw the sprite
+	tex, ok := r.textures[sprite.Image]
+	if ok && tex.ID != 0 {
+		rl.DrawTexture(tex, int32(sprite.X), int32(sprite.Y), rl.White)
+	} else {
+		rl.DrawRectangle(int32(sprite.X), int32(sprite.Y), int32(sprite.Width), int32(sprite.Height), rl.White)
+	}
 	return nil
 }
 
 // LoadModel loads a 3D model file and registers it by filename for later DrawModel calls
 func (r *Runtime) LoadModel(filename string) error {
-	fmt.Printf("Loading 3D model: %s\n", filename)
+	model := rl.LoadModel(filename)
+	r.models3D[filename] = model
 	r.models[filename] = &Model{
 		ID:       filename,
 		Mesh:     filename,
@@ -337,8 +349,6 @@ func (r *Runtime) UpdatePhysics(deltaTime float64) error {
 
 // Render renders the current frame
 func (r *Runtime) Render() error {
-	fmt.Printf("Rendering frame (%dx%d)\n", r.graphics.screenWidth, r.graphics.screenHeight)
-
 	// Draw all sprites
 	for _, sprite := range r.sprites {
 		if sprite.Visible {
@@ -346,11 +356,18 @@ func (r *Runtime) Render() error {
 		}
 	}
 
-	// In a real implementation, this would use Raylib to render 3D models
+	// Draw 3D models (requires BeginMode3D/EndMode3D - caller must ensure)
 	for _, model := range r.models {
 		if model.Visible {
-			fmt.Printf("Drawing model '%s' at (%.1f, %.1f, %.1f)\n",
-				model.ID, model.X, model.Y, model.Z)
+			rlModel, has3D := r.models3D[model.Mesh]
+			if has3D && rlModel.MeshCount > 0 {
+				pos := rl.Vector3{X: float32(model.X), Y: float32(model.Y), Z: float32(model.Z)}
+				scale := float32(1)
+				if model.Scale[0] > 0 {
+					scale = float32(model.Scale[0])
+				}
+				rl.DrawModel(rlModel, pos, scale, rl.White)
+			}
 		}
 	}
 
@@ -449,16 +466,10 @@ func (r *Runtime) Sync() error {
 	}
 	rl.BeginDrawing()
 	rl.ClearBackground(rl.NewColor(20, 20, 30, 255))
-	// Draw all sprites as rectangles at their position (or with texture if loaded)
 	for _, sprite := range r.sprites {
-		if !sprite.Visible {
-			continue
+		if sprite.Visible {
+			r.DrawSprite(sprite.ID)
 		}
-		x := int32(sprite.X)
-		y := int32(sprite.Y)
-		w := int32(sprite.Width)
-		h := int32(sprite.Height)
-		rl.DrawRectangle(x, y, w, h, rl.White)
 	}
 	rl.EndDrawing()
 	return nil
@@ -525,5 +536,63 @@ func (r *Runtime) MainLoop() error {
 	}
 
 	fmt.Println("Main loop completed")
+	return nil
+}
+
+// HasImplicitHandlers returns true if the loaded chunk has OnUpdate or OnDraw subs (DBP-style implicit loop).
+func (r *Runtime) HasImplicitHandlers() bool {
+	chunk := r.vm.Chunk()
+	if chunk == nil {
+		return false
+	}
+	_, hasUpdate := chunk.GetFunction("onupdate")
+	_, hasDraw := chunk.GetFunction("ondraw")
+	return hasUpdate || hasDraw
+}
+
+// RunImplicitLoop runs the DBP-style implicit loop: InitWindow, OnStart once, then loop with OnUpdate/OnDraw.
+// Call this when HasImplicitHandlers() is true instead of vm.Run().
+func (r *Runtime) RunImplicitLoop() error {
+	chunk := r.vm.Chunk()
+	if chunk == nil {
+		return fmt.Errorf("no chunk loaded")
+	}
+
+	// Init window and FPS
+	if err := r.InitializeGraphics(1280, 720, "CyberBASIC 2"); err != nil {
+		return err
+	}
+	rl.SetTargetFPS(60)
+
+	// OnStart once
+	if _, ok := chunk.GetFunction("onstart"); ok {
+		if err := r.vm.InvokeSub("OnStart", nil); err != nil {
+			return err
+		}
+	}
+
+	// Main loop
+	for !r.ShouldClose() {
+		dt := float64(rl.GetFrameTime())
+
+		// OnUpdate
+		if _, ok := chunk.GetFunction("onupdate"); ok {
+			if err := r.vm.InvokeSub("OnUpdate", []interface{}{dt}); err != nil {
+				return err
+			}
+		}
+
+		// Draw frame
+		rl.BeginDrawing()
+		rl.ClearBackground(rl.NewColor(0, 0, 0, 255))
+		if _, ok := chunk.GetFunction("ondraw"); ok {
+			if err := r.vm.InvokeSub("OnDraw", nil); err != nil {
+				rl.EndDrawing()
+				return err
+			}
+		}
+		rl.EndDrawing()
+	}
+
 	return nil
 }

@@ -70,6 +70,19 @@ func (c *Compiler) compileStatement(stmt parser.Node, chunk *vm.Chunk) error {
 		}
 		chunk.Write(byte(vm.OpWaitSeconds))
 		return nil
+	case *parser.WaitFramesStatement:
+		if err := c.compileExpression(node.Frames, chunk); err != nil {
+			return err
+		}
+		chunk.Write(byte(vm.OpLoadConst))
+		ci := chunk.WriteConstant(60.0)
+		if err := checkConstIndex(ci, " for WaitFrames divisor"); err != nil {
+			return err
+		}
+		chunk.Write(byte(ci))
+		chunk.Write(byte(vm.OpDiv))
+		chunk.Write(byte(vm.OpWaitSeconds))
+		return nil
 	default:
 		return errWithLine(stmt, fmt.Errorf("unsupported statement type: %T", stmt))
 	}

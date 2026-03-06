@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"cyberbasic/compiler/bindings/raylib"
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // Heightmap is a 2D grid of heights (width × depth).
@@ -43,6 +44,67 @@ func valueNoise2D(x, y float64) float64 {
 	return v00*(1-fx)*(1-fy) + v10*fx*(1-fy) + v01*(1-fx)*fy + v11*fx*fy
 }
 
+// LoadHeightmapFromFile loads grayscale image from path. Returns heightmap id.
+// If file is missing or invalid, returns flat heightmap (all zeros) - never errors.
+func LoadHeightmapFromFile(path string, width, depth int, heightScale float32) (string, error) {
+	if path == "" {
+		return createFlatHeightmap(width, depth)
+	}
+	img := rl.LoadImage(path)
+	if img.Width <= 0 || img.Height <= 0 {
+		return createFlatHeightmap(width, depth)
+	}
+	w, h := int(img.Width), int(img.Height)
+	if width <= 0 {
+		width = w
+	}
+	if depth <= 0 {
+		depth = h
+	}
+	heights := make([]float32, width*depth)
+	for z := 0; z < depth; z++ {
+		for x := 0; x < width; x++ {
+			sx := x * w / width
+			if sx >= w {
+				sx = w - 1
+			}
+			sy := z * h / depth
+			if sy >= h {
+				sy = h - 1
+			}
+			c := rl.GetImageColor(*img, int32(sx), int32(sy))
+			gray := (float32(c.R) + float32(c.G) + float32(c.B)) / (3 * 255)
+			heights[z*width+x] = gray
+		}
+	}
+	rl.UnloadImage(img)
+	hm := &Heightmap{Width: width, Depth: depth, Heights: heights}
+	heightmapMu.Lock()
+	heightmapSeq++
+	id := fmt.Sprintf("heightmap_%d", heightmapSeq)
+	heightmaps[id] = hm
+	heightmapMu.Unlock()
+	return id, nil
+}
+
+// createFlatHeightmap returns a flat heightmap (all zeros).
+func createFlatHeightmap(width, depth int) (string, error) {
+	if width <= 0 {
+		width = 32
+	}
+	if depth <= 0 {
+		depth = 32
+	}
+	heights := make([]float32, width*depth)
+	hm := &Heightmap{Width: width, Depth: depth, Heights: heights}
+	heightmapMu.Lock()
+	heightmapSeq++
+	id := fmt.Sprintf("heightmap_%d", heightmapSeq)
+	heightmaps[id] = hm
+	heightmapMu.Unlock()
+	return id, nil
+}
+
 // LoadHeightmapFromImage fills a new heightmap from raylib image (grayscale 0-1). Returns heightmap id.
 func LoadHeightmapFromImage(imageID string) (string, error) {
 	width, height, heights, ok := raylib.GetImageDataForHeightmap(imageID)
@@ -53,6 +115,52 @@ func LoadHeightmapFromImage(imageID string) (string, error) {
 		return "", fmt.Errorf("image has invalid dimensions")
 	}
 	hm := &Heightmap{Width: width, Depth: height, Heights: heights}
+	heightmapMu.Lock()
+	heightmapSeq++
+	id := fmt.Sprintf("heightmap_%d", heightmapSeq)
+	heightmaps[id] = hm
+	heightmapMu.Unlock()
+	return id, nil
+}
+
+// GenHeightmapNoise creates a procedural heightmap using deterministic value noise with seed.
+func GenHeightmapNoise(width, depth int, seed int64, octaves int, scale float64) (string, error) {
+	if width <= 0 {
+		width = 32
+	}
+	if depth <= 0 {
+		depth = 32
+	}
+	if octaves <= 0 {
+		octaves = 4
+	}
+	if scale <= 0 {
+		scale = 1
+	}
+	heights := make([]float32, width*depth)
+	for z := 0; z < depth; z++ {
+		for x := 0; x < width; x++ {
+			var n float64
+			freq := 1.0
+			amp := 1.0
+			maxAmp := 0.0
+			for o := 0; o < octaves; o++ {
+				n += valueNoise2D((float64(x)+float64(seed))*scale*freq, (float64(z)+float64(seed)*0.5)*scale*freq) * amp
+				maxAmp += amp
+				amp *= 0.5
+				freq *= 2
+			}
+			n /= maxAmp
+			if n < 0 {
+				n = 0
+			}
+			if n > 1 {
+				n = 1
+			}
+			heights[z*width+x] = float32(n)
+		}
+	}
+	hm := &Heightmap{Width: width, Depth: depth, Heights: heights}
 	heightmapMu.Lock()
 	heightmapSeq++
 	id := fmt.Sprintf("heightmap_%d", heightmapSeq)

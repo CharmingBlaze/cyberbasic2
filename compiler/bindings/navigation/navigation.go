@@ -61,9 +61,9 @@ func RegisterNavigation(v *vm.VM) {
 	})
 	v.RegisterForeign("NavMeshAddObstacle", func(args []interface{}) (interface{}, error) { return nil, nil })
 	v.RegisterForeign("NavMeshRemoveObstacle", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("NavMeshFindPath", func(args []interface{}) (interface{}, error) {
+	v.RegisterForeign("NavMeshFindPathRaw", func(args []interface{}) (interface{}, error) {
 		if len(args) < 7 {
-			return nil, fmt.Errorf("NavMeshFindPath requires (meshId, ox, oy, oz, dx, dy, dz)")
+			return nil, fmt.Errorf("NavMeshFindPathRaw requires (meshId, ox, oy, oz, dx, dy, dz)")
 		}
 		return []interface{}{}, nil
 	})

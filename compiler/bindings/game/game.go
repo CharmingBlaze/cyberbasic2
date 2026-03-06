@@ -101,6 +101,7 @@ var (
 	replicateVars   = make(map[string]map[string]bool) // entity -> set of var names
 	replicatePos    = make(map[string]bool)
 	replicateRot    = make(map[string]bool)
+	replicateScale  = make(map[string]bool)
 	replicateMu     sync.Mutex
 
 	// Shader graph (nodes + connections; compile = stub)
@@ -777,7 +778,7 @@ func RegisterGame(v *vm.VM) {
 		}
 		return nil, nil
 	})
-	v.RegisterForeign("SetTile", func(args []interface{}) (interface{}, error) {
+	setTileByMapId := func(args []interface{}) (interface{}, error) {
 		if len(args) < 4 {
 			return nil, fmt.Errorf("SetTile requires (mapId, x, y, tileID)")
 		}
@@ -792,8 +793,8 @@ func RegisterGame(v *vm.VM) {
 		}
 		tilemapMu.Unlock()
 		return nil, nil
-	})
-	v.RegisterForeign("GetTile", func(args []interface{}) (interface{}, error) {
+	}
+	getTileByMapId := func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {
 			return nil, fmt.Errorf("GetTile requires (mapId, x, y)")
 		}
@@ -806,7 +807,11 @@ func RegisterGame(v *vm.VM) {
 			return 0, nil
 		}
 		return tm.Tiles[y][x], nil
-	})
+	}
+	v.RegisterForeign("SetTileByMapId", setTileByMapId)
+	v.RegisterForeign("GetTileByMapId", getTileByMapId)
+	v.RegisterForeign("SetTile", setTileByMapId)
+	v.RegisterForeign("GetTile", getTileByMapId)
 	v.RegisterForeign("TilemapCollision", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {
 			return nil, fmt.Errorf("TilemapCollision requires (mapId, x, y)")
@@ -1437,6 +1442,17 @@ func RegisterGame(v *vm.VM) {
 			replicateMu.Unlock()
 		}
 		return nil, nil
+	})
+	v.RegisterForeign("ReplicateScale", func(args []interface{}) (interface{}, error) {
+		if len(args) >= 1 {
+			replicateMu.Lock()
+			replicateScale[toString(args[0])] = true
+			replicateMu.Unlock()
+		}
+		return nil, nil
+	})
+	v.RegisterForeign("ReplicateValue", func(args []interface{}) (interface{}, error) {
+		return v.CallForeign("ReplicateVariable", args)
 	})
 	v.RegisterForeign("RPC", func(args []interface{}) (interface{}, error) { return nil, nil })
 

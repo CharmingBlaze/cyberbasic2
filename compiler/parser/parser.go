@@ -85,12 +85,14 @@ func (p *Parser) statement() (Node, error) {
 		return p.moduleDecl()
 	case lexer.TokenOn:
 		return p.onEventStatement()
-	case lexer.TokenStartCoroutine:
+	case lexer.TokenStartCoroutine, lexer.TokenStartTask:
 		return p.startCoroutineStatement()
 	case lexer.TokenYield:
 		return p.yieldStatement()
 	case lexer.TokenWaitSeconds:
 		return p.waitSecondsStatement()
+	case lexer.TokenWaitFrames:
+		return p.waitFramesStatement()
 	case lexer.TokenDim:
 		return p.dimStatement()
 	case lexer.TokenConst:
@@ -108,6 +110,9 @@ func (p *Parser) statement() (Node, error) {
 	case lexer.TokenSleep:
 		return p.sleepStatement()
 	case lexer.TokenWait:
+		if p.current+1 < len(p.tokens) && p.tokens[p.current+1].Type == lexer.TokenLeftParen {
+			return p.waitSecondsStatement() // WAIT(expr) = WaitSeconds(expr)
+		}
 		return p.waitStatement()
 	case lexer.TokenSelect:
 		return p.selectCaseStatement()

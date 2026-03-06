@@ -43,6 +43,7 @@ const (
 	NodeStartCoroutineStatement
 	NodeYieldStatement
 	NodeWaitSecondsStatement
+	NodeWaitFramesStatement
 	NodeJSONIndexAccess
 	NodeDictLiteral
 )
@@ -235,6 +236,14 @@ type WaitSecondsStatement struct {
 
 func (w *WaitSecondsStatement) Type() NodeType { return NodeWaitSecondsStatement }
 func (w *WaitSecondsStatement) String() string  { return "WaitSeconds(...)" }
+
+// WaitFramesStatement represents WaitFrames(n) - yields for n frames (~n/60 sec)
+type WaitFramesStatement struct {
+	Frames Node
+}
+
+func (w *WaitFramesStatement) Type() NodeType { return NodeWaitFramesStatement }
+func (w *WaitFramesStatement) String() string  { return "WaitFrames(...)" }
 
 // Assignment represents variable assignment (scalar or array element)
 type Assignment struct {

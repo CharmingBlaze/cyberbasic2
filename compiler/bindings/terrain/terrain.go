@@ -130,6 +130,12 @@ func RegisterTerrain(v *vm.VM) {
 	})
 
 	// --- Phase 3: High-level terrain API ---
+	v.RegisterForeign("MakeTerrainFlat", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("MakeTerrainFlat requires (width, depth)")
+		}
+		return MakeTerrainFlat(v, toFloat32(args[0]), toFloat32(args[1]))
+	})
 	v.RegisterForeign("TerrainCreate", func(args []interface{}) (interface{}, error) {
 		if len(args) < 4 {
 			return nil, fmt.Errorf("TerrainCreate requires (heightmapId, sizeX, sizeZ, heightScale)")
@@ -166,6 +172,60 @@ func RegisterTerrain(v *vm.VM) {
 			return nil, fmt.Errorf("SetTerrainLOD requires (terrainId, lodLevel)")
 		}
 		return nil, SetTerrainLOD(toString(args[0]), int(toInt32(args[1])))
+	})
+	v.RegisterForeign("SetTerrainPosition", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetTerrainPosition requires (terrainId, x, y, z)")
+		}
+		return nil, SetTerrainPosition(toString(args[0]), toFloat32(args[1]), toFloat32(args[2]), toFloat32(args[3]))
+	})
+	v.RegisterForeign("SetTerrainLayer", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("SetTerrainLayer requires (terrainId, layerIndex, textureId)")
+		}
+		return nil, SetTerrainLayer(toString(args[0]), int(toInt32(args[1])), toString(args[2]))
+	})
+	v.RegisterForeign("SetTerrainSplatmap", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetTerrainSplatmap requires (terrainId, path)")
+		}
+		return nil, SetTerrainSplatmap(toString(args[0]), toString(args[1]))
+	})
+	v.RegisterForeign("GenerateTerrainNoise", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("GenerateTerrainNoise requires (terrainId, seed, octaves, scale)")
+		}
+		terrainID := toString(args[0])
+		ts := GetTerrainState(terrainID)
+		if ts == nil {
+			return nil, fmt.Errorf("unknown terrain id: %s", terrainID)
+		}
+		width := int(ts.SizeX)
+		depth := int(ts.SizeZ)
+		if width <= 0 {
+			width = 64
+		}
+		if depth <= 0 {
+			depth = 64
+		}
+		seed := int64(toFloat64(args[1]))
+		octaves := int(toInt32(args[2]))
+		scale := float64(0.01)
+		if len(args) >= 4 {
+			scale = toFloat64(args[3])
+		}
+		hmID, err := GenHeightmapNoise(width, depth, seed, octaves, scale)
+		if err != nil {
+			return nil, err
+		}
+		terrainMu.Lock()
+		ts.HeightmapID = hmID
+		if ts.HeightScale <= 0 {
+			ts.HeightScale = 20
+		}
+		terrainMu.Unlock()
+		_ = TerrainUpdate(v, terrainID)
+		return nil, nil
 	})
 	v.RegisterForeign("TerrainRaise", func(args []interface{}) (interface{}, error) {
 		if len(args) < 5 {

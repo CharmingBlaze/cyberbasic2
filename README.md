@@ -70,6 +70,7 @@ CyberBasic/
 │   ├── runtime/       # Game loop, StepFrame
 │   └── bindings/      # Foreign API (all subsystems above)
 │       ├── raylib/    # Graphics, window, input, audio, fonts, math, 2D layers/camera/backgrounds, 3D, hybrid flush
+│       ├── dbp/       # DBP-style commands (LoadImage, Sprite, LoadObject, PositionObject, etc.)
 │       ├── box2d/     # 2D physics
 │       ├── bullet/    # 3D physics
 │       ├── game/      # Tilemaps, particles, game helpers
@@ -149,6 +150,7 @@ On Windows: `.\cyberbasic.exe examples\first_game.bas`. Helper scripts: `./run_d
 | [Multiplayer](docs/MULTIPLAYER.md) | TCP client/server |
 | [In-process multi-window](docs/MULTI_WINDOW_INPROCESS.md) | Multiple viewports in one process |
 | [API Reference](API_REFERENCE.md) | All bindings |
+| [DBP Parity Checklist](docs/DBP_PARITY.md) | DarkBASIC Pro–style features, implicit loop, examples |
 | [Changelog](CHANGELOG.md) | Version history and release notes |
 
 ---

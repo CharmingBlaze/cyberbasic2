@@ -22,10 +22,17 @@ type WaterState struct {
 	WaveHeight float32
 	WaveFreq   float32
 	Time       float32
+	// UV scroll for animated water
+	UScroll float32
+	VScroll float32
+	// Reflection/refraction (silently disabled if unsupported)
+	ReflectionOn bool
+	RefractionOn bool
 	// Optional texture refs (for future shader use)
 	ReflectionTexture string
 	RefractionTexture string
 	NormalMap         string
+	FoamTexture      string
 	ColorR            float32
 	ColorG            float32
 	ColorB            float32
@@ -38,6 +45,13 @@ type WaterState struct {
 	Density           float32
 	DragLinear        float32
 	DragAngular       float32
+	// Depth-based color blending (deep vs shallow)
+	DepthColorR   float32
+	DepthColorG   float32
+	DepthColorB   float32
+	ShallowColorR float32
+	ShallowColorG float32
+	ShallowColorB float32
 }
 
 var (
@@ -82,6 +96,12 @@ func RegisterWater(v *vm.VM) {
 		}
 		if depth <= 0 {
 			depth = 10
+		}
+		if width > 10000 {
+			width = 10000
+		}
+		if depth > 10000 {
+			depth = 10000
 		}
 		resX, resZ := int32(16), int32(16)
 		if tileSize > 0 {
@@ -385,4 +405,90 @@ func RegisterWater(v *vm.VM) {
 		// Stub: sample water height at body position and apply upward force via physics; full impl would use Bullet body.
 		return nil, nil
 	})
+
+	// SetWaterScroll(waterId, uSpeed, vSpeed): UV scroll for animated water.
+	v.RegisterForeign("SetWaterScroll", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("SetWaterScroll requires (waterId, uSpeed, vSpeed)")
+		}
+		waterMu.Lock()
+		defer waterMu.Unlock()
+		if w, ok := waters[toString(args[0])]; ok {
+			w.UScroll = toFloat32(args[1])
+			w.VScroll = toFloat32(args[2])
+		}
+		return nil, nil
+	})
+	// SetWaterReflection(waterId, onOff): Enable reflection; silently disabled if unsupported.
+	v.RegisterForeign("SetWaterReflection", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetWaterReflection requires (waterId, onOff)")
+		}
+		waterMu.Lock()
+		defer waterMu.Unlock()
+		if w, ok := waters[toString(args[0])]; ok {
+			w.ReflectionOn = toFloat32(args[1]) != 0
+		}
+		return nil, nil
+	})
+	// SetWaterRefraction(waterId, onOff): Enable refraction; silently disabled if unsupported.
+	v.RegisterForeign("SetWaterRefraction", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetWaterRefraction requires (waterId, onOff)")
+		}
+		waterMu.Lock()
+		defer waterMu.Unlock()
+		if w, ok := waters[toString(args[0])]; ok {
+			w.RefractionOn = toFloat32(args[1]) != 0
+		}
+		return nil, nil
+	})
+	// SetWaterDepthColor(waterId, r, g, b): Deep water tint.
+	v.RegisterForeign("SetWaterDepthColor", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetWaterDepthColor requires (waterId, r, g, b)")
+		}
+		waterMu.Lock()
+		defer waterMu.Unlock()
+		if w, ok := waters[toString(args[0])]; ok {
+			w.DepthColorR = toFloat32(args[1])
+			w.DepthColorG = toFloat32(args[2])
+			w.DepthColorB = toFloat32(args[3])
+		}
+		return nil, nil
+	})
+	// SetWaterShallowColor(waterId, r, g, b): Shallow water tint.
+	v.RegisterForeign("SetWaterShallowColor", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetWaterShallowColor requires (waterId, r, g, b)")
+		}
+		waterMu.Lock()
+		defer waterMu.Unlock()
+		if w, ok := waters[toString(args[0])]; ok {
+			w.ShallowColorR = toFloat32(args[1])
+			w.ShallowColorG = toFloat32(args[2])
+			w.ShallowColorB = toFloat32(args[3])
+		}
+		return nil, nil
+	})
+	// SetWaterFoamTexture(waterId, textureId): Foam mask; skip layer if missing.
+	v.RegisterForeign("SetWaterFoamTexture", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetWaterFoamTexture requires (waterId, textureId)")
+		}
+		waterMu.Lock()
+		defer waterMu.Unlock()
+		if w, ok := waters[toString(args[0])]; ok {
+			w.FoamTexture = toString(args[1])
+		}
+		return nil, nil
+	})
+}
+
+// GetWaterByID returns WaterState for internal string id (for DBP id mapping).
+func GetWaterByID(internalID string) *WaterState {
+	waterMu.Lock()
+	w := waters[internalID]
+	waterMu.Unlock()
+	return w
 }

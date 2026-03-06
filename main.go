@@ -11,6 +11,7 @@ import (
 	"cyberbasic/compiler"
 	"cyberbasic/compiler/bindings/box2d"
 	"cyberbasic/compiler/bindings/bullet"
+	"cyberbasic/compiler/bindings/dbp"
 	"cyberbasic/compiler/bindings/ecs"
 	"cyberbasic/compiler/bindings/game"
 	"cyberbasic/compiler/bindings/indoor"
@@ -226,17 +227,21 @@ func main() {
 	rt.GetVM().SetRuntime(rt)
 	// Expose raylib and Bullet as foreign API: RL.*, BULLET.*
 	raylib.RegisterRaylib(rt.GetVM())
+	dbp.RegisterDBP(rt.GetVM())
 	bullet.RegisterBullet(rt.GetVM())
 	box2d.RegisterBox2D(rt.GetVM())
 	ecs.RegisterECS(rt.GetVM())
 	net.RegisterNet(rt.GetVM())
 	scene.RegisterScene(rt.GetVM())
 	game.RegisterGame(rt.GetVM())
+	dbp.Register2D(rt.GetVM()) // 2D API overlay (SetTile/GetTile with int id)
 	sql.RegisterSQL(rt.GetVM())
 	terrain.RegisterTerrain(rt.GetVM())
+	dbp.RegisterTerrain(rt.GetVM()) // DBP terrain (integer IDs) - after terrain package
 	objects.RegisterObjects(rt.GetVM())
 	procedural.RegisterProcedural(rt.GetVM())
 	water.RegisterWater(rt.GetVM())
+	dbp.RegisterWater(rt.GetVM()) // DBP water (integer IDs) - after water package so DrawWater etc. overwrite
 	vegetation.RegisterVegetation(rt.GetVM())
 	world.RegisterWorld(rt.GetVM())
 	navigation.RegisterNavigation(rt.GetVM())
@@ -245,7 +250,7 @@ func main() {
 
 	fmt.Println("Running program...")
 
-	// Run the program
+	// Run the program (top-level code first)
 	err = rt.GetVM().Run()
 	if err != nil {
 		fmt.Printf("Runtime error: %v\n", err)
@@ -256,6 +261,21 @@ func main() {
 		}
 		rt.CloseWindow()
 		os.Exit(2)
+	}
+
+	// DBP-style: if program has OnUpdate/OnDraw, run implicit loop (window + frame loop)
+	if rt.HasImplicitHandlers() {
+		err = rt.RunImplicitLoop()
+		if err != nil {
+			fmt.Printf("Runtime error: %v\n", err)
+			if debug {
+				for i, f := range rt.GetVM().StackTrace() {
+					fmt.Printf("  #%d line %d (ip %d)\n", i, f.Line, f.IP)
+				}
+			}
+			rt.CloseWindow()
+			os.Exit(2)
+		}
 	}
 
 	rt.CloseWindow()

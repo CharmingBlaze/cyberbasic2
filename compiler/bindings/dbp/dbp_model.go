@@ -1,0 +1,243 @@
+// Package dbp: Shared pipeline to convert model.Model -> GPU resources + DBP objects.
+package dbp
+
+import (
+	"fmt"
+	"path/filepath"
+	"sync"
+
+	"cyberbasic/compiler/bindings/model"
+	rl "github.com/gen2brain/raylib-go/raylib"
+)
+
+// BuildResult holds the result of building a model into runtime resources.
+type BuildResult struct {
+	ObjectIDs   []int
+	TextureIDs  []int
+	MaterialIDs []int
+	LightIDs    []int
+}
+
+// nextTexID, nextMatID for level-scoped resources
+var (
+	levelTexCounter    int
+	levelMatCounter    int
+	levelLightCounter  int
+	levelBuildMu       sync.Mutex
+	defaultTexture     rl.Texture2D
+	defaultTextureOnce sync.Once
+	defaultMaterial    rl.Material
+	defaultMaterialOnce sync.Once
+)
+
+// getDefaultTexture returns a 1x1 white pixel texture for fallback when texture load fails.
+func getDefaultTexture() rl.Texture2D {
+	defaultTextureOnce.Do(func() {
+		img := rl.GenImageColor(1, 1, rl.NewColor(255, 255, 255, 255))
+		defaultTexture = rl.LoadTextureFromImage(img)
+		rl.UnloadImage(img)
+	})
+	return defaultTexture
+}
+
+// getDefaultMaterial returns white (0.8,0.8,0.8) material for fallback.
+func getDefaultMaterial() rl.Material {
+	defaultMaterialOnce.Do(func() {
+		defaultMaterial = rl.LoadMaterialDefault()
+		if defaultMaterial.Maps != nil {
+			defaultMaterial.Maps.Texture = getDefaultTexture()
+			defaultMaterial.Maps.Color = rl.NewColor(204, 204, 204, 255) // 0.8 * 255
+		}
+	})
+	return defaultMaterial
+}
+
+// BuildModel converts a model.Model into GPU resources and DBP objects.
+// objectIDBase: for levels use levelID*levelObjectIDBase; for single object use user id.
+// basePath: directory of the source file (for resolving texture paths).
+func BuildModel(m *model.Model, objectIDBase int, basePath string) (*BuildResult, error) {
+	res := &BuildResult{}
+	levelBuildMu.Lock()
+	texBase := levelTexCounter
+	matBase := levelMatCounter
+	lightBase := levelLightCounter
+	levelBuildMu.Unlock()
+
+	// Load textures - use default on failure or empty path
+	for i, tex := range m.Textures {
+		t := getDefaultTexture()
+		if tex.Path != "" {
+			path := tex.Path
+			if !filepath.IsAbs(path) && basePath != "" {
+				path = filepath.Join(basePath, path)
+			}
+			loaded := rl.LoadTexture(path)
+			if loaded.ID != 0 {
+				t = loaded
+			}
+		}
+		tid := objectIDBase + 10000 + i
+		if tid <= 0 {
+			tid = 1
+		}
+		texturesMu.Lock()
+		textures[tid] = t
+		texturesMu.Unlock()
+		res.TextureIDs = append(res.TextureIDs, tid)
+	}
+
+	// Create materials - ensure at least one default
+	materialsList := m.Materials
+	if len(materialsList) == 0 {
+		materialsList = []model.Material{{
+			BaseColorR: 0.8, BaseColorG: 0.8, BaseColorB: 0.8, BaseColorA: 1,
+			Metallic: 0, Roughness: 1, BaseColorTextureIndex: -1,
+		}}
+	}
+	for range materialsList {
+		mat := rl.LoadMaterialDefault()
+		mid := objectIDBase + 20000 + len(res.MaterialIDs)
+		if mid <= 0 {
+			mid = 1
+		}
+		materialsMu.Lock()
+		materials[mid] = mat
+		materialsMu.Unlock()
+		res.MaterialIDs = append(res.MaterialIDs, mid)
+	}
+
+	// Apply textures to materials - use default texture when index invalid
+	for i, mat := range materialsList {
+		if i >= len(res.MaterialIDs) {
+			break
+		}
+		materialsMu.Lock()
+		m := materials[res.MaterialIDs[i]]
+		materialsMu.Unlock()
+		if m.Maps != nil {
+			t := getDefaultTexture()
+			if mat.BaseColorTextureIndex >= 0 && mat.BaseColorTextureIndex < len(res.TextureIDs) {
+				texturesMu.Lock()
+				t = textures[res.TextureIDs[mat.BaseColorTextureIndex]]
+				texturesMu.Unlock()
+			}
+			m.Maps.Texture = t
+			m.Maps.Color = rl.NewColor(
+				uint8(mat.BaseColorR*255), uint8(mat.BaseColorG*255),
+				uint8(mat.BaseColorB*255), uint8(mat.BaseColorA*255),
+			)
+			materialsMu.Lock()
+			materials[res.MaterialIDs[i]] = m
+			materialsMu.Unlock()
+		}
+	}
+
+	// Build meshes and create objects for each mesh node - skip empty meshes
+	meshModels := make([]rl.Model, len(m.Meshes))
+	for i := range m.Meshes {
+		rlMesh, indicesKeep, err := meshToRaylib(&m.Meshes[i])
+		if err != nil {
+			continue // skip empty meshes, do not fail
+		}
+		rl.UploadMesh(&rlMesh, false)
+		mod := rl.LoadModelFromMesh(rlMesh)
+		meshModels[i] = mod
+		_ = indicesKeep // keep alive until UploadMesh done
+	}
+
+	// Create DBP objects for nodes that have meshes
+	for i, node := range m.Nodes {
+		if node.MeshIndex < 0 || node.MeshIndex >= len(meshModels) {
+			continue
+		}
+		objID := objectIDBase + i
+		obj := newDbpObject(meshModels[node.MeshIndex])
+		obj.x = node.Transform.X
+		obj.y = node.Transform.Y
+		obj.z = node.Transform.Z
+		obj.pitch = node.Transform.Pitch
+		obj.yaw = node.Transform.Yaw
+		obj.roll = node.Transform.Roll
+		obj.scaleX = node.Transform.ScaleX
+		obj.scaleY = node.Transform.ScaleY
+		obj.scaleZ = node.Transform.ScaleZ
+		matIdx := m.Meshes[node.MeshIndex].MaterialIndex
+		if matIdx < 0 || matIdx >= len(res.MaterialIDs) {
+			matIdx = 0
+		}
+		if matIdx < len(res.MaterialIDs) {
+			matID := res.MaterialIDs[matIdx]
+			materialsMu.Lock()
+			mat, ok := materials[matID]
+			materialsMu.Unlock()
+			if ok && mat.Maps != nil {
+				obj.model.Materials = &mat
+			} else {
+				_ = getDefaultMaterial() // ensure init
+				obj.model.Materials = &defaultMaterial
+			}
+		}
+		objectsMu.Lock()
+		objects[objID] = obj
+		objectsMu.Unlock()
+		res.ObjectIDs = append(res.ObjectIDs, objID)
+	}
+
+	// Create lights
+	for i, light := range m.Lights {
+		lightsMu.Lock()
+		lid := objectIDBase + 30000 + lightBase + i
+		if lid <= 0 {
+			lid = 1
+		}
+		lights[lid] = &dbpLight{
+			lightType: light.Type,
+			x: light.X, y: light.Y, z: light.Z,
+			r: light.R, g: light.G, b: light.B,
+			intensity: light.Intensity,
+			range_:    light.Range,
+		}
+		lightsMu.Unlock()
+		res.LightIDs = append(res.LightIDs, lid)
+	}
+
+	_ = texBase
+	_ = matBase
+	return res, nil
+}
+
+func meshToRaylib(m *model.Mesh) (rl.Mesh, []uint16, error) {
+	vCount := len(m.Vertices) / 3
+	if vCount == 0 {
+		return rl.Mesh{}, nil, fmt.Errorf("mesh has no vertices")
+	}
+	if len(m.Normals) < vCount*3 {
+		model.ComputeFlatNormals(m)
+	}
+	normals := m.Normals
+	texcoords := m.Texcoords
+	if len(texcoords) < vCount*2 {
+		texcoords = make([]float32, vCount*2)
+	}
+	triCount := vCount / 3
+	var indicesKeep []uint16
+	mesh := rl.Mesh{
+		VertexCount:   int32(vCount),
+		TriangleCount: int32(triCount),
+		Vertices:      &m.Vertices[0],
+		Normals:       &normals[0],
+		Texcoords:     &texcoords[0],
+	}
+	if len(m.Indices) > 0 {
+		triCount = len(m.Indices) / 3
+		mesh.TriangleCount = int32(triCount)
+		if len(m.Indices) <= 65535 {
+			indicesKeep = make([]uint16, len(m.Indices))
+			for i, idx := range m.Indices {
+				indicesKeep[i] = uint16(idx)
+			}
+			mesh.Indices = &indicesKeep[0]
+		}
+	}
+	return mesh, indicesKeep, nil
+}

@@ -973,6 +973,33 @@ func RegisterNet(v *vm.VM) {
 		}
 		return 0, nil
 	})
+	v.RegisterForeign("NetDisconnect", func(args []interface{}) (interface{}, error) {
+		return v.CallForeign("Disconnect", args)
+	})
+	v.RegisterForeign("NetIsServer", func(args []interface{}) (interface{}, error) {
+		netMu.Lock()
+		n := len(servers)
+		netMu.Unlock()
+		if n > 0 {
+			return 1, nil
+		}
+		return 0, nil
+	})
+	v.RegisterForeign("NetPlayerID", func(args []interface{}) (interface{}, error) {
+		netMu.Lock()
+		for cid := range conns {
+			netMu.Unlock()
+			return cid, nil
+		}
+		netMu.Unlock()
+		return "", nil
+	})
+	v.RegisterForeign("NetPing", func(args []interface{}) (interface{}, error) {
+		return v.CallForeign("GetPing", args)
+	})
+	v.RegisterForeign("NetLatency", func(args []interface{}) (interface{}, error) {
+		return v.CallForeign("GetPing", args)
+	})
 	v.RegisterForeign("GetConnectionCount", func(args []interface{}) (interface{}, error) {
 		netMu.Lock()
 		n := len(conns)

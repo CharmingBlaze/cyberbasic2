@@ -233,6 +233,21 @@ StartCoroutine Co()
 	}
 }
 
+func TestCompileStartTaskAndWait(t *testing.T) {
+	src := `Sub Co()
+  Wait(0.5)
+End Sub
+StartTask Co()
+`
+	chunk := mustCompile(t, src)
+	if !chunkContainsOp(chunk, vm.OpStartCoroutine) {
+		t.Error("expected StartTask to compile to OpStartCoroutine")
+	}
+	if !chunkContainsOp(chunk, vm.OpWaitSeconds) {
+		t.Error("expected WAIT(expr) to compile to OpWaitSeconds")
+	}
+}
+
 // chunkHasConstant returns true if chunk.Constants contains the given string (e.g. "begindrawing").
 func chunkHasConstant(chunk *vm.Chunk, name string) bool {
 	for _, c := range chunk.Constants {

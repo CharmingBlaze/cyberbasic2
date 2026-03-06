@@ -1,6 +1,6 @@
 module cyberbasic
 
-go 1.22.0
+go 1.24
 
 toolchain go1.24.2
 
@@ -15,10 +15,13 @@ require (
 	github.com/ByteArena/box2d v1.0.2 // indirect
 	github.com/dustin/go-humanize v1.0.1 // indirect
 	github.com/ebitengine/purego v0.8.1 // indirect
+	github.com/flywave/go-obj v0.0.0-20250815235847-2e1d7495ae52 // indirect
+	github.com/flywave/go3d v0.0.0-20220209071216-2c50e8b3e7ff // indirect
 	github.com/google/uuid v1.3.0 // indirect
 	github.com/hashicorp/golang-lru/v2 v2.0.7 // indirect
 	github.com/mattn/go-isatty v0.0.16 // indirect
 	github.com/ncruces/go-strftime v0.1.9 // indirect
+	github.com/qmuntal/gltf v0.28.0 // indirect
 	github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec // indirect
 	golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f // indirect
 	golang.org/x/sys v0.27.0 // indirect

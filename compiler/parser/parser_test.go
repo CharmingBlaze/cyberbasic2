@@ -313,6 +313,37 @@ StartCoroutine Worker()
 	}
 }
 
+func TestParseStartTaskAndWait(t *testing.T) {
+	// StartTask and WAIT(expr) are DBP aliases for StartCoroutine and WaitSeconds
+	src := `Sub Worker()
+  Wait(0.5)
+End Sub
+StartTask Worker()
+`
+	prog := mustParse(t, src)
+	if len(prog.Statements) != 2 {
+		t.Fatalf("expected 2 statements, got %d", len(prog.Statements))
+	}
+	sub, ok := prog.Statements[0].(*SubDecl)
+	if !ok {
+		t.Fatalf("expected SubDecl, got %T", prog.Statements[0])
+	}
+	sc, ok := prog.Statements[1].(*StartCoroutineStatement)
+	if !ok {
+		t.Fatalf("expected StartCoroutineStatement, got %T", prog.Statements[1])
+	}
+	if strings.ToLower(sc.SubName) != "worker" {
+		t.Errorf("StartTask sub name: got %q", sc.SubName)
+	}
+	ws, ok := sub.Body.Statements[0].(*WaitSecondsStatement)
+	if !ok {
+		t.Fatalf("expected WaitSecondsStatement from WAIT(expr), got %T", sub.Body.Statements[0])
+	}
+	if ws.Seconds == nil {
+		t.Error("WAIT(expr) should set Seconds")
+	}
+}
+
 func TestParseJSONIndexSugar(t *testing.T) {
 	src := `VAR x = cfg["key"]
 VAR y = cfg["a"]["b"]

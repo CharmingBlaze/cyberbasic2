@@ -240,10 +240,14 @@ func (t TokenType) String() string {
 		return "TokenKeyPressed"
 	case TokenStartCoroutine:
 		return "TokenStartCoroutine"
+	case TokenStartTask:
+		return "TokenStartTask"
 	case TokenYield:
 		return "TokenYield"
 	case TokenWaitSeconds:
 		return "TokenWaitSeconds"
+	case TokenWaitFrames:
+		return "TokenWaitFrames"
 	case TokenEqual:
 		return "TokenEqual"
 	case TokenNotEqual:
@@ -446,8 +450,10 @@ const (
 	TokenKeyDown  // KeyDown
 	TokenKeyPressed
 	TokenStartCoroutine
+	TokenStartTask // DBP alias for StartCoroutine
 	TokenYield
 	TokenWaitSeconds
+	TokenWaitFrames // DBP: wait N frames (compiles to WaitSeconds(n/60))
 
 	// Operators
 	TokenEqual
@@ -580,8 +586,10 @@ var KeywordMap = map[string]TokenType{
 	"KEYDOWN":                 TokenKeyDown,
 	"KEYPRESSED":              TokenKeyPressed,
 	"STARTCOROUTINE":           TokenStartCoroutine,
+	"STARTTASK":                TokenStartTask,
 	"YIELD":                    TokenYield,
 	"WAITSECONDS":              TokenWaitSeconds,
+	"WAITFRAMES":               TokenWaitFrames,
 }
 
 // OperatorMap maps operator strings to token types

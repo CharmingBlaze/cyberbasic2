@@ -1,0 +1,363 @@
+# DBP Extended Commands Reference
+
+This document lists all DarkBASIC Pro-style high-level commands in CyberBASIC2, organized by module.
+
+## Package Structure
+
+The DBP bindings are split into modular files under `compiler/bindings/dbp/`:
+
+| File | Purpose |
+|------|---------|
+| `dbp.go` | Core: 2D/3D graphics, objects, scene, input, time, math, FPS camera |
+| `dbp_textures.go` | Texture registry (id-based LoadTexture, DeleteTexture, filter, wrap) |
+| `dbp_materials.go` | Material registry (MakeMaterial, SetMaterialColor, ApplyMaterial) |
+| `dbp_camera.go` | Camera extras (CameraFollow, CameraOrbit, CameraShake, CameraSmooth) |
+| `dbp_world.go` | World (SetSkybox, SetAmbientLight, SetFog, clouds, sun, time, weather) |
+| `dbp_water.go` | Water (MakeWater, SetWaterTexture, PositionWater, scroll, waves, DrawWater) |
+| `dbp_terrain.go` | Terrain (MakeTerrain, LoadHeightmap, SetTerrainLayer, SetTerrainSplatmap, DrawTerrain) |
+| `dbp_groups.go` | Object groups (MakeGroup, AddToGroup, PositionGroup, DrawGroup) |
+| `dbp_players.go` | Player state (MakePlayer, SetPlayerPosition, MovePlayer) |
+| `dbp_audio.go` | Music (LoadMusic, PlayMusic, StopMusic, SetMusicVolume, SetMusicLoop) |
+| `dbp_lighting.go` | Light registry (MakeLight, PositionLight, SetLightColor, etc.) |
+| `dbp_physics.go` | Physics wrappers (PhysicsOn/Off, MakeRigidBody, SetGravity, etc.) |
+| `dbp_collision.go` | Raycast, Spherecast, ObjectCollides, PointInObject |
+| `dbp_particles.go` | MakeParticles, SetParticleColor/Size/Speed, EmitParticlesAt |
+| `dbp_net.go` | Networking (wrappers over net package) |
+| `dbp_file.go` | SaveString, LoadString, SaveValue, LoadValue |
+| `dbp_runtime.go` | StopTask, PauseTask, ResumeTask, FixedUpdate, OnFixedUpdate |
+| `dbp_replication.go` | Replication (from game package) |
+| `dbp_2d.go` | 2D Game API: drawing, sprites, spritesheets, tilemaps, camera, collision, physics, objects, particles |
+| `dbp_3d.go` | 3D Game API: window, camera, objects, mesh, animation, terrain, math, replication |
+| `dbp_mesh.go` | LoadMesh, GetModelBounds, GetMeshVertexCount, GetMeshTriangleCount |
+| `dbp_animation.go` | LoadAnimation, PlayAnimation, SetAnimationFrame, GetAnimationFrame, GetAnimationLength, GetAnimationName |
+| `dbp_level.go` | LoadLevel, DrawLevel, UnloadLevel, LoadLevelCollision, GetLevelColliderCount, GetLevelCollider, GetLevelObjectCount, GetLevelObject |
+| `dbp_prefab.go` | LoadPrefab, SpawnPrefab |
+| `dbp_ik.go` | IKEnable, IKSolveTwoBone |
+| `dbp_instancing.go` | MakeInstance, PositionInstance, DrawInstances |
+| `dbp_nav.go` | NavMeshLoad, NavMeshFindPath, NavMeshDraw |
+
+## Core Commands (dbp.go)
+
+### 2D Graphics
+- `LoadImage(path, id)` - Load texture, store at integer id
+- `Sprite(id, x, y)` - Draw texture at position
+- `Cls()` / `CLS` - Clear screen
+- `Ink(r, g, b)` - Set current draw color
+
+### 3D Objects
+- `LoadObject(path, id)` / `LoadObjectId(id, path)` - Load model
+- `LoadCube(id, size)` / `MakeCube(id, size)` - Procedural cube
+- `MakeSphere(id, radius)` - Procedural sphere
+- `MakePlane(id, width, height)` - Procedural plane
+- `PositionObject(id, x, y, z)` - Set position
+- `RotateObject(id, pitch, yaw, roll)` - Set rotation
+- `YRotateObject(id, angle)` - Add to yaw
+- `ScaleObject(id, sx, sy, sz)` - Set scale
+- `MoveObject(id, x, y, z)` - Add to position
+- `TurnObject(id, pitch, yaw, roll)` - Add to rotation
+- `DrawObject(id)` - Draw object
+- `HideObject(id)` / `ShowObject(id)` - Visibility
+- `DeleteObject(id)` - Remove and unload
+
+### Object Extras
+- `CloneObject(newID, sourceID)` - Clone object
+- `FixObject(id)` / `UnfixObject(id)` - Fixed/kinematic flag
+- `SetObjectColor(id, r, g, b)` - Tint color
+- `SetObjectAlpha(id, value)` - Alpha
+- `SetObjectTexture(id, textureID)` - Apply texture
+- `SetObjectShader(id, shaderID)` - Store shader for object (custom draw)
+- `SetObjectWireframe(id, onOff)` - Wireframe mode
+- `SetObjectCollision(id, onOff)` - Collision flag
+
+### Scene
+- `Start3D` / `End3D` - BeginMode3D / EndMode3D
+- `DrawGrid(size, spacing)` - Draw grid
+- `Clear(r, g, b)` - ClearBackground
+- `BackgroundColor(r, g, b)` - Alias for Clear
+
+### Input
+- `KeyDown(key)` / `KeyHit(key)` / `KeyUp(key)`
+- `MouseX` / `MouseY` / `MouseMoveX` / `MouseMoveY`
+- `MouseButtonDown(btn)` / `MouseButtonHit(btn)` / `MouseButtonUp(btn)`
+- `HideMouse` / `ShowMouse` / `LockMouse` / `UnlockMouse`
+
+### Time & Math
+- `DeltaTime` - GetFrameTime
+- `FPS` - GetFPS
+- `Clamp(value, min, max)` / `Lerp(a, b, t)` / `RandomRange(min, max)`
+
+### Game Loop
+- `StartDraw` / `EndDraw` - BeginDrawing / EndDrawing
+- `Sync` / `SYNC` - End frame
+- `EscapeKey` - IsKeyDown(KEY_ESCAPE)
+
+### FPS Camera
+- `FpsCameraOn` / `FpsCameraOff`
+- `FpsCameraPosition(x, y, z)`
+- `FpsMoveSpeed(value)` / `FpsLookSpeed(value)`
+- `FpsUpdate` - Update camera from mouse/WASD
+
+### Audio (Sounds)
+- `LoadSound(id, path)` / `PlaySound(id)` / `StopSound(id)` / `SetSoundVolume(id, value)`
+
+## Textures (dbp_textures.go)
+- `LoadTexture(id, path)` - Load texture at id
+- `DeleteTexture(id)` - Unload and remove
+- `SetTextureFilter(id, mode)` / `SetTextureWrap(id, mode)`
+
+## Materials (dbp_materials.go)
+- `MakeMaterial(id)` - Create material
+- `SetMaterialColor(id, r, g, b)` / `SetMaterialTexture(id, textureID)`
+- `ApplyMaterial(id, objectID)` - Apply to object
+
+## Camera Extras (dbp_camera.go)
+- `CameraFollow(objectID, distance)` - Follow object
+- `CameraOrbit(x, y, z, angle, pitch, distance)` - Orbit around point
+- `CameraShake(amount, duration)` - Screen shake
+- `CameraSmooth(value)` - Lerp factor
+- `CameraUpdate` - Apply all camera extras (call each frame)
+
+## World (dbp_world.go)
+- `SetSkybox(path)` - Load skybox (fallback: solid color if missing)
+- `SetAmbientLight(r, g, b)` - Ambient color
+- `SetFog(onOff)` / `SetFogOff` / `SetFogColor(r, g, b)` / `SetFogRange(near, far)`
+- **Clouds:** `SetCloudsOn` / `SetCloudsOff` / `SetCloudTexture(path)` / `SetCloudSpeed(value)` / `SetCloudDensity(value)` / `SetCloudHeight(value)` / `SetCloudColor(r, g, b)`
+- **Sun:** `SetSunDirection(x, y, z)` / `SetSunColor(r, g, b)` / `SetSunIntensity(value)`
+- **Time:** `SetWorldTime(hours)` / `GetWorldTime()` / `SetWorldTimeScale(value)` / `SetWeatherPreset(name)`
+
+## Water (dbp_water.go)
+- `MakeWater(id, width, depth)` - Create water plane
+- `SetWaterTexture(id, path)` / `PositionWater(id, x, y, z)` / `SetWaterLevel(id, height)` / `SetWaterColor(id, r, g, b)`
+- `SetWaterScroll(id, uSpeed, vSpeed)` - UV scroll
+- `SetWaterWaveStrength(id, value)` / `SetWaterWaveSpeed(id, value)`
+- `SetWaterReflection(id, onOff)` / `SetWaterRefraction(id, onOff)`
+- `SetWaterNormalmap(id, path)` / `SetWaterFoamTexture(id, path)` / `SetWaterDepthColor(id, r, g, b)` / `SetWaterShallowColor(id, r, g, b)`
+- `DrawWater(id)` - Draw at stored position
+
+## Terrain (dbp_terrain.go)
+- `MakeTerrain(id, width, depth)` - Create flat terrain
+- `LoadHeightmap(id, path, width, depth, heightScale)` - From file (fallback: flat if missing)
+- `SetTerrainTexture(id, path)` / `PositionTerrain(id, x, y, z)`
+- `SetTerrainLayer(id, layerIndex, path)` / `SetTerrainSplatmap(id, path)`
+- `GenerateTerrainNoise(id, seed, octaves, scale)` - Procedural (deterministic)
+- `DrawTerrain(id)` - Draw at stored position
+
+See [docs/WORLD_WATER_TERRAIN.md](WORLD_WATER_TERRAIN.md) for full reference and safety rules.
+
+## Groups (dbp_groups.go)
+- `MakeGroup(id)` / `AddToGroup(groupID, objectID)` / `RemoveFromGroup(groupID, objectID)`
+- `PositionGroup(groupID, x, y, z)` / `RotateGroup(groupID, pitch, yaw, roll)`
+- `DrawGroup(groupID)` / `SyncGroup(groupID)`
+
+## Players (dbp_players.go)
+- `MakePlayer(id)` / `SetPlayerPosition(id, x, y, z)` / `SetPlayerAngle(id, pitch, yaw, roll)`
+- `MovePlayer(id, x, y, z)` / `TurnPlayer(id, pitch, yaw, roll)` / `SyncPlayer(id)`
+
+## Audio Expanded (dbp_audio.go)
+- `LoadMusic(id, path)` / `PlayMusic(id)` / `StopMusic(id)`
+- `SetMusicVolume(id, value)` / `SetMusicLoop(id, onOff)`
+
+## Physics (dbp_physics.go)
+- **3D (Bullet):** `PhysicsOn` / `PhysicsOff` - Enable/disable default world
+- `SetGravity(x, y, z)` - Set 3D gravity
+- `PhysicsStep(dt)` - Step all 3D worlds
+- `MakeRigidBody(bodyId$, x, y, z, mass)` - Create sphere rigid body
+- `MakeStaticBody(bodyId$, x, y, z, sizeX, sizeY, sizeZ)` - Create static box
+- `GetVelocityX/Y/Z(bodyId$)` - Get velocity (use bullet's ApplyForce/ApplyImpulse)
+- `GetPositionX/Y/Z(bodyId$)` - Get position
+- **2D (Box2D):** `PhysicsOn2D(gx?, gy?)` / `PhysicsOff2D`
+- `SetGravity2D(x, y)` / `PhysicsStep2D(dt)`
+- `MakeRigidBody2D(bodyId$, x, y, w, h, density)` / `MakeStaticBody2D(bodyId$, x, y, w, h)`
+- `GetVelocityX2D/Y2D(bodyId$)` - Use ApplyForce2D/ApplyImpulse2D with world "default"
+
+## Collision (dbp_collision.go)
+- `Raycast(ox, oy, oz, dx, dy, dz [, maxDist])` - 3D raycast; use RayHitX/Y/Z, RayHitBody for results
+- `Raycast2D(ox, oy, dx, dy)` - 2D raycast; use RayHitX2D, RayHitY2D, RayHitBody2D
+- `Spherecast(ox, oy, oz, dx, dy, dz, radius)` - Thick ray (uses raycast internally)
+- `ObjectCollides(idA, idB)` - DBP objects AABB overlap (collision flag must be set)
+- `PointInObject(objectId, x, y, z)` - Point inside object AABB
+- `BodyCollides(bodyIdA$, bodyIdB$)` - Physics body collision (bullet)
+
+## Particles (dbp_particles.go)
+- `MakeParticles(id)` - Create particle system (integer id)
+- `SetParticleColor(id, r, g, b, a)` / `SetParticleSize(id, size)` / `SetParticleSpeed(id, vx, vy, vz)`
+- `SetParticleLifetime(id, seconds)` - Default lifetime
+- `EmitParticlesAt(id, x, y, z [, count])` - Emit at position (count default 10)
+- `DrawParticles(id)` - Update and draw (call in 3D mode)
+- `DeleteParticles(id)` - Remove system
+
+## Networking (net package + dbp_net.go)
+- `NetConnect(ip$, port)` - Connect, returns connectionId$
+- `NetSend(connectionId$, data$)` / `NetReceive(connectionId$)` - Send/receive text
+- `NetDisconnect(connectionId$)` - Close connection
+- `NetIsServer()` - 1 if hosting, 0 otherwise
+- `NetPlayerID()` - First connection id (or "")
+- `NetPing(connectionId$)` / `NetLatency(connectionId$)` - RTT in ms
+- `Host(port)` / `Accept(serverId$)` - Server API
+
+## File I/O (dbp_file.go)
+- `SaveString(path, text)` - Write string to file
+- `LoadString(path)` - Read file as string
+- `SaveValue(path, value)` - Save number or string
+- `LoadValue(path)` - Load (returns number if parseable, else string)
+
+## Runtime (dbp_runtime.go + language)
+- `WaitFrames(n)` - Language construct: yield for n frames (~n/60 sec) in coroutines
+- `StopTask(name)` / `PauseTask(name)` / `ResumeTask(name)` - Stubs (need VM fiber name tracking)
+
+## Replication (game package)
+- `ReplicatePosition(entityId$)` / `ReplicateRotation(entityId$)` / `ReplicateScale(entityId$)`
+- `ReplicateValue(entityId$, varName$)` - Alias for ReplicateVariable
+
+## Lighting (dbp_lighting.go)
+- `MakeLight(id, type)` / `PositionLight(id, x, y, z)` / `RotateLight(id, pitch, yaw, roll)`
+- `SetLightColor(id, r, g, b)` / `SetLightIntensity(id, value)` / `SetLightRange(id, value)`
+- `DeleteLight(id)` / `SyncLight(id)`
+
+Note: Raylib has no built-in dynamic lights. The light registry stores state; visual effect requires a custom shader.
+
+## 2D Game API (dbp_2d.go)
+
+**Full reference:** See [docs/2D_GAME_API.md](2D_GAME_API.md) for the complete 2D API with examples.
+
+### Drawing
+- `DrawPixel(x, y, r, g, b)` / `DrawRectOutline(x, y, w, h, r, g, b)` / `DrawCircleOutline(x, y, radius, r, g, b)`
+- `DrawTriangle(x1,y1, x2,y2, x3,y3, r,g,b)`
+
+### Sprites
+- `DeleteSprite(id)` / `DrawSpriteRotated(id, x, y, angle)` / `DrawSpriteScaled(id, x, y, sx, sy)` / `DrawSpriteTint(id, x, y, r, g, b)`
+
+### Spritesheets
+- `LoadSpritesheet(id, path, frameW, frameH)` / `SetSpriteFrame(id, frame)` / `NextSpriteFrame(id)`
+- `DrawSpriteFrame(id, frame, x, y)` / `AnimateSprite(id, startFrame, endFrame, speed)`
+
+### Tilemaps
+- `LoadTilemap(id, path)` / `DrawTilemap(id)` / `SetTile(id, x, y, tileIndex)` / `GetTile(id, x, y)`
+
+### 2D Camera
+- `Camera2DOn` / `Camera2DOff` / `Camera2DPosition(x, y)` / `Camera2DZoom(value)` / `Camera2DRotation(angle)` / `Camera2DFollow(objectId)`
+
+### 2D Collision
+- `RectCollides(x1,y1,w1,h1, x2,y2,w2,h2)` / `PointInRect(x,y, rx,ry,rw,rh)` / `CircleCollides(...)` / `PointInCircle(...)`
+
+### 2D Physics
+- `Physics2DOn` / `Physics2DOff` / `MakeBody2D(id, mass)` / `MakeStatic2D(id)`
+- `SetBody2DPosition(id, x, y)` / `SetBody2DVelocity(id, vx, vy)` / `ApplyForce2D(id, fx, fy)` / `ApplyImpulse2D(id, ix, iy)`
+- `GetBody2DX(id)` / `GetBody2DY(id)` / `GetBody2DVX(id)` / `GetBody2DVY(id)`
+
+### 2D Objects (SpriteObject2D)
+- `MakeSpriteObject(id, spriteId)` / `PositionObject2D(id, x, y)` / `MoveObject2D(id, dx, dy)` / `RotateObject2D(id, angle)` / `ScaleObject2D(id, sx, sy)`
+- `DrawObject2D(id)` / `SyncObject2D(id)`
+
+### UI
+- `UITextbox(id, x, y, w, h)` - Editable text box; returns current text
+
+### 2D Math
+- `AngleBetween2D(x1,y1, x2,y2)` / `Distance2D(x1,y1, x2,y2)` / `Normalize2D(x, y)` / `Dot2D(x1,y1, x2,y2)`
+
+### 2D Particles
+- `MakeParticles2D(id, maxCount)` / `SetParticles2DColor(id, r, g, b)` / `SetParticles2DSize(id, size)` / `SetParticles2DSpeed(id, speed)`
+- `EmitParticles2D(id, count [, x, y])` / `DrawParticles2D(id)`
+
+## 3D Game API (dbp_3d.go)
+
+**Full reference:** See [docs/3D_GAME_API.md](3D_GAME_API.md) for the complete 3D API with examples.
+
+### Window
+- `Window(width, height, title)` / `CloseWindow` / `SetTargetFPS(value)`
+
+### Camera Queries
+- `GetCameraX` / `GetCameraY` / `GetCameraZ` / `GetCameraPitch` / `GetCameraYaw`
+- `PointCameraAt(x, y, z)` / `SetCameraFOV(value)` / `SetCameraUp(x, y, z)`
+
+### 3D Object Creation
+- `MakeCylinder(id, radius, height)` / `MakeGrid(id, size, spacing)`
+- `LoadObject(id, path)` - DBP arg order (id first)
+
+### 3D Object Queries
+- `GetObjectX(id)` / `GetObjectY(id)` / `GetObjectZ(id)`
+- `GetObjectPitch(id)` / `GetObjectYaw(id)` / `GetObjectRoll(id)`
+- `GetObjectScaleX(id)` / `GetObjectScaleY(id)` / `GetObjectScaleZ(id)`
+
+### Parenting & Tags
+- `ParentObject(childID, parentID)` / `UnparentObject(id)`
+- `SetObjectTag(id, tag)` / `GetObjectTag(id)`
+
+### Replication
+- `SyncObject(id)` / `UnsyncObject(id)` / `SetObjectOwner(id, playerID)` / `GetObjectOwner(id)`
+
+### 3D Physics (Collision Shapes, Rigid Body)
+- `MakeBoxCollider(id, sx, sy, sz)` / `MakeSphereCollider(id, radius)` / `MakeCapsuleCollider(id, radius, height)`
+- `MakeRigidBodyId(id, x, y, z, mass)` - Create rigid body with int ID
+- `SetRigidBodyPosition(id, x, y, z)` / `SetRigidBodyVelocity(id, vx, vy, vz)`
+- `GetRigidBodyX/Y/Z(id)` / `GetRigidBodyMass(id)` / `GetRigidBodySpeed(id)` / `GetRigidBodyAngularVelocity(id)`
+
+### Level Loading (dbp_level.go)
+- `LoadLevel(id, path)` / `DrawLevel(id)` / `UnloadLevel(id)`
+- `LoadLevelCollision(id)` - Create physics colliders from level; returns count
+- `GetLevelColliderCount(id)` / `GetLevelCollider(id, index)` - Collider queries
+- `GetLevelObjectCount(id)` / `GetLevelObject(id, index)` - Object queries
+
+### Prefab (dbp_prefab.go)
+- `LoadPrefab(id, path)` - Load prefab template
+- `SpawnPrefab(id, x, y, z)` - Instantiate prefab at position; returns object ID
+
+### IK (dbp_ik.go)
+- `IKEnable(objectID, onOff)` - Enable/disable IK for object
+- `IKSolveTwoBone(objectID, boneA$, boneB$, targetX, targetY, targetZ)` - Two-bone IK solver
+
+### Model / Mesh / Animation
+- `LoadMesh(id, path)` / `GetModelBounds(objectID)` / `GetMeshVertexCount(id)` / `GetMeshTriangleCount(id)`
+- `LoadAnimation(id, path)` / `PlayAnimation(objectID, animID, speed)` / `SetAnimationFrame(objectID, frame)`
+- `GetAnimationFrame(objectID)` / `GetAnimationLength(animID)` / `GetAnimationName(animID)` (graceful when no anim)
+
+### Light / Skybox Queries
+- `GetLightX/Y/Z(id)` / `GetLightColorR/G/B(id)`
+- `GetSkybox()` / `GetAmbientLightR/G/B()`
+
+### Terrain
+- `SetTerrainHeight(terrainId, x, z, height)` / `PaintTerrainTexture(terrainId, x, z, layer)`
+
+### 3D Particles
+- `MakeParticles3D(id, maxCount)` / `SetParticles3DColor/Size/Speed(id, ...)` / `EmitParticles3D(id, count [, x, y, z])`
+- `DrawParticles3D(id)` / `GetParticles3DCount(id)` / `GetParticles3DMax(id)`
+
+### Instancing
+- `MakeInstance(baseID, instanceID)` / `PositionInstance(instanceID, x, y, z)` / `DrawInstances(baseID)`
+
+### Pathfinding
+- `NavMeshLoad(id, path)` / `NavMeshFindPath(id, startX, startY, startZ, endX, endY, endZ)` / `NavMeshDraw(id)`
+
+### Matrix / Quaternion (stubs)
+- `MakeQuaternion(id, pitch, yaw, roll)` / `RotateObjectQuat(id, quatID)` / `GetObjectMatrix(id)`
+
+### Runtime
+- `FixedUpdate(rate)` / `OnFixedUpdate(label$)`
+
+### 3D Math
+- `Distance3D(x1,y1,z1, x2,y2,z2)` / `AngleBetween3D(...)` / `Normalize3D(x,y,z)` / `Dot3D(...)` / `Cross3D(...)`
+
+## 2D Drawing Aliases (dbp.go)
+- `DrawRect(x, y, w, h, r, g, b)` / `DrawCircle(x, y, radius, r, g, b)` / `DrawLine(x1, y1, x2, y2, r, g, b)`
+- `DrawSprite(id, x, y)` / `LoadSprite(id, path)` - Same as Sprite/LoadImage
+
+## Text
+- `DrawText(text$, x, y, size)` or `DrawText(text$, x, y, size, r, g, b)`
+- `LoadFont(id, path)` / `SetFont(id)` - Font registry
+
+## File I/O
+- `FileExists(path)` / `AppendFile(path, text)`
+
+## UI
+- `UIButton(id, x, y, w, h, text$)` / `UILabel(x, y, text$)` / `UICheckbox(id, x, y, text$)` / `UISlider(id, x, y, w, min, max, value)`
+
+## Debug
+- `DebugLog(text$)` / `DebugDrawLine(x1,y1,z1, x2,y2,z2)` / `DebugDrawBox(x, y, z, size)`
+
+## Math
+- `Randomize(seed)` / `RandomMinMax(a, b)` / `Distance(x1,y1,z1, x2,y2,z2)` / `AngleBetween(...)` / `Dot(...)`
+
+## Coroutines
+- `StartTask SubName()` - Alias for StartCoroutine
+- `Wait(seconds)` - Alias for WaitSeconds when followed by parentheses
+- `Yield` - Already exists

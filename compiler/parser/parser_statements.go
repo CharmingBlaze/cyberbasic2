@@ -356,9 +356,9 @@ func (p *Parser) yieldStatement() (Node, error) {
 	return &YieldStatement{}, nil
 }
 
-// waitSecondsStatement parses WaitSeconds(expr)
+// waitSecondsStatement parses WaitSeconds(expr) or WAIT(expr)
 func (p *Parser) waitSecondsStatement() (Node, error) {
-	p.advance() // Skip WaitSeconds
+	p.advance() // Skip WaitSeconds or WAIT
 	if !p.match(lexer.TokenLeftParen) {
 		return nil, &Error{Message: "expected '(' after WaitSeconds", Line: p.line(), Col: p.col()}
 	}
@@ -370,6 +370,22 @@ func (p *Parser) waitSecondsStatement() (Node, error) {
 		return nil, &Error{Message: "expected ')'", Line: p.line(), Col: p.col()}
 	}
 	return &WaitSecondsStatement{Seconds: expr}, nil
+}
+
+// waitFramesStatement parses WaitFrames(expr)
+func (p *Parser) waitFramesStatement() (Node, error) {
+	p.advance() // Skip WaitFrames
+	if !p.match(lexer.TokenLeftParen) {
+		return nil, &Error{Message: "expected '(' after WaitFrames", Line: p.line(), Col: p.col()}
+	}
+	expr, err := p.expression()
+	if err != nil {
+		return nil, err
+	}
+	if !p.match(lexer.TokenRightParen) {
+		return nil, &Error{Message: "expected ')'", Line: p.line(), Col: p.col()}
+	}
+	return &WaitFramesStatement{Frames: expr}, nil
 }
 
 // constStatement parses CONST name = expr (, name = expr)*

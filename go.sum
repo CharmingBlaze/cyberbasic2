@@ -6,6 +6,10 @@ github.com/dustin/go-humanize v1.0.1 h1:GzkhY7T5VNhEkwH0PVJgjz+fX1rhBrR7pRT3mDkp
 github.com/dustin/go-humanize v1.0.1/go.mod h1:Mu1zIs6XwVuF/gI1OepvI0qD18qycQx+mFykh5fBlto=
 github.com/ebitengine/purego v0.8.1 h1:sdRKd6plj7KYW33EH5As6YKfe8m9zbN9JMrOjNVF/BE=
 github.com/ebitengine/purego v0.8.1/go.mod h1:iIjxzd6CiRiOG0UyXP+V1+jWqUXVjPKLAI0mRfJZTmQ=
+github.com/flywave/go-obj v0.0.0-20250815235847-2e1d7495ae52 h1:MQKNZuJtBstT36I1PGOPzoDIXmzaa62lCdXNdX7WBUE=
+github.com/flywave/go-obj v0.0.0-20250815235847-2e1d7495ae52/go.mod h1:dC5WMiFR2doIzp7MkTfeQR/CnuBrhtcY1V+6wL1J7Yg=
+github.com/flywave/go3d v0.0.0-20220209071216-2c50e8b3e7ff h1:B4CbtbuGiceyTFkhxrgA4OYw+TseiuU3CDJSQqGLoBU=
+github.com/flywave/go3d v0.0.0-20220209071216-2c50e8b3e7ff/go.mod h1:0/K6WtaMwhhVJb84xWStt+ALQl2EdvzW2oJqz+330GU=
 github.com/gen2brain/raylib-go/raygui v0.0.0-20260217065004-2c5f1b24d85e h1:j8TPlltV6+Mk/XSTWIw1OLYw3B3Mhq37yneIlPrtwlU=
 github.com/gen2brain/raylib-go/raygui v0.0.0-20260217065004-2c5f1b24d85e/go.mod h1:Don7nFrETwG1JBACDZPvRahYPaSSvhLY9v9NUzD1YWc=
 github.com/gen2brain/raylib-go/raylib v0.55.1 h1:1rdc10WvvYjtj7qijHnV9T38/WuvlT6IIL+PaZ6cNA8=
@@ -24,6 +28,8 @@ github.com/ncruces/go-strftime v0.1.9 h1:bY0MQC28UADQmHmaF5dgpLmImcShSi2kHU9XLdh
 github.com/ncruces/go-strftime v0.1.9/go.mod h1:Fwc5htZGVVkseilnfgOVb9mKy6w1naJmn9CehxcKcls=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
+github.com/qmuntal/gltf v0.28.0 h1:C4A1temWMPtcI2+qNfpfRq8FEJxoBGUN3ZZM8BCc+xU=
+github.com/qmuntal/gltf v0.28.0/go.mod h1:YoXZOt0Nc0kIfSKOLZIRoV4FycdC+GzE+3JgiAGYoMs=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec h1:W09IVJc94icq4NjY3clb7Lk8O1qJ8BdBEF8z0ibU0rE=
 github.com/remyoudompheng/bigfft v0.0.0-20230129092748-24d4a6f8daec/go.mod h1:qqbHyh8v60DhA7CoWK5oRCqLrMHRGoxYCSS9EjAz6Eo=
 golang.org/x/exp v0.0.0-20241108190413-2d47ceb2692f h1:XdNn9LlyWAhLVp6P/i8QYBW+hlyhrhei9uErw2B5GJo=

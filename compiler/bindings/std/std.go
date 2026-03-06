@@ -3,6 +3,7 @@
 package std
 
 import (
+	"bufio"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -14,8 +15,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
-	"time"
 	"sync"
+	"time"
 
 	"cyberbasic/compiler/valueutil"
 	"cyberbasic/compiler/vm"
@@ -458,6 +459,13 @@ func RegisterStd(v *vm.VM) {
 			return nil, nil
 		}
 		fmt.Fprintln(os.Stderr, "[debug]", fmt.Sprint(args[0]))
+		return nil, nil
+	})
+	// WaitKey(): DBP-style - wait for user to press Enter (console mode). Blocks until keypress.
+	v.RegisterForeign("WaitKey", func(args []interface{}) (interface{}, error) {
+		fmt.Print("Press Enter to continue...")
+		reader := bufio.NewReader(os.Stdin)
+		_, _ = reader.ReadString('\n')
 		return nil, nil
 	})
 	v.RegisterForeign("Len", func(args []interface{}) (interface{}, error) {
