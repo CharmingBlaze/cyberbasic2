@@ -31,7 +31,10 @@ Important rule: messages are now consumed exactly once. If `ProcessNetworkEvents
 
 - Reader goroutines keep TCP connections alive during idle periods instead of treating short read timeouts as disconnects.
 - Disconnect cleanup is centralized so a dead socket does not emit duplicate disconnect events.
+- `AcceptTimeout` now uses listener deadlines for both plain TCP and TLS-hosted servers.
+- Numeric receive buffers are stored per connection, so multi-connection polling no longer shares one global scratch buffer unless you intentionally use the legacy one-argument `GetReceivedNumber(index)` form.
 - RPC and entity-sync payloads ride on the same message queue as normal text messages.
+- Callback errors from `OnClientConnect`, `OnClientDisconnect`, `OnMessage`, `OnEntitySync`, or registered RPC handlers now propagate out of `ProcessNetworkEvents()` instead of being silently swallowed.
 
 ## Simulation Model
 
@@ -60,6 +63,8 @@ The following features are not implemented yet:
 - Reliable-ordered vs unreliable channels
 - Matchmaking, lobby discovery, NAT traversal
 - Built-in host migration
+- Automatic high-level replication beyond explicit `SyncEntity` helper messages
+- Automatic use of `ReplicatePosition` / `ReplicateRotation` / `ReplicateScale` / `ReplicateValue` markers
 
 ## Recommended Usage Today
 
@@ -71,6 +76,7 @@ CyberBASIC2 multiplayer is currently best suited for:
 - Lightweight authoritative servers with modest player counts
 
 For fast-action networked games, treat the current API as a foundation layer rather than a finished replication stack.
+`SyncEntity` is real today; the `Replicate*` helpers are not a complete shipping replication system yet.
 
 ## Suggested Architecture
 
@@ -90,6 +96,8 @@ Implemented now:
 - Single-consumption message queue semantics
 - Callback and polling APIs
 - RPC and entity-sync helpers
+- TLS-capable timed accept path
+- Per-connection numeric receive buffers
 - Fixed-step callback support for simulation
 
 Still roadmap work:

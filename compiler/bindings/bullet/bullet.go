@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"math"
 	"strconv"
+	"strings"
 	"sync"
 )
 
@@ -115,6 +116,22 @@ var (
 	}
 	lastRayMu sync.Mutex
 )
+
+func bulletFeatureAvailable(name string) bool {
+	switch strings.ToLower(strings.TrimSpace(name)) {
+	case "sphere", "box", "capsule", "cylinder", "cone", "raycast", "body_properties", "ccd", "kinematic":
+		return true
+	case "native", "native_backend", "joints", "hinge_joint", "slider_joint", "cone_twist_joint", "point_to_point_joint", "fixed_joint",
+		"joint_limits", "joint_motor", "heightmap", "compound", "compound_shapes", "torque", "torque_impulse", "mesh_collider", "exact_mesh_collision":
+		return false
+	default:
+		return false
+	}
+}
+
+func unsupportedBulletFeatureError(feature string) error {
+	return fmt.Errorf("%s is not supported by the shipped Bullet fallback backend; check BulletFeatureAvailable() or BulletNativeAvailable()", feature)
+}
 
 func getWorld(id string) *world {
 	worldMu.RLock()
@@ -233,6 +250,25 @@ func registerEntityGetters3D(v *vm.VM) {
 
 // registerFlat3D registers flat CreateWorld3D, Step3D, CreateBox3D, etc. (no BULLET. prefix).
 func registerFlat3D(v *vm.VM) {
+	v.RegisterForeign("BulletBackendName", func(args []interface{}) (interface{}, error) {
+		return "purego-fallback", nil
+	})
+	v.RegisterForeign("BulletBackendMode", func(args []interface{}) (interface{}, error) {
+		return "fallback", nil
+	})
+	v.RegisterForeign("BulletNativeAvailable", func(args []interface{}) (interface{}, error) {
+		return 0, nil
+	})
+	v.RegisterForeign("BulletFeatureAvailable", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return 0, fmt.Errorf("BulletFeatureAvailable requires (featureName$)")
+		}
+		if bulletFeatureAvailable(toString(args[0])) {
+			return 1, nil
+		}
+		return 0, nil
+	})
+
 	// World
 	v.RegisterForeign("CreateWorld3D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 4 {
@@ -473,13 +509,13 @@ func registerFlat3D(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterForeign("CreateHeightmap3D", func(args []interface{}) (interface{}, error) {
-		return nil, nil
+		return nil, unsupportedBulletFeatureError("CreateHeightmap3D")
 	})
 	v.RegisterForeign("CreateCompound3D", func(args []interface{}) (interface{}, error) {
-		return nil, nil
+		return nil, unsupportedBulletFeatureError("CreateCompound3D")
 	})
 	v.RegisterForeign("AddShapeToCompound3D", func(args []interface{}) (interface{}, error) {
-		return nil, nil
+		return nil, unsupportedBulletFeatureError("AddShapeToCompound3D")
 	})
 
 	// Position
@@ -657,10 +693,10 @@ func registerFlat3D(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterForeign("ApplyTorque3D", func(args []interface{}) (interface{}, error) {
-		return nil, nil
+		return nil, unsupportedBulletFeatureError("ApplyTorque3D")
 	})
 	v.RegisterForeign("ApplyTorqueImpulse3D", func(args []interface{}) (interface{}, error) {
-		return nil, nil
+		return nil, unsupportedBulletFeatureError("ApplyTorqueImpulse3D")
 	})
 
 	// Body properties (implemented; used in Step and resolveCollisions)
@@ -779,14 +815,28 @@ func registerFlat3D(v *vm.VM) {
 	v.RegisterForeign("BulletJointsAvailable", func(args []interface{}) (interface{}, error) {
 		return 0, nil
 	})
-	// 3D joints: stubs (constraint solver not implemented in pure-Go engine; use full Bullet CGO build for joints)
-	v.RegisterForeign("CreateHingeJoint3D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("CreateSliderJoint3D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("CreateConeTwistJoint3D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("CreatePointToPointJoint3D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("CreateFixedJoint3D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("SetJointLimits3D", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("SetJointMotor3D", func(args []interface{}) (interface{}, error) { return nil, nil })
+	// 3D joints: clearly gated in the shipped fallback backend.
+	v.RegisterForeign("CreateHingeJoint3D", func(args []interface{}) (interface{}, error) {
+		return nil, unsupportedBulletFeatureError("CreateHingeJoint3D")
+	})
+	v.RegisterForeign("CreateSliderJoint3D", func(args []interface{}) (interface{}, error) {
+		return nil, unsupportedBulletFeatureError("CreateSliderJoint3D")
+	})
+	v.RegisterForeign("CreateConeTwistJoint3D", func(args []interface{}) (interface{}, error) {
+		return nil, unsupportedBulletFeatureError("CreateConeTwistJoint3D")
+	})
+	v.RegisterForeign("CreatePointToPointJoint3D", func(args []interface{}) (interface{}, error) {
+		return nil, unsupportedBulletFeatureError("CreatePointToPointJoint3D")
+	})
+	v.RegisterForeign("CreateFixedJoint3D", func(args []interface{}) (interface{}, error) {
+		return nil, unsupportedBulletFeatureError("CreateFixedJoint3D")
+	})
+	v.RegisterForeign("SetJointLimits3D", func(args []interface{}) (interface{}, error) {
+		return nil, unsupportedBulletFeatureError("SetJointLimits3D")
+	})
+	v.RegisterForeign("SetJointMotor3D", func(args []interface{}) (interface{}, error) {
+		return nil, unsupportedBulletFeatureError("SetJointMotor3D")
+	})
 
 	// Raycast (from->to)
 	v.RegisterForeign("RayCast3D", func(args []interface{}) (interface{}, error) {
@@ -1073,6 +1123,39 @@ func registerFlat3D(v *vm.VM) {
 		}
 		w.mu.Unlock()
 		return nil, nil
+	})
+	v.RegisterForeign("SetBodyPosition", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetBodyPosition requires (bodyId, x, y, z)")
+		}
+		w := getWorld(defaultPhysicsWorld)
+		if w == nil {
+			return nil, nil
+		}
+		w.mu.Lock()
+		b := w.bodies[toString(args[0])]
+		if b != nil {
+			b.position = vec3{toFloat64(args[1]), toFloat64(args[2]), toFloat64(args[3])}
+		}
+		w.mu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("GetBodyPosition", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return []interface{}{0.0, 0.0, 0.0}, nil
+		}
+		w := getWorld(defaultPhysicsWorld)
+		if w == nil {
+			return []interface{}{0.0, 0.0, 0.0}, nil
+		}
+		w.mu.RLock()
+		b := w.bodies[toString(args[0])]
+		x, y, z := 0.0, 0.0, 0.0
+		if b != nil {
+			x, y, z = b.position.x, b.position.y, b.position.z
+		}
+		w.mu.RUnlock()
+		return []interface{}{x, y, z}, nil
 	})
 	v.RegisterForeign("SetBodyVelocity", func(args []interface{}) (interface{}, error) {
 		if len(args) < 4 {

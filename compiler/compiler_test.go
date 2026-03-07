@@ -297,3 +297,28 @@ CloseWindow()
 		}
 	}
 }
+
+// TestHybridLoopUsesSharedStepFrame ensures the compiler routes automatic update/draw loops
+// through the runtime StepFrame helper instead of open-coding a separate variable-dt path.
+func TestHybridLoopUsesSharedStepFrame(t *testing.T) {
+	src := `SUB Update(dt)
+ENDSUB
+
+SUB Draw()
+ENDSUB
+
+InitWindow(800, 600, "test")
+WHILE NOT WindowShouldClose()
+WEND
+CloseWindow()
+`
+	chunk := mustCompile(t, src)
+	if !chunkHasConstant(chunk, "stepframe") {
+		t.Fatalf("expected hybrid loop to call runtime StepFrame")
+	}
+	for _, name := range []string{"getframetime", "stepallphysics2d", "stepallphysics3d", "clearrenderqueues", "flushrenderqueues"} {
+		if chunkHasConstant(chunk, name) {
+			t.Fatalf("expected hybrid loop to stop open-coding %q once StepFrame is used", name)
+		}
+	}
+}

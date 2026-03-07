@@ -100,8 +100,8 @@ func NewRuntime() *Runtime {
 		models:   make(map[string]*Model),
 		cameras:  make(map[string]*Camera),
 		sounds:   make(map[string]*Sound),
-		textures:  make(map[string]rl.Texture2D),
-		models3D:  make(map[string]rl.Model),
+		textures: make(map[string]rl.Texture2D),
+		models3D: make(map[string]rl.Model),
 		graphics: &GraphicsEngine{
 			screenWidth:  800,
 			screenHeight: 600,
@@ -176,10 +176,10 @@ func (r *Runtime) LoadModel(filename string) error {
 	model := rl.LoadModel(filename)
 	r.models3D[filename] = model
 	r.models[filename] = &Model{
-		ID:       filename,
-		Mesh:     filename,
-		Visible:  true,
-		Scale:    [3]float64{1, 1, 1},
+		ID:      filename,
+		Mesh:    filename,
+		Visible: true,
+		Scale:   [3]float64{1, 1, 1},
 	}
 	return nil
 }
@@ -573,25 +573,9 @@ func (r *Runtime) RunImplicitLoop() error {
 
 	// Main loop
 	for !r.ShouldClose() {
-		dt := float64(rl.GetFrameTime())
-
-		// OnUpdate
-		if _, ok := chunk.GetFunction("onupdate"); ok {
-			if err := r.vm.InvokeSub("OnUpdate", []interface{}{dt}); err != nil {
-				return err
-			}
+		if err := StepImplicitFrame(r.vm); err != nil {
+			return err
 		}
-
-		// Draw frame
-		rl.BeginDrawing()
-		rl.ClearBackground(rl.NewColor(0, 0, 0, 255))
-		if _, ok := chunk.GetFunction("ondraw"); ok {
-			if err := r.vm.InvokeSub("OnDraw", nil); err != nil {
-				rl.EndDrawing()
-				return err
-			}
-		}
-		rl.EndDrawing()
 	}
 
 	return nil

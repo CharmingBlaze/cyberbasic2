@@ -11,7 +11,7 @@ if not exist cyberbasic.exe (
 )
 echo Starting... (window may take a moment)
 echo If NO WINDOW appears: update graphics/OpenGL drivers, or run:
-echo   go run test_raylib_window.go
+echo   go run deprecated\test_raylib_window.go
 echo to test raylib on this PC.
 echo.
 cyberbasic.exe examples\run_3d_physics_demo.bas

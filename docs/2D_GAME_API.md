@@ -116,23 +116,54 @@ DrawSpriteFrame 1, GetSpriteFrame 1, 100, 100
 
 | Command | Args | Description |
 |---------|------|-------------|
-| `LoadTilemap` | (id, path) | Load tilemap from file; maps id to internal map |
-| `DrawTilemap` | (id) | Draw tilemap |
+| `LoadTilemap` | (id, path) | Load tilemap JSON from file; maps DBP id to internal map |
+| `DrawTilemap` | (id) or (id, x, y) | Draw tilemap at its origin or with a draw offset |
 | `SetTile` | (id, x, y, tileIndex) | Set tile at grid position |
 | `GetTile` | (id, x, y) | Get tile value (assign to variable) |
+| `TilemapSetTileset` | (mapId, texturePath) | Assign or replace the atlas texture used when drawing non-zero tiles |
 | `DeleteTilemap` | (id) | Remove tilemap |
 | `HideTilemap` | (id) | Set visible=false |
 | `ShowTilemap` | (id) | Set visible=true |
 | `TilemapExists` | (id) | Returns 1 if exists, 0 otherwise |
 
-**Multiplayer-safe?** SetTile modifies shared state; use replication for sync.
+Shipping workflow:
+
+- `LoadTilemap(id, path)` loads a JSON map, not a PNG image.
+- The JSON supports `width`, `height`, `tiles`, `solid`, and either `tileSize` or `tileWidth` plus `tileHeight`.
+- Optional `tileset` in the JSON, or `TilemapSetTileset(mapId, texturePath)` at runtime, enables atlas-based textured drawing.
+- Tile value `0` is empty. Non-zero tiles draw from the atlas using `tileIndex - 1`.
+- If no tileset is assigned, the renderer falls back to gray debug rectangles so maps still remain visible while prototyping.
+
+**Multiplayer-safe?** `SetTile` modifies shared state. Use `SyncEntity` or your own messages for real networking; `Replicate*` markers are not an automatic replication layer today.
 
 **Example:**
 ```basic
-LoadTilemap 1, "level1.png"
+LoadTilemap 1, "levels/level1.json"
+TilemapSetTileset "tm_1", "tiles/dungeon.png"
 SetTile 1, 5, 5, 2
 t = GetTile 1, 5, 5
-DrawTilemap 1
+DrawTilemap 1, 64, 32
+```
+
+Example tilemap JSON:
+
+```json
+{
+  "tileWidth": 32,
+  "tileHeight": 32,
+  "width": 8,
+  "height": 6,
+  "tileset": "tiles/dungeon.png",
+  "solid": [1, 2],
+  "tiles": [
+    [1,1,1,1,1,1,1,1],
+    [1,0,0,0,0,0,0,1],
+    [1,0,2,2,0,0,0,1],
+    [1,0,0,0,0,3,0,1],
+    [1,0,0,0,0,0,0,1],
+    [1,1,1,1,1,1,1,1]
+  ]
+}
 ```
 
 ---
@@ -182,7 +213,7 @@ End If
 
 ## 8. 2D Physics
 
-Uses Box2D. Requires `Physics2DOn` before use.
+Uses the default Box2D world. These commands are simple DBPro-style wrappers over the authoritative 2D backend; use `Box2DBackendName()` and `Box2DBackendMode()` if you want to inspect the active backend at runtime. Requires `Physics2DOn` before use.
 
 | Command | Args | Description |
 |---------|------|-------------|
@@ -231,7 +262,7 @@ Combine sprite + position/rotation/scale for easy game objects.
 | `CloneSpriteObject` | (newID, sourceID) | Duplicate sprite object |
 | `SpriteObjectExists` | (id) | Returns 1 if exists, 0 otherwise |
 
-**Multiplayer-safe?** SyncObject2D registers for replication; use with ReplicatePosition.
+**Multiplayer-safe?** `SyncObject2D` is only a local marker. Use `SyncEntity`, RPC, or custom network messages for actual transport today.
 
 **Example:**
 ```basic
@@ -353,14 +384,14 @@ End Sub
 
 ## 15. Multiplayer Essentials
 
-For networked games, use these with the replication system:
+For networked games, use the explicit transport helpers:
 
-- `SyncObject2D(id)` – Mark object for position sync
-- `ReplicatePosition(entityId)` – Register entity for replication
-- `ReplicateRotation(entityId)` – Register rotation
-- `ReplicateScale(entityId)` – Register scale
+- `SyncEntity(connectionId, entityId, x, y)` – Send a 2D position update directly
+- `SyncEntityToRoom(roomId, entityId, x, y)` – Broadcast a 2D position update
+- `SendRPC(connectionId, name, ...)` – Send gameplay events or commands
+- `ReplicatePosition(entityId)` / `ReplicateRotation(entityId)` / `ReplicateScale(entityId)` – Marker-only today, not automatic state replication
 
-See `docs/DBP_EXTENDED.md` and the replication module for full setup.
+See `docs/MULTIPLAYER.md` and `docs/MULTIPLAYER_DESIGN.md` for the current shipping model.
 
 ---
 

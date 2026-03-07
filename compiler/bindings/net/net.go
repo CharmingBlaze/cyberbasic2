@@ -68,6 +68,15 @@ type netEvent struct {
 	payload string
 }
 
+type deadlineListener interface {
+	SetDeadline(time.Time) error
+}
+
+type serverState struct {
+	listener       net.Listener
+	deadlineSource deadlineListener
+}
+
 var (
 	netVM             *vm.VM
 	eventQueue        []netEvent
@@ -83,12 +92,13 @@ var (
 	connMessagesMu    sync.Mutex
 	conns             = make(map[string]net.Conn)
 	readers           = make(map[string]*bufio.Reader)
-	servers           = make(map[string]net.Listener)
+	servers           = make(map[string]*serverState)
 	rooms             = make(map[string]map[string]bool) // roomId -> set of connectionIds
 	netMu             sync.Mutex
 	connCounter       int
 	servCounter       int
-	receivedNumbers   []float64
+	receivedNumbers   = make(map[string][]float64)
+	lastNumbersConnID string
 	receivedNumbersMu sync.Mutex
 )
 
@@ -130,6 +140,12 @@ func cleanupConnection(cid string, conn net.Conn, sendDisconnectEvent bool) {
 	connMessagesMu.Lock()
 	delete(connMessages, cid)
 	connMessagesMu.Unlock()
+	receivedNumbersMu.Lock()
+	delete(receivedNumbers, cid)
+	if lastNumbersConnID == cid {
+		lastNumbersConnID = ""
+	}
+	receivedNumbersMu.Unlock()
 	pingMu.Lock()
 	delete(pingSentAt, cid)
 	delete(lastRTTMs, cid)
@@ -140,6 +156,41 @@ func cleanupConnection(cid string, conn net.Conn, sendDisconnectEvent bool) {
 	if conn != nil {
 		_ = conn.Close()
 	}
+}
+
+func addServer(listener net.Listener, deadlineSource deadlineListener) string {
+	netMu.Lock()
+	defer netMu.Unlock()
+	servCounter++
+	id := fmt.Sprintf("server_%d", servCounter)
+	servers[id] = &serverState{listener: listener, deadlineSource: deadlineSource}
+	return id
+}
+
+func acceptServerConnection(state *serverState, timeout time.Duration) (net.Conn, error) {
+	if state == nil || state.listener == nil {
+		return nil, fmt.Errorf("server not available")
+	}
+	if timeout > 0 && state.deadlineSource != nil {
+		if err := state.deadlineSource.SetDeadline(time.Now().Add(timeout)); err != nil {
+			return nil, err
+		}
+		defer state.deadlineSource.SetDeadline(time.Time{})
+	}
+	conn, err := state.listener.Accept()
+	if err != nil {
+		if netErr, ok := err.(net.Error); ok && netErr.Timeout() {
+			return nil, nil
+		}
+		if errors.Is(err, os.ErrDeadlineExceeded) {
+			return nil, nil
+		}
+		if errors.Is(err, net.ErrClosed) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return conn, nil
 }
 
 // startReader runs in a goroutine; reads lines from conn, appends to connMessages[id], pushes "message" events; on error pushes "disconnect" and removes conn.
@@ -494,28 +545,42 @@ func RegisterNet(v *vm.VM) {
 			f, err := strconv.ParseFloat(p, 64)
 			if err != nil {
 				receivedNumbersMu.Lock()
-				receivedNumbers = nil
+				delete(receivedNumbers, id)
+				if lastNumbersConnID == id {
+					lastNumbersConnID = ""
+				}
 				receivedNumbersMu.Unlock()
 				return 0, nil
 			}
 			nums = append(nums, f)
 		}
 		receivedNumbersMu.Lock()
-		receivedNumbers = nums
+		receivedNumbers[id] = nums
+		lastNumbersConnID = id
 		receivedNumbersMu.Unlock()
 		return len(nums), nil
 	})
 	v.RegisterForeign("GetReceivedNumber", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
-			return nil, fmt.Errorf("GetReceivedNumber(index) requires 1 argument")
+			return nil, fmt.Errorf("GetReceivedNumber(index) or GetReceivedNumber(connectionId, index) requires 1 or 2 arguments")
 		}
-		idx := toInt(args[0])
+		connID := ""
+		idxArg := args[0]
+		if len(args) >= 2 {
+			connID = toString(args[0])
+			idxArg = args[1]
+		}
+		idx := toInt(idxArg)
 		receivedNumbersMu.Lock()
 		defer receivedNumbersMu.Unlock()
-		if idx < 0 || idx >= len(receivedNumbers) {
+		if connID == "" {
+			connID = lastNumbersConnID
+		}
+		nums := receivedNumbers[connID]
+		if idx < 0 || idx >= len(nums) {
 			return 0.0, nil
 		}
-		return receivedNumbers[idx], nil
+		return nums[idx], nil
 	})
 	v.RegisterForeign("Disconnect", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
@@ -570,11 +635,8 @@ func RegisterNet(v *vm.VM) {
 		if err != nil {
 			return nil, nil
 		}
-		netMu.Lock()
-		servCounter++
-		id := fmt.Sprintf("server_%d", servCounter)
-		servers[id] = listener
-		netMu.Unlock()
+		deadlineSrc, _ := listener.(deadlineListener)
+		id := addServer(listener, deadlineSrc)
 		return id, nil
 	})
 	v.RegisterForeign("HostTLS", func(args []interface{}) (interface{}, error) {
@@ -589,15 +651,13 @@ func RegisterNet(v *vm.VM) {
 			return nil, nil
 		}
 		config := &tls.Config{Certificates: []tls.Certificate{cert}}
-		listener, err := tls.Listen("tcp", fmt.Sprintf(":%d", port), config)
+		baseListener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 		if err != nil {
 			return nil, nil
 		}
-		netMu.Lock()
-		servCounter++
-		id := fmt.Sprintf("server_%d", servCounter)
-		servers[id] = listener
-		netMu.Unlock()
+		tcpListener, _ := baseListener.(*net.TCPListener)
+		listener := tls.NewListener(baseListener, config)
+		id := addServer(listener, tcpListener)
 		return id, nil
 	})
 	v.RegisterForeign("Accept", func(args []interface{}) (interface{}, error) {
@@ -606,13 +666,16 @@ func RegisterNet(v *vm.VM) {
 		}
 		sid := toString(args[0])
 		netMu.Lock()
-		listener, ok := servers[sid]
+		state, ok := servers[sid]
 		netMu.Unlock()
 		if !ok {
 			return nil, fmt.Errorf("unknown server: %s", sid)
 		}
-		conn, err := listener.Accept()
+		conn, err := acceptServerConnection(state, 0)
 		if err != nil {
+			return nil, nil
+		}
+		if conn == nil {
 			return nil, nil
 		}
 		netMu.Lock()
@@ -631,8 +694,8 @@ func RegisterNet(v *vm.VM) {
 		sid := toString(args[0])
 		netMu.Lock()
 		defer netMu.Unlock()
-		if listener, ok := servers[sid]; ok {
-			_ = listener.Close()
+		if state, ok := servers[sid]; ok {
+			_ = state.listener.Close()
 			delete(servers, sid)
 		}
 		return nil, nil
@@ -924,11 +987,8 @@ func RegisterNet(v *vm.VM) {
 		if err != nil {
 			return nil, nil
 		}
-		netMu.Lock()
-		servCounter++
-		id := fmt.Sprintf("server_%d", servCounter)
-		servers[id] = listener
-		netMu.Unlock()
+		deadlineSrc, _ := listener.(deadlineListener)
+		id := addServer(listener, deadlineSrc)
 		return id, nil
 	})
 	v.RegisterForeign("NetConnect", func(args []interface{}) (interface{}, error) {
@@ -1066,18 +1126,16 @@ func RegisterNet(v *vm.VM) {
 		sid := toString(args[0])
 		timeoutMs := toInt(args[1])
 		netMu.Lock()
-		listener, ok := servers[sid]
+		state, ok := servers[sid]
 		netMu.Unlock()
 		if !ok {
 			return nil, fmt.Errorf("unknown server: %s", sid)
 		}
-		// TCPListener has SetDeadline; net.Listener interface does not
-		if tcpListener, ok := listener.(*net.TCPListener); ok {
-			tcpListener.SetDeadline(time.Now().Add(time.Duration(timeoutMs) * time.Millisecond))
-			defer tcpListener.SetDeadline(time.Time{})
-		}
-		conn, err := listener.Accept()
+		conn, err := acceptServerConnection(state, time.Duration(timeoutMs)*time.Millisecond)
 		if err != nil {
+			return nil, nil
+		}
+		if conn == nil {
 			return nil, nil
 		}
 		netMu.Lock()
@@ -1100,11 +1158,15 @@ func RegisterNet(v *vm.VM) {
 			switch ev.typ {
 			case "connect":
 				if _, ok := netVM.Chunk().GetFunction("onclientconnect"); ok {
-					_ = netVM.InvokeSub("onclientconnect", []interface{}{ev.id})
+					if err := netVM.InvokeSub("onclientconnect", []interface{}{ev.id}); err != nil {
+						return nil, err
+					}
 				}
 			case "disconnect":
 				if _, ok := netVM.Chunk().GetFunction("onclientdisconnect"); ok {
-					_ = netVM.InvokeSub("onclientdisconnect", []interface{}{ev.id})
+					if err := netVM.InvokeSub("onclientdisconnect", []interface{}{ev.id}); err != nil {
+						return nil, err
+					}
 				}
 			case "message":
 				msg, ok := popMessage(ev.id)
@@ -1131,7 +1193,9 @@ func RegisterNet(v *vm.VM) {
 						remoteEntities[entityId]["z"] = z
 						remoteEntitiesMu.Unlock()
 						if _, ok := netVM.Chunk().GetFunction("onentitysync"); ok {
-							_ = netVM.InvokeSub("onentitysync", []interface{}{entityId, x, y, z})
+							if err := netVM.InvokeSub("onentitysync", []interface{}{entityId, x, y, z}); err != nil {
+								return nil, err
+							}
 						}
 						handled = true
 					}
@@ -1148,14 +1212,18 @@ func RegisterNet(v *vm.VM) {
 						subName, hasHandler := rpcHandlers[rpcName]
 						rpcMu.Unlock()
 						if hasHandler && subName != "" {
-							_ = netVM.InvokeSub(subName, rpcArgs)
+							if err := netVM.InvokeSub(subName, rpcArgs); err != nil {
+								return nil, err
+							}
 							handled = true
 						}
 					}
 				}
 				if !handled {
 					if _, ok := netVM.Chunk().GetFunction("onmessage"); ok {
-						_ = netVM.InvokeSub("onmessage", []interface{}{ev.id, msg})
+						if err := netVM.InvokeSub("onmessage", []interface{}{ev.id, msg}); err != nil {
+							return nil, err
+						}
 					}
 				}
 			}
@@ -1208,11 +1276,8 @@ func RegisterNet(v *vm.VM) {
 		if err != nil {
 			return nil, nil
 		}
-		netMu.Lock()
-		servCounter++
-		id := fmt.Sprintf("server_%d", servCounter)
-		servers[id] = listener
-		netMu.Unlock()
+		deadlineSrc, _ := listener.(deadlineListener)
+		id := addServer(listener, deadlineSrc)
 		return id, nil
 	})
 	v.RegisterForeign("Broadcast", func(args []interface{}) (interface{}, error) {

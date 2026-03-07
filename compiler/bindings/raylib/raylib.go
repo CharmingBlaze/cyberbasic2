@@ -155,7 +155,7 @@ var (
 		DirX, DirY, DirZ float32
 	})
 	lightDataMu    sync.Mutex
-	shadowsEnabled bool
+	shadowsEnabled bool = true
 
 	// RemoveShader() ends current shader mode
 	currentShaderId string

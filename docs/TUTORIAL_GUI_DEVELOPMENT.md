@@ -22,13 +22,65 @@ Before starting, make sure you've completed:
 
 ---
 
+## Pick Your GUI Path First
+
+CyberBASIC2 currently has two practical GUI paths:
+
+1. `Gui*` and DBP `UI*` commands: the fuller rectangle-based GUI path, recommended for real menus and settings screens.
+2. `BeginUI` / `EndUI`: the lightweight no-CGO layout path, best for HUDs, debug panels, and simple forms.
+
+Recommended rule:
+
+- Use `Gui*` or `UI*` when you want the most complete current widget set.
+- Use `BeginUI` only when you specifically want the simpler no-CGO path.
+
+Minimal full-path example:
+
+```basic
+VAR name = "Player"
+VAR volume = 0.7
+VAR fullscreen = 0
+
+WHILE NOT WindowShouldClose()
+  ClearBackground(30, 30, 40, 255)
+
+  GuiWindowBox(24, 24, 320, 220, "Options")
+  GuiLabel(40, 60, 80, 24, "Name")
+  name = GuiTextBox("nameBox", 120, 56, 180, 28, name)
+  volume = GuiSlider(40, 100, 220, 24, "Vol", "", volume, 0, 1)
+  fullscreen = GuiCheckBox(40, 140, 24, 24, "Fullscreen", fullscreen)
+  IF GuiButton(40, 180, 120, 28, "Apply") THEN
+    PRINT "Applied"
+  ENDIF
+WEND
+```
+
+Minimal no-CGO layout example:
+
+```basic
+VAR enabled = 1
+
+WHILE NOT WindowShouldClose()
+  ClearBackground(30, 30, 40, 255)
+  BeginUI()
+  Label("Debug Panel")
+  enabled = Checkbox("Feature enabled", enabled)
+  IF Button("Ping") THEN PRINT "Clicked"
+  EndUI()
+WEND
+```
+
+The rest of this tutorial focuses mostly on concepts and patterns. For the authoritative command matrix, use `docs/GUI_GUIDE.md`.
+
+---
+
 ## Lesson 1: Basic GUI Elements
 
 ### Understanding GUI Mode
 
 CyberBASIC2 provides two main approaches to GUI:
-1. **Immediate Mode GUI** - Simple, stateless UI elements
-2. **Custom Drawing** - Full control over appearance
+1. **Widget APIs** - `Gui*` / `UI*` for the fuller rectangle-based widget path, or `BeginUI` / `EndUI` for the simpler layout path.
+2. **Custom Drawing** - Manual shapes/text for fully bespoke interfaces.
 
 ```basic
 // Basic GUI Elements Demo

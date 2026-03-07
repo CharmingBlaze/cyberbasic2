@@ -142,6 +142,42 @@ func registerPhysics(v *vm.VM) {
 		}
 		return v.CallForeign("GetPositionZ3D", []interface{}{defaultPhysicsWorld3D, toString(args[0])})
 	})
+	v.RegisterForeign("GetBodyX", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return 0.0, nil
+		}
+		return v.CallForeign("GetPositionX3D", []interface{}{defaultPhysicsWorld3D, toString(args[0])})
+	})
+	v.RegisterForeign("GetBodyY", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return 0.0, nil
+		}
+		return v.CallForeign("GetPositionY3D", []interface{}{defaultPhysicsWorld3D, toString(args[0])})
+	})
+	v.RegisterForeign("GetBodyZ", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return 0.0, nil
+		}
+		return v.CallForeign("GetPositionZ3D", []interface{}{defaultPhysicsWorld3D, toString(args[0])})
+	})
+	v.RegisterForeign("GetBodyVX", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return 0.0, nil
+		}
+		return v.CallForeign("GetVelocityX3D", []interface{}{defaultPhysicsWorld3D, toString(args[0])})
+	})
+	v.RegisterForeign("GetBodyVY", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return 0.0, nil
+		}
+		return v.CallForeign("GetVelocityY3D", []interface{}{defaultPhysicsWorld3D, toString(args[0])})
+	})
+	v.RegisterForeign("GetBodyVZ", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return 0.0, nil
+		}
+		return v.CallForeign("GetVelocityZ3D", []interface{}{defaultPhysicsWorld3D, toString(args[0])})
+	})
 
 	// --- Collision shapes (int ID -> Bullet body mapping) ---
 	physicsBodyId := func(id int) string {
@@ -186,8 +222,8 @@ func registerPhysics(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterForeign("MakeSphereCollider", func(args []interface{}) (interface{}, error) {
-		if len(args) < 3 {
-			return nil, fmt.Errorf("MakeSphereCollider(id, radius) requires 3 arguments")
+		if len(args) < 2 {
+			return nil, fmt.Errorf("MakeSphereCollider(id, radius) requires 2 arguments")
 		}
 		id := toInt(args[0])
 		radius := toFloat64Physics(args[1])
@@ -205,8 +241,8 @@ func registerPhysics(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterForeign("MakeCapsuleCollider", func(args []interface{}) (interface{}, error) {
-		if len(args) < 4 {
-			return nil, fmt.Errorf("MakeCapsuleCollider(id, radius, height) requires 4 arguments")
+		if len(args) < 3 {
+			return nil, fmt.Errorf("MakeCapsuleCollider(id, radius, height) requires 3 arguments")
 		}
 		id := toInt(args[0])
 		radius := toFloat64Physics(args[1])
@@ -228,8 +264,7 @@ func registerPhysics(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterForeign("MakeMeshCollider", func(args []interface{}) (interface{}, error) {
-		// Stub: Bullet has no mesh collider in current impl
-		return nil, nil
+		return nil, fmt.Errorf("MakeMeshCollider is not supported by the shipped 3D fallback backend; use simpler colliders or gate with BulletFeatureAvailable(\"mesh_collider\")")
 	})
 
 	v.RegisterForeign("MakeRigidBodyId", func(args []interface{}) (interface{}, error) {
@@ -410,7 +445,7 @@ func registerPhysics(v *vm.VM) {
 		return bodyId, err
 	})
 	v.RegisterForeign("MakeStaticBody2D", func(args []interface{}) (interface{}, error) {
-		if len(args) < 6 {
+		if len(args) < 5 {
 			return nil, fmt.Errorf("MakeStaticBody2D(bodyId$, x, y, w, h) requires 5 arguments")
 		}
 		bodyId := toString(args[0])
@@ -432,12 +467,18 @@ func registerPhysics(v *vm.VM) {
 		if len(args) < 1 {
 			return 0.0, nil
 		}
-		return v.CallForeign("GetVelocityX2D", []interface{}{defaultPhysicsWorld2D, toString(args[0])})
+		if len(args) >= 2 {
+			return v.CallForeign("GetVelocityX2DByBodyId", []interface{}{toString(args[0]), toString(args[1])})
+		}
+		return v.CallForeign("GetVelocityX2DByBodyId", []interface{}{defaultPhysicsWorld2D, toString(args[0])})
 	})
 	v.RegisterForeign("GetVelocityY2D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return 0.0, nil
 		}
-		return v.CallForeign("GetVelocityY2D", []interface{}{defaultPhysicsWorld2D, toString(args[0])})
+		if len(args) >= 2 {
+			return v.CallForeign("GetVelocityY2DByBodyId", []interface{}{toString(args[0]), toString(args[1])})
+		}
+		return v.CallForeign("GetVelocityY2DByBodyId", []interface{}{defaultPhysicsWorld2D, toString(args[0])})
 	})
 }

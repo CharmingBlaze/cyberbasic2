@@ -51,7 +51,7 @@ Complete guide to all CyberBASIC2 documentation.
 - **[Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)** – Making games with CyberBASIC2
   - Game loop, input handling
   - GAME.* helpers (camera, movement, collision)
-  - 2D/3D physics (Box2D, Bullet)
+  - 2D physics (Box2D) and current 3D Bullet-shaped fallback physics
   - ECS (entity-component system)
   - Best practices
 - **[2D Graphics Guide](2D_GRAPHICS_GUIDE.md)** – Full 2D rendering reference
@@ -65,7 +65,7 @@ Complete guide to all CyberBASIC2 documentation.
   - Primitives, models, meshes
   - 3D game checklist
   - **3D editor and level builder** (GetMouseRay, PickGroundPlane, level objects, SaveLevel/LoadLevel)
-- **[3D Physics Guide](3D_PHYSICS_GUIDE.md)** – Bullet: worlds, bodies, position/rotation, forces, raycast, StepAllPhysics3D, GAME.* helpers
+- **[3D Physics Guide](3D_PHYSICS_GUIDE.md)** – Bullet-shaped 3D physics API: worlds, bodies, position/rotation, forces, raycast, StepAllPhysics3D, GAME.* helpers
 - **[Asset Pipeline](ASSET_PIPELINE.md)** – LoadAsset, PreloadAsset, caching, level vs object loading
 
 - **[Windows, scaling, and splitscreen](WINDOWS_AND_VIEWS.md)** – Window commands, DPI/scaling, views and split-screen
@@ -103,7 +103,7 @@ Complete guide to all CyberBASIC2 documentation.
 - **[SQL (SQLite)](SQL.md)** – Full SQL guide: OpenDatabase, Exec, Query, parameterized statements, transactions, common patterns
 
 - **[World, Water, Terrain, Clouds](WORLD_WATER_TERRAIN.md)** – Water, terrain, skybox, clouds, sun, time
-- **[Level Loading](LEVEL_LOADING.md)** – Unified 3D loading (LOAD LEVEL loads meshes, materials, textures, lights automatically)
+- **[Level Loading](LEVEL_LOADING.md)** – Unified 3D loading (LOAD LEVEL loads meshes, materials, textures, hierarchy, and collision hooks)
 - **[3D Loading Spec](3D_LOADING_SPEC.md)** – Design goals and safe loading behavior for 3D assets
 
 ## Workflows
@@ -141,7 +141,7 @@ Complete guide to all CyberBASIC2 documentation.
 | **Create user interfaces** | [GUI Development Tutorial](TUTORIAL_GUI_DEVELOPMENT.md) → [GUI Guide](GUI_GUIDE.md) |
 | **Add multiplayer** | [Multiplayer Tutorial](TUTORIAL_MULTIPLAYER.md) → [Multiplayer Guide](MULTIPLAYER.md) |
 | **Use 2D physics (Box2D)** | [2D Physics Guide](2D_PHYSICS_GUIDE.md) |
-| **Use 3D physics (Bullet)** | [3D Physics Guide](3D_PHYSICS_GUIDE.md) |
+| **Use 3D physics (Bullet-shaped fallback)** | [3D Physics Guide](3D_PHYSICS_GUIDE.md) |
 | **Use the hybrid loop** | [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop) (define update(dt) and draw()) |
 | **Use in-process multi-window** | [In-process multi-window](MULTI_WINDOW_INPROCESS.md) |
 | **Use ECS** | [ECS Guide](ECS_GUIDE.md) → [API Reference](../API_REFERENCE.md) |
@@ -149,6 +149,6 @@ Complete guide to all CyberBASIC2 documentation.
 | **Look up DBP-style commands** | [Core Command Reference](CORE_COMMAND_REFERENCE.md) → [2D Game API](2D_GAME_API.md) / [3D Game API](3D_GAME_API.md) |
 | **Use zero-boilerplate (OnStart/OnUpdate/OnDraw)** | [DBP Parity](DBP_PARITY.md) → [examples/dbp_style/](../examples/dbp_style/) |
 
-**Full feature set:** CyberBASIC2 supports **full 2D** and **full 3D** graphics, **full 2D physics** (Box2D), **full 3D physics** (Bullet), **full ECS** (entity-component system), **GUI** (BeginUI, Label, Button, Slider, Checkbox, etc.), and **multiplayer** (TCP Connect/Send/Receive, Host/Accept). See the guides above for each area.
+**Current shipped feature set:** CyberBASIC2 supports **full 2D** and **full 3D** graphics, **authoritative 2D physics** (Box2D), a **Bullet-shaped 3D physics API backed by the shipped pure-Go fallback**, **full ECS** (entity-component system), **GUI** (BeginUI, Label, Button, Slider, Checkbox, etc.), and **multiplayer** (TCP Connect/Send/Receive, Host/Accept). See the guides above for the exact current scope of each area.
 
 All documentation lives in the `docs/` directory and the project root. Start with [Getting Started](GETTING_STARTED.md). For doc conventions (headings, code blocks, links), see [Documentation style](STYLE.md).

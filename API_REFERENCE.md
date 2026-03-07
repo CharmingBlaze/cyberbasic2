@@ -900,8 +900,8 @@ Use flat names only (no namespace). Legacy `BOX2D.*` in source is rewritten at c
 | **RayHitX2D** | () | float | Hit X |
 | **RayHitY2D** | () | float | Hit Y |
 | **RayHitBody2D** | () | bodyId | Hit body |
-| **GetCollisionCount2D** | (worldId) | int | Collision count (after Step) |
-| **GetCollisionOther2D** | (index) | bodyId | Other body in collision |
+| **GetCollisionCount2D** | (worldId, bodyId) | int | Buffered collision count for one body (after Step) |
+| **GetCollisionOther2D** | (worldId, bodyId, index) | bodyId | Other body in collision |
 
 Other: SetSensor2D, ApplyTorque2D, SetAngularVelocity2D, GetAngularVelocity2D, SetFriction2D, SetRestitution2D, SetDamping2D, SetFixedRotation2D, SetGravityScale2D, SetMass2D, SetBullet2D, GetCollisionNormalX2D, GetCollisionNormalY2D.
 
@@ -909,10 +909,14 @@ Other: SetSensor2D, ApplyTorque2D, SetAngularVelocity2D, GetAngularVelocity2D, S
 
 ## 15. Bullet (3D physics) – `bullet.go`
 
-Use flat names only (no namespace). Legacy `BULLET.*` in source is rewritten at compile time. **3D constraint joints** (CreateHingeJoint3D, etc.) are not implemented in the pure-Go engine.
+Use flat names only (no namespace). Legacy `BULLET.*` in source is rewritten at compile time. The shipped 3D backend reports `BulletBackendName() = "purego-fallback"` and `BulletBackendMode() = "fallback"`. Use `BulletFeatureAvailable(feature$)` for per-feature gating.
 
 | Command | Arguments | Returns | Description |
 |---------|-----------|---------|-------------|
+| **BulletBackendName** | () | string | Backend name |
+| **BulletBackendMode** | () | string | Backend mode |
+| **BulletNativeAvailable** | () | 0/1 | Native Bullet availability |
+| **BulletFeatureAvailable** | (featureName$) | 0/1 | Query per-feature support |
 | **CreateWorld3D** | (worldId, gx, gy, gz) | — | Create 3D world |
 | **SetWorldGravity3D** | (worldId, gx, gy, gz) | — | Set world gravity |
 | **Step3D** | (worldId, dt) | — | Step simulation |
@@ -928,6 +932,10 @@ Use flat names only (no namespace). Legacy `BULLET.*` in source is rewritten at 
 | **SetRotation3D** | (worldId, bodyId, rx, ry, rz) | — | Set rotation |
 | **ApplyForce3D** | (worldId, bodyId, fx, fy, fz) | — | Apply force |
 | **ApplyImpulse3D** | (worldId, bodyId, ix, iy, iz) | — | Apply impulse |
+| **SetBodyPosition** | (bodyId, x, y, z) | — | Default-world body position helper |
+| **GetBodyPosition** | (bodyId) | [x,y,z] | Default-world body position helper |
+| **SetBodyVelocity** | (bodyId, vx, vy, vz) | — | Default-world body velocity helper |
+| **GetBodyVelocity** | (bodyId) | [vx,vy,vz] | Default-world body velocity helper |
 | **RayCastFromDir3D** | (worldId, sx, sy, sz, dx, dy, dz, maxDist) | 1=hit 0=miss | Ray cast (dir + maxDist) |
 | **RayCast3D** | (worldId, fromX, fromY, fromZ, toX, toY, toZ) | 1=hit 0=miss | Ray cast (from–to) |
 | **RayHitX3D** / **RayHitY3D** / **RayHitZ3D** | () | float | Last hit point |
@@ -936,7 +944,7 @@ Use flat names only (no namespace). Legacy `BULLET.*` in source is rewritten at 
 | **GetCollisionCount3D** | (worldId, bodyId) | int | Collision count |
 | **GetCollisionOther3D** | (worldId, bodyId, index) | bodyId | Other body |
 
-Other legacy: CreateCapsule3D, CreateStaticMesh3D, CreateCylinder3D, CreateCone3D, CreateHeightmap3D, CreateCompound3D, AddShapeToCompound3D, SetScale3D, GetVelocityX3D/Y3D/Z3D, SetAngularVelocity3D, GetAngularVelocityX3D/Y3D/Z3D, ApplyTorque3D, ApplyTorqueImpulse3D, SetMass3D. **Body properties (implemented):** SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, SetGravity3D (per-body gravity scale), SetLinearFactor3D, SetAngularFactor3D, SetCCD3D (stored). **3D joints (stubs):** CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, CreatePointToPointJoint3D, CreateFixedJoint3D, SetJointLimits3D, SetJointMotor3D — not implemented in the pure-Go engine; use a full Bullet CGO build for constraint joints.
+Other legacy: CreateCapsule3D, CreateStaticMesh3D, CreateCylinder3D, CreateCone3D, CreateHeightmap3D, CreateCompound3D, AddShapeToCompound3D, SetScale3D, GetVelocityX3D/Y3D/Z3D, SetAngularVelocity3D, GetAngularVelocityX3D/Y3D/Z3D, ApplyTorque3D, ApplyTorqueImpulse3D, SetMass3D. **Body properties (implemented):** SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, SetGravity3D (per-body gravity scale), SetLinearFactor3D, SetAngularFactor3D, SetCCD3D (stored). **Unsupported in the shipped fallback:** CreateHeightmap3D, CreateCompound3D, AddShapeToCompound3D, ApplyTorque3D, ApplyTorqueImpulse3D, CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, CreatePointToPointJoint3D, CreateFixedJoint3D, SetJointLimits3D, SetJointMotor3D. These now return explicit errors instead of silently succeeding.
 
 ---
 

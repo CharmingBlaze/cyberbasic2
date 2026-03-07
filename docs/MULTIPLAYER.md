@@ -219,7 +219,8 @@ Use typed send/receive when you only need numbers (no extra parsing):
 On the receiver:
 
 - **ReceiveNumbers**(connectionId) — read the next line and parse it as numbers (handles "i 42", "f 3.14", or "n 1 2 3.5"). Returns the **count** of numbers received (0 if no data or parse error). Non-blocking.
-- **GetReceivedNumber**(index) — get the number at 0-based index from the last **ReceiveNumbers** call. Returns 0.0 if index is out of range.
+- **GetReceivedNumber**(index) — get the number at 0-based index from the most recent **ReceiveNumbers** call.
+- **GetReceivedNumber**(connectionId, index) — get the number from the last parsed numeric message for that specific connection. Use this form when you process multiple connections in one frame.
 
 Example:
 
@@ -320,11 +321,17 @@ RPC runs on the same thread as **ProcessNetworkEvents()** (no extra threading). 
 
 ## Entity synchronization
 
-You can sync entity position (and optionally other state) so the engine tracks and sends updates.
+The shipping transport includes explicit entity-position sync helpers. It does **not** include a general automatic replication layer yet.
 
 - **SyncEntity**(connectionId, entityId, x, y) or **SyncEntity**(connectionId, entityId, x, y, z) — send position for `entityId` to one connection.
 - **SyncEntityToRoom**(roomId, entityId, x, y) or **SyncEntityToRoom**(roomId, entityId, x, y, z) — send to every connection in the room. Returns the number of connections the message was sent to.
 - On the receiver, define **OnEntitySync**(entityId, x, y, z) (4 parameters). It is called when **ProcessNetworkEvents()** processes an entity sync message. You can also read the last synced state with **GetRemoteEntity**(entityId), which returns a dictionary with keys `"x"`, `"y"`, `"z"` (use **GetJSONKey** to read them). No interpolation in this phase; interpolation can be a later enhancement.
+
+Replication note:
+
+- `ReplicatePosition`, `ReplicateRotation`, `ReplicateScale`, and `ReplicateValue` are currently marker-only bookkeeping helpers for future higher-level replication work.
+- They do not automatically transmit state over the TCP transport today.
+- For real networked state in the current engine, use `SyncEntity`, `SyncEntityToRoom`, `SendRPC`, or your own `Send*` messages.
 
 ## API summary
 
@@ -358,7 +365,7 @@ You can sync entity position (and optionally other state) so the engine tracks a
 | **SendNumbers**(connectionId, n1, n2, …) | Send up to 16 numbers in one message. Returns 1 if sent, 0 on failure. |
 | **SendText**(connectionId, text) | Same as Send; plain text. Returns true/false. |
 | **ReceiveNumbers**(connectionId) | Read next line as numbers; returns count (0 if no data or parse error). Use GetReceivedNumber(index). |
-| **GetReceivedNumber**(index) | Get number at 0-based index from last ReceiveNumbers. Returns 0.0 if out of range. |
+| **GetReceivedNumber**(index) / **GetReceivedNumber**(connectionId, index) | Get number at 0-based index from the last parsed numeric message globally or for a specific connection. |
 | **SendToRoomInt**(roomId, value) | Broadcast one integer to room. Returns count sent. |
 | **SendToRoomFloat**(roomId, value) | Broadcast one float to room. Returns count sent. |
 | **SendToRoomNumbers**(roomId, n1, n2, …) | Broadcast up to 16 numbers to room. Returns count sent. |

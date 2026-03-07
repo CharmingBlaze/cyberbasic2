@@ -6,7 +6,7 @@ This document explains how drawing and the game loop work in CyberBASIC2: the th
 
 ### DBP-style (OnStart/OnUpdate/OnDraw)
 
-**Zero boilerplate:** Define `OnStart()`, `OnUpdate(dt)`, and `OnDraw()`. No `InitWindow`, no `WHILE` loop. Call `UseUnifiedRenderer` in `OnStart()` and `SYNC` at the end of `OnDraw()`. The engine handles 3D→2D→GUI order automatically. See [DBP Parity](DBP_PARITY.md).
+**Zero boilerplate:** Define `OnStart()`, `OnUpdate(dt)`, and `OnDraw()`. No `InitWindow`, no `WHILE` loop. The runtime now uses the same fixed-step accumulator path as the hybrid loop before calling `OnUpdate(dt)` and `OnDraw()`. Call `UseUnifiedRenderer` in `OnStart()` and `SYNC` at the end of `OnDraw()` when you want the unified 3D→2D→GUI pipeline. See [DBP Parity](DBP_PARITY.md).
 
 ### Manual loop
 
@@ -25,17 +25,23 @@ Prefer the hybrid loop for new games when you want automatic physics stepping an
 When using the hybrid loop, each frame runs in this order:
 
 1. **GetFrameTime** → `dt`
-2. **StepAllPhysics2D(dt)** and **StepAllPhysics3D(dt)** (all registered worlds)
-3. **update(dt)** (if defined)
-4. **ClearRenderQueues**
-5. **draw()** (if defined) — all Draw*/Gui* calls inside `draw()` are **queued** (2D, 3D, GUI)
-6. **FlushRenderQueues** — the engine then:
+2. **Accumulate scaled frame time** into the runtime fixed-step clock
+3. Run **zero or more fixed steps** at `FixedDeltaTime()`:
+   - `StepAllPhysics2D(FixedDeltaTime())`
+   - `StepAllPhysics3D(FixedDeltaTime())`
+   - `OnFixedUpdate(label$)` callback if registered
+4. **update(dt)** (if defined)
+5. **ClearRenderQueues**
+6. **draw()** (if defined) — all Draw*/Gui* calls inside `draw()` are **queued** (2D, 3D, GUI)
+7. **FlushRenderQueues** — the engine then:
    - BeginDrawing
    - ClearBackground
    - 2D by layer (sorted, with parallax/scroll per layer)
    - BeginMode3D … all 3D draws … EndMode3D
    - GUI (2D overlay)
    - EndDrawing
+
+`dt` is still the per-frame delta for frame-rate-dependent update logic. Physics and deterministic-style gameplay should use `FixedUpdate(rate)` plus `OnFixedUpdate(label$)` when you want explicit fixed-step code alongside the automatic physics stepping.
 
 
 

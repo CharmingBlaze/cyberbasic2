@@ -23,6 +23,64 @@ Before starting, make sure you've completed:
 
 ---
 
+## Recommended Shipping Path
+
+If you are building a real 2D game on the current engine, this is the most dependable workflow today:
+
+1. Use the hybrid loop: define `update(dt)` and `draw()`, then use an empty `WHILE NOT WindowShouldClose() WEND`.
+2. Build levels as JSON tilemaps with `width`, `height`, `tiles`, `solid`, and `tileSize` or `tileWidth` plus `tileHeight`.
+3. Assign a tileset atlas with `TilemapSetTileset(id, "tiles/atlas.png")` or put `tileset` in the JSON file.
+4. Use sprites or spritesheets for actors, and use tilemaps for level collision/layout.
+5. For networking, use `SyncEntity`, RPC, or explicit messages; do not assume `Replicate*` gives automatic transport yet.
+
+Minimal shipping-style example:
+
+```basic
+LoadTilemap 1, "levels/level1.json"
+TilemapSetTileset 1, "tiles/dungeon.png"
+
+VAR playerX = 96
+VAR playerY = 96
+
+SUB update(dt)
+  IF IsKeyDown(KEY_RIGHT) THEN playerX = playerX + 160 * dt
+  IF IsKeyDown(KEY_LEFT) THEN playerX = playerX - 160 * dt
+  IF IsKeyDown(KEY_DOWN) THEN playerY = playerY + 160 * dt
+  IF IsKeyDown(KEY_UP) THEN playerY = playerY - 160 * dt
+END SUB
+
+SUB draw()
+  ClearBackground(24, 24, 32, 255)
+  DrawTilemap 1, 0, 0
+  DrawRect playerX, playerY, 28, 28, 80, 200, 255
+END SUB
+
+WHILE NOT WindowShouldClose()
+WEND
+```
+
+Example tilemap JSON:
+
+```json
+{
+  "tileSize": 32,
+  "width": 5,
+  "height": 4,
+  "tileset": "tiles/dungeon.png",
+  "solid": [1],
+  "tiles": [
+    [1,1,1,1,1],
+    [1,0,0,0,1],
+    [1,0,2,0,1],
+    [1,1,1,1,1]
+  ]
+}
+```
+
+The rest of this tutorial still teaches useful 2D patterns, but many early lessons use primitive/manual-loop examples for learning purposes rather than the recommended shipping workflow above.
+
+---
+
 ## Lesson 1: Basic 2D Setup
 
 ### Understanding the 2D Coordinate System

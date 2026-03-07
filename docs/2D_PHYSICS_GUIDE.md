@@ -2,6 +2,8 @@
 
 Complete guide to 2D physics in CyberBASIC2 using Box2D: worlds, bodies, shapes, joints, raycast, collision, and integration with the hybrid loop and GAME.* helpers.
 
+The shipped 2D backend is the authoritative Box2D path in this repo. You can query it at runtime with `Box2DBackendName()` and `Box2DBackendMode()`, which currently return `bytearena-box2d` and `authoritative`.
+
 ## Table of Contents
 
 1. [Quick start](#quick-start)
@@ -58,6 +60,11 @@ The API uses **flat names** only (no namespace). Legacy **BOX2D.*** in source is
 
 All commands are **case-insensitive**. For the complete list see [API Reference](../API_REFERENCE.md) section 14.
 
+Two usage styles exist:
+
+- explicit-world Box2D commands such as `CreateWorld2D`, `CreateBox2D`, `Step2D`, and `ApplyForce2D(worldId, bodyId, fx, fy)`
+- simple default-world wrappers such as `Physics2DOn`, `MakeBody2D`, `MakeStatic2D`, `SetBody2DPosition`, `ApplyForce2D(bodyId, fx, fy)`, and `ApplyImpulse2D(bodyId, ix, iy)` in the DBP/game API layer
+
 ---
 
 ## Worlds and bodies
@@ -110,11 +117,11 @@ See [API Reference](../API_REFERENCE.md) section 14 for full signatures.
 
 ## Collision
 
-After **Step2D**, you can query contacts:
+After **Step2D**, you can query contacts for a specific body:
 
-- **GetCollisionCount2D**(worldId) — number of contact pairs this step.
-- **GetCollisionOther2D**(index) — the "other" body id in the pair (0-based index).
-- **GetCollisionNormalX2D**(index), **GetCollisionNormalY2D**(index) — contact normal.
+- **GetCollisionCount2D**(worldId, bodyId) — number of contacts buffered for that body this step.
+- **GetCollisionOther2D**(worldId, bodyId, index) — the "other" body id for a buffered contact (0-based index).
+- **GetCollisionNormalX2D**(worldId, bodyId, index), **GetCollisionNormalY2D**(worldId, bodyId, index) — buffered contact normal.
 
 **Collision callbacks:** Register a Sub to be called when a specific body collides:
 
@@ -148,6 +155,8 @@ See [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md#game-helpers).
 | Command | Arguments | Returns | Description |
 |---------|-----------|---------|-------------|
 | **CreateWorld2D** | (worldId, gravityX, gravityY) | — | Create world |
+| **Box2DBackendName** | () | string | Backend name (`bytearena-box2d`) |
+| **Box2DBackendMode** | () | string | Backend mode (`authoritative`) |
 | **Step2D** | (worldId, dt [, velIters, posIters]) | — | Step simulation |
 | **DestroyWorld2D** | (worldId) | — | Destroy world |
 | **CreateBody2D** | (worldId, bodyId, type, shape, x, y, density, …) | bodyId | Create body (see API Reference) |
@@ -167,8 +176,8 @@ See [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md#game-helpers).
 | **RayCast2D** | (worldId, x1, y1, x2, y2) | bool | Ray cast |
 | **RayHitX2D/Y2D** | () | float | Hit point |
 | **RayHitBody2D** | () | bodyId | Hit body |
-| **GetCollisionCount2D** | (worldId) | int | Contact count |
-| **GetCollisionOther2D** | (index) | bodyId | Other body in contact |
+| **GetCollisionCount2D** | (worldId, bodyId) | int | Buffered contact count for one body |
+| **GetCollisionOther2D** | (worldId, bodyId, index) | bodyId | Other body in contact |
 | **StepAllPhysics2D** | (dt) | — | Step all worlds (hybrid loop) |
 
 For the full list including **SetSensor2D**, **SetFriction2D**, **GetCollisionNormalX2D/Y2D**, and legacy **DestroyWorld2D**, **DestroyBody**, see [API Reference](../API_REFERENCE.md) section 14.

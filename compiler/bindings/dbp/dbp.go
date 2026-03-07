@@ -1498,22 +1498,48 @@ func RegisterDBP(v *vm.VM) {
 		return v.CallForeign("GuiButton", []interface{}{args[1], args[2], args[3], args[4], args[5]})
 	})
 	v.RegisterForeign("UILabel", func(args []interface{}) (interface{}, error) {
-		if len(args) < 3 {
-			return nil, fmt.Errorf("UILabel(x, y, text$) requires 3 arguments")
+		switch {
+		case len(args) >= 6:
+			return v.CallForeign("GuiLabel", []interface{}{args[1], args[2], args[3], args[4], args[5]})
+		case len(args) >= 4:
+			return v.CallForeign("GuiLabel", []interface{}{args[1], args[2], 200, 20, args[3]})
+		case len(args) >= 3:
+			return v.CallForeign("GuiLabel", []interface{}{args[0], args[1], 200, 20, args[2]})
+		default:
+			return nil, fmt.Errorf("UILabel(x, y, text$) or UILabel(id, x, y, text$) or UILabel(id, x, y, w, h, text$)")
 		}
-		return v.CallForeign("GuiLabel", []interface{}{args[0], args[1], 200, 20, args[2]})
 	})
 	v.RegisterForeign("UICheckbox", func(args []interface{}) (interface{}, error) {
-		if len(args) < 4 {
-			return nil, fmt.Errorf("UICheckbox(id, x, y, text$) requires 4 arguments")
+		switch {
+		case len(args) >= 5:
+			return v.CallForeign("GuiCheckBox", []interface{}{args[1], args[2], 20, 20, args[3], args[4]})
+		case len(args) >= 4:
+			return v.CallForeign("GuiCheckBox", []interface{}{args[1], args[2], 20, 20, args[3], false})
+		default:
+			return nil, fmt.Errorf("UICheckbox(id, x, y, text$, checked) requires 5 arguments")
 		}
-		return v.CallForeign("GuiCheckBox", []interface{}{args[1], args[2], 20, 20, args[3], false})
 	})
 	v.RegisterForeign("UISlider", func(args []interface{}) (interface{}, error) {
-		if len(args) < 7 {
-			return nil, fmt.Errorf("UISlider(id, x, y, w, min, max, value) requires 7 arguments")
+		switch {
+		case len(args) >= 9:
+			return v.CallForeign("GuiSlider", []interface{}{args[1], args[2], args[3], args[4], args[5], "", args[6], args[7], args[8]})
+		case len(args) >= 7:
+			return v.CallForeign("GuiSlider", []interface{}{args[1], args[2], args[3], args[4], args[5], args[6]})
+		default:
+			return nil, fmt.Errorf("UISlider(id, x, y, w, min, max, value) or UISlider(id, x, y, w, h, text$, value, min, max)")
 		}
-		return v.CallForeign("GuiSlider", []interface{}{args[1], args[2], args[3], args[4], args[5], args[6]})
+	})
+	v.RegisterForeign("UITextBox", func(args []interface{}) (interface{}, error) {
+		if len(args) < 6 {
+			return nil, fmt.Errorf("UITextBox(id, x, y, w, h, text$) requires 6 arguments")
+		}
+		return v.CallForeign("GuiTextBoxId", []interface{}{args[0], args[1], args[2], args[3], args[4], args[5]})
+	})
+	v.RegisterForeign("UIProgressBar", func(args []interface{}) (interface{}, error) {
+		if len(args) < 9 {
+			return nil, fmt.Errorf("UIProgressBar(id, x, y, w, h, text$, value, min, max) requires 9 arguments")
+		}
+		return v.CallForeign("GuiProgressBar", []interface{}{args[1], args[2], args[3], args[4], args[5], "", args[6], args[7], args[8]})
 	})
 
 	// --- Debugging ---

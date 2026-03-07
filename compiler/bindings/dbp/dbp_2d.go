@@ -73,12 +73,12 @@ type spriteObject2D struct {
 }
 
 type particle2D struct {
-	x, y   float32
-	vx, vy float32
-	life   float32
+	x, y    float32
+	vx, vy  float32
+	life    float32
 	maxLife float32
 	r, g, b uint8
-	size   float32
+	size    float32
 }
 
 type particles2DSystem struct {
@@ -269,11 +269,11 @@ func register2DSpritesheets(v *vm.VM) {
 				}
 				spritesheetsMu.Lock()
 				spritesheets[id] = &spritesheetEntry{
-					tex:          tex,
-					frameCount:   frameCount,
-					aseprite:     sheet,
-					frameW:       0, // per-frame in aseprite
-					frameH:       0,
+					tex:        tex,
+					frameCount: frameCount,
+					aseprite:   sheet,
+					frameW:     0, // per-frame in aseprite
+					frameH:     0,
 				}
 				spritesheetsMu.Unlock()
 				spritesheetTexMu.Lock()
@@ -602,7 +602,7 @@ func register2DTilemaps(v *vm.VM) {
 		}
 		id := toInt(args[0])
 		path := toString(args[1])
-		result, err := v.CallForeign("LoadTilemap", []interface{}{path})
+		result, err := v.CallForeign("TilemapLoadByPath", []interface{}{path})
 		if err != nil {
 			return nil, err
 		}
@@ -632,7 +632,14 @@ func register2DTilemaps(v *vm.VM) {
 		if !ok {
 			strId = toString(args[0])
 		}
-		_, err := v.CallForeign("DrawTilemap", []interface{}{strId})
+		drawArgs := []interface{}{strId}
+		if len(args) >= 2 {
+			drawArgs = append(drawArgs, args[1])
+		}
+		if len(args) >= 3 {
+			drawArgs = append(drawArgs, args[2])
+		}
+		_, err := v.CallForeign("TilemapDrawByMapId", drawArgs)
 		return nil, err
 	})
 	v.RegisterForeign("SetTile", func(args []interface{}) (interface{}, error) {
@@ -661,17 +668,35 @@ func register2DTilemaps(v *vm.VM) {
 		}
 		return v.CallForeign("GetTileByMapId", []interface{}{strId, args[1], args[2]})
 	})
+	v.RegisterForeign("TilemapSetTileset", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("TilemapSetTileset(id, path) requires 2 arguments")
+		}
+		id := toInt(args[0])
+		tilemapId2StrMu.Lock()
+		strId, ok := tilemapId2Str[id]
+		tilemapId2StrMu.Unlock()
+		if !ok {
+			strId = toString(args[0])
+		}
+		_, err := v.CallForeign("TilemapSetTilesetByMapId", []interface{}{strId, args[1]})
+		return nil, err
+	})
 	v.RegisterForeign("DeleteTilemap", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("DeleteTilemap(id) requires 1 argument")
 		}
 		id := toInt(args[0])
 		tilemapId2StrMu.Lock()
+		strId := tilemapId2Str[id]
 		delete(tilemapId2Str, id)
 		tilemapId2StrMu.Unlock()
 		tilemapVisibleMu.Lock()
 		delete(tilemapVisible, id)
 		tilemapVisibleMu.Unlock()
+		if strId != "" {
+			_, _ = v.CallForeign("TilemapDeleteByMapId", []interface{}{strId})
+		}
 		return nil, nil
 	})
 	v.RegisterForeign("HideTilemap", func(args []interface{}) (interface{}, error) {
@@ -849,7 +874,7 @@ func register2DPhysics(v *vm.VM) {
 		}
 		sid := toString(args[0])
 		fx, fy := args[1], args[2]
-		return v.CallForeign("ApplyForce2D", []interface{}{"default", sid, fx, fy})
+		return v.CallForeign("ApplyForce2DByBodyId", []interface{}{"default", sid, fx, fy})
 	})
 	v.RegisterForeign("ApplyImpulse2D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {
@@ -857,7 +882,7 @@ func register2DPhysics(v *vm.VM) {
 		}
 		sid := toString(args[0])
 		ix, iy := args[1], args[2]
-		return v.CallForeign("ApplyImpulse2D", []interface{}{"default", sid, ix, iy})
+		return v.CallForeign("ApplyImpulse2DByBodyId", []interface{}{"default", sid, ix, iy})
 	})
 	v.RegisterForeign("GetBody2DX", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
@@ -1039,7 +1064,7 @@ func register2DObjects(v *vm.VM) {
 			spriteId: src.spriteId,
 			x:        src.x, y: src.y,
 			angle: src.angle,
-			sx: src.sx, sy: src.sy,
+			sx:    src.sx, sy: src.sy,
 			syncMe:  false,
 			visible: src.visible,
 		}
@@ -1126,8 +1151,8 @@ func register2DParticles(v *vm.VM) {
 		particles2D[id] = &particles2DSystem{
 			particles: make([]particle2D, 0, maxCount),
 			maxCount:  maxCount,
-			r: 255, g: 255, b: 255,
-			size:  2, speed: 50,
+			r:         255, g: 255, b: 255,
+			size: 2, speed: 50,
 		}
 		particles2DMu.Unlock()
 		return nil, nil

@@ -540,10 +540,12 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **PhysicsSetGravity**(x, y, z) | Set gravity of default world |
 | **CreateRigidBody**([model,] mass) | Create box body in default world → bodyId |
 | **ApplyForce**(bodyId, fx, fy, fz) **ApplyImpulse**(bodyId, ix, iy, iz) | Force / impulse |
-| **SetBodyVelocity**(bodyId, vx, vy, vz) **GetBodyVelocity**(bodyId) | Linear velocity |
+| **SetBodyPosition**(bodyId, x, y, z) **GetBodyPosition**(bodyId) | Default-world body position helper |
+| **SetBodyVelocity**(bodyId, vx, vy, vz) **GetBodyVelocity**(bodyId) | Default-world linear velocity helper |
+| **GetBodyX/Y/Z**(bodyId) **GetBodyVX/VY/VZ**(bodyId) | Default-world scalar position / velocity helpers |
 | **CheckCollision3D**(bodyIdA, bodyIdB) | → true if AABBs overlap |
 | **SetFriction3D** **SetRestitution3D** **SetDamping3D** **SetKinematic3D** **SetGravity3D** **SetLinearFactor3D** **SetAngularFactor3D** **SetCCD3D** | Body properties (implemented) |
-*Use flat names (CreateWorld3D, Step3D, CreateBox3D, RayCastFromDir3D, etc.). Legacy `BULLET.*` is rewritten at compile time. 3D constraint joints (CreateHingeJoint3D, etc.) are not implemented in the pure-Go engine.* |
+*Use flat names (CreateWorld3D, Step3D, CreateBox3D, RayCastFromDir3D, etc.). Legacy `BULLET.*` is rewritten at compile time. The shipped 3D backend currently reports `BulletBackendName() = "purego-fallback"` and `BulletBackendMode() = "fallback"`. Use `BulletFeatureAvailable(name)` for per-feature gating. Unsupported 3D constraint joints and other missing fallback features now return explicit errors instead of silently succeeding.* |
 
 ---
 
@@ -693,7 +695,7 @@ State is stored for use with custom shaders; raylib has no built-in lighting.
 | **SetLightColor**(lightId, r, g, b) | Set light color (0–255) |
 | **SetLightIntensity**(lightId, amount) | Set intensity |
 | **SetLightDirection**(lightId, x, y, z) | Direction vector |
-| **EnableShadows**() / **DisableShadows**() | Toggle the global directional shadow system |
+| **EnableShadows**() / **DisableShadows**() | Toggle the global directional shadow system (enabled by default) |
 | **EnableShadows**(lightId) / **DisableShadows**(lightId) | Mark a DBP light as the preferred shadow caster |
 | **SetShadowQuality**(name) | Apply `low`, `medium`/`mid`, or `high` shadow preset |
 | **SetShadowMapSize**(width, height) | Override shadow map resolution |
@@ -895,7 +897,7 @@ Load JSON: `{ "nodeId": { "text": "...", "next": "otherId", "choices": [{"text":
 
 ## Physics joints & ragdolls
 
-**2D joints:** Use Box2D commands (CreateRevoluteJoint2D, CreatePrismaticJoint2D, SetJointLimits2D, SetJointMotor2D, etc.); see [2D physics (Box2D)](#2d-physics-box2d). **3D joints:** Stubs; use flat 3D commands (CreateWorld3D, Step3D, etc.); constraint joints (CreateHingeJoint3D, etc.) are not implemented in the pure-Go engine.
+**2D joints:** Use Box2D commands (CreateRevoluteJoint2D, CreatePrismaticJoint2D, SetJointLimits2D, SetJointMotor2D, etc.); see [2D physics (Box2D)](#2d-physics-box2d). **3D joints:** Unsupported in the current `purego-fallback` backend; use flat 3D commands (CreateWorld3D, Step3D, etc.), but constraint joints (CreateHingeJoint3D, etc.) now return explicit unsupported-feature errors in the shipped backend.
 
 | Command | Description |
 |--------|-------------|

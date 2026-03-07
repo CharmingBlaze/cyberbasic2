@@ -1,27 +1,19 @@
-// Package runtime: StepFrame provides a single "one frame" entry point for the hybrid update/draw pipeline.
+// Package runtime: frame stepping helpers for hybrid and implicit update/draw loops.
 package runtime
 
 import (
 	"cyberbasic/compiler/runtime/time"
 	"cyberbasic/compiler/vm"
+
+	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 const maxFixedCatchupSteps = 8
 
-// StepFrame runs one hybrid frame: get dt, step physics 2D/3D, update(dt), clear queues, draw(), flush queues.
-// The VM must have raylib and hybrid bindings registered (GetFrameTime, StepAllPhysics2D/3D, ClearRenderQueues, FlushRenderQueues).
-// update(dt) and draw() are invoked if the loaded chunk defines them. Use for a single entry point per frame (e.g. headless testing).
-func StepFrame(v *vm.VM) error {
-	if v.Chunk() == nil {
-		return nil
-	}
-	chunk := v.Chunk()
-	_, hasUpdate := chunk.GetFunction("update")
-	_, hasDraw := chunk.GetFunction("draw")
-
+func beginRuntimeFrame(v *vm.VM) (float64, error) {
 	dt, err := v.CallForeign("GetFrameTime", nil)
 	if err != nil {
-		return err
+		return 0, err
 	}
 	dtVal := float32(0)
 	if f, ok := dt.(float64); ok {
@@ -36,14 +28,14 @@ func StepFrame(v *vm.VM) error {
 	steps := 0
 	for time.GetAccumulator() >= fixedStep && steps < maxFixedCatchupSteps {
 		if _, err = v.CallForeign("StepAllPhysics2D", []interface{}{fixedStepArg}); err != nil {
-			return err
+			return 0, err
 		}
 		if _, err = v.CallForeign("StepAllPhysics3D", []interface{}{fixedStepArg}); err != nil {
-			return err
+			return 0, err
 		}
 		if label := FixedUpdateLabel(); label != "" {
 			if err = v.InvokeSub(label, []interface{}{fixedStepArg}); err != nil {
-				return err
+				return 0, err
 			}
 		}
 		time.ConsumeAccumulator(fixedStep)
@@ -51,6 +43,24 @@ func StepFrame(v *vm.VM) error {
 	}
 	if steps == maxFixedCatchupSteps {
 		time.ClampAccumulator(fixedStep)
+	}
+	return float64(dtVal), nil
+}
+
+// StepFrame runs one hybrid frame: get dt, step fixed physics/callbacks, update(dt), clear queues, draw(), flush queues.
+// The VM must have raylib and hybrid bindings registered (GetFrameTime, StepAllPhysics2D/3D, ClearRenderQueues, FlushRenderQueues).
+// update(dt) and draw() are invoked if the loaded chunk defines them. Use for the compiler-emitted hybrid loop and tests.
+func StepFrame(v *vm.VM) error {
+	if v.Chunk() == nil {
+		return nil
+	}
+	chunk := v.Chunk()
+	_, hasUpdate := chunk.GetFunction("update")
+	_, hasDraw := chunk.GetFunction("draw")
+
+	dt, err := beginRuntimeFrame(v)
+	if err != nil {
+		return err
 	}
 	if hasUpdate {
 		if err = v.InvokeSub("update", []interface{}{dt}); err != nil {
@@ -67,4 +77,35 @@ func StepFrame(v *vm.VM) error {
 	}
 	_, err = v.CallForeign("FlushRenderQueues", nil)
 	return err
+}
+
+// StepImplicitFrame runs one DBP-style implicit frame using OnUpdate/OnDraw naming.
+// It shares the same fixed-step runtime path as StepFrame so the main loop behavior stays consistent.
+func StepImplicitFrame(v *vm.VM) error {
+	if v.Chunk() == nil {
+		return nil
+	}
+	chunk := v.Chunk()
+	_, hasUpdate := chunk.GetFunction("onupdate")
+	_, hasDraw := chunk.GetFunction("ondraw")
+
+	dt, err := beginRuntimeFrame(v)
+	if err != nil {
+		return err
+	}
+	if hasUpdate {
+		if err = v.InvokeSub("OnUpdate", []interface{}{dt}); err != nil {
+			return err
+		}
+	}
+	rl.BeginDrawing()
+	rl.ClearBackground(rl.NewColor(0, 0, 0, 255))
+	if hasDraw {
+		if err = v.InvokeSub("OnDraw", nil); err != nil {
+			rl.EndDrawing()
+			return err
+		}
+	}
+	rl.EndDrawing()
+	return nil
 }

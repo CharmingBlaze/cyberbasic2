@@ -108,5 +108,5 @@ This table maps DarkBASIC Pro commands to CyberBASIC2 equivalents. Use it when p
 
 ## Summary
 
-- **Already in CyberBASIC2:** Print, file (ReadFile, WriteFile, DeleteFile, FileExists), mouse/keyboard (GetMouseX/Y, IsKeyPressed, etc.), 3D (LoadModel, SetCamera3D, DrawModel, meshes), 2D (DrawTexture, LoadTexture, shapes), audio (LoadSound, PlayMusicStream, etc.), network (Connect, Send, Receive, Host, Accept), collision (CheckCollision*, GetRayCollision*, Box2D, Bullet), GUI (Gui* raygui, BeginUI/EndUI).
+- **Already in CyberBASIC2:** Print, file (ReadFile, WriteFile, DeleteFile, FileExists), mouse/keyboard (GetMouseX/Y, IsKeyPressed, etc.), 3D (LoadModel, SetCamera3D, DrawModel, meshes), 2D (DrawTexture, LoadTexture, shapes), audio (LoadSound, PlayMusicStream, etc.), network (Connect, Send, Receive, Host, Accept), collision (CheckCollision*, GetRayCollision*, Box2D, Bullet-shaped 3D fallback physics), GUI (Gui* raygui, BeginUI/EndUI).
 - **Added for DBP parity:** Left, Right, Mid, Len, Chr, Asc, Str, Val, Rnd, Int (std); CopyFile, ListDir, GetDirItem, ExecuteFile (std). See [DBP_GAP.md](DBP_GAP.md) for the gap list.

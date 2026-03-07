@@ -164,7 +164,7 @@ go build -o cyberbasic .
 ./cyberbasic examples/first_game.bas
 ```
 
-Optional C engine (Raylib + Bullet):
+Optional C engine scaffold (Raylib + Bullet wrapper experiments, not the default runtime path):
 
 ```bash
 cd engine && make
@@ -186,7 +186,7 @@ To cut a new release:
 
 ## Limitations and Roadmap
 
-- **Physics:** Box2D joints (Revolute, Prismatic, Weld, Rope, Pulley, Gear, Wheel) and SetJointLimits2D/SetJointMotor2D are implemented; Bullet body properties (friction, restitution, damping, kinematic, gravity scale, linear/angular factor) are implemented. 3D constraint joints (CreateHingeJoint3D, etc.) remain stubs in the pure-Go engine; see API_REFERENCE.
+- **Physics:** Box2D joints (Revolute, Prismatic, Weld, Rope, Pulley, Gear, Wheel) and SetJointLimits2D/SetJointMotor2D are implemented; Bullet-style body properties (friction, restitution, damping, kinematic, gravity scale, linear/angular factor) are implemented in the shipped `purego-fallback` backend. Unsupported 3D constraint joints and related missing fallback features now return explicit errors; see `API_REFERENCE.md`.
 - **UI:** Full widget set and theme/style (GuiLoadStyle, GuiSetStyle, GuiGetStyle) are available; layout is manual (x, y, w, h per control).
 - **Audio:** Stream callbacks that require C function pointers are not exposed from BASIC; use **UpdateAudioStream** to push samples.
 - **Roadmap:** Working debugger, more complete physics joints, REPL, VSCode extension, and CI are on the roadmap. See [ROADMAP.md](ROADMAP.md).

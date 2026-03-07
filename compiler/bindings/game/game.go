@@ -6,6 +6,8 @@ import (
 	"fmt"
 	"math"
 	"os"
+	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
@@ -43,54 +45,73 @@ type particle struct {
 }
 
 type particleSystem struct {
-	Particles  []particle
-	DefaultR   uint8
-	DefaultG   uint8
-	DefaultB   uint8
-	DefaultA   uint8
-	Lifetime   float32
+	Particles        []particle
+	DefaultR         uint8
+	DefaultG         uint8
+	DefaultB         uint8
+	DefaultA         uint8
+	Lifetime         float32
 	VelX, VelY, VelZ float32
-	LayerID   string
-	ZIndex    int
+	LayerID          string
+	ZIndex           int
 }
 
 var (
-	particleSystems   = make(map[string]*particleSystem)
-	particleSeq       int
-	particleMu        sync.Mutex
+	particleSystems = make(map[string]*particleSystem)
+	particleSeq     int
+	particleMu      sync.Mutex
 
 	// AI state: entity id -> position, velocity, speed, target
-	aiPos     = make(map[string][3]float64)
-	aiVel     = make(map[string][3]float64)
-	aiSpeed   = make(map[string]float64)
-	aiTarget  = make(map[string][3]float64)
-	aiWander  = make(map[string]float64) // radius
-	aiMu      sync.RWMutex
+	aiPos    = make(map[string][3]float64)
+	aiVel    = make(map[string][3]float64)
+	aiSpeed  = make(map[string]float64)
+	aiTarget = make(map[string][3]float64)
+	aiWander = make(map[string]float64) // radius
+	aiMu     sync.RWMutex
 
 	// Animation: key -> { startValue, targetValue, startTime, duration }
-	animValue    = make(map[string]struct{ Start, Target float64; StartT time.Time; Dur time.Duration })
-	animColor    = make(map[string]struct{ R0, G0, B0, A0, R1, G1, B1, A1 float64; StartT time.Time; Dur time.Duration })
-	animPosition = make(map[string]struct{ X0, Y0, Z0, X1, Y1, Z1 float64; StartT time.Time; Dur time.Duration })
-	animRotation = make(map[string]struct{ P0, Y0, R0, P1, Y1, R1 float64; StartT time.Time; Dur time.Duration })
-	animMu       sync.Mutex
+	animValue = make(map[string]struct {
+		Start, Target float64
+		StartT        time.Time
+		Dur           time.Duration
+	})
+	animColor = make(map[string]struct {
+		R0, G0, B0, A0, R1, G1, B1, A1 float64
+		StartT                         time.Time
+		Dur                            time.Duration
+	})
+	animPosition = make(map[string]struct {
+		X0, Y0, Z0, X1, Y1, Z1 float64
+		StartT                 time.Time
+		Dur                    time.Duration
+	})
+	animRotation = make(map[string]struct {
+		P0, Y0, R0, P1, Y1, R1 float64
+		StartT                 time.Time
+		Dur                    time.Duration
+	})
+	animMu sync.Mutex
 
 	// Tilemap: id -> grid and solid set
-	tilemaps   = make(map[string]*tilemapData)
-	tilemapSeq int
-	tilemapMu  sync.RWMutex
+	tilemaps            = make(map[string]*tilemapData)
+	tilemapSeq          int
+	tilemapMu           sync.RWMutex
+	tilemapTextureCache = make(map[string]rl.Texture2D)
+	tilemapTextureRefs  = make(map[string]int)
+	tilemapTextureMu    sync.Mutex
 
 	// Dialogue
-	dialogueNodes    = make(map[string]map[string]interface{})
-	dialogueVars     = make(map[string]interface{})
-	dialogueCurrent  string
-	dialogueMu       sync.RWMutex
+	dialogueNodes   = make(map[string]map[string]interface{})
+	dialogueVars    = make(map[string]interface{})
+	dialogueCurrent string
+	dialogueMu      sync.RWMutex
 
 	// Inventory: invId -> slots []{itemID, amount}, maxSlots
-	inventories   = make(map[string]*invData)
-	invSeq        int
-	invMu         sync.RWMutex
-	itemDefs      = make(map[string]*itemDef)
-	itemDefMu     sync.RWMutex
+	inventories = make(map[string]*invData)
+	invSeq      int
+	invMu       sync.RWMutex
+	itemDefs    = make(map[string]*itemDef)
+	itemDefMu   sync.RWMutex
 
 	// Behavior trees
 	aiTrees   = make(map[string]*btNode)
@@ -98,29 +119,32 @@ var (
 	aiTreeMu  sync.Mutex
 
 	// Replication (state to sync)
-	replicateVars   = make(map[string]map[string]bool) // entity -> set of var names
-	replicatePos    = make(map[string]bool)
-	replicateRot    = make(map[string]bool)
-	replicateScale  = make(map[string]bool)
-	replicateMu     sync.Mutex
+	replicateVars  = make(map[string]map[string]bool) // entity -> set of var names
+	replicatePos   = make(map[string]bool)
+	replicateRot   = make(map[string]bool)
+	replicateScale = make(map[string]bool)
+	replicateMu    sync.Mutex
 
 	// Shader graph (nodes + connections; compile = stub)
-	shaderGraphNodes   = make(map[string]*sgNode)
-	shaderGraphGraphs  = make(map[string]*sgGraph)
-	shaderGraphSeq     int
-	shaderGraphMu      sync.Mutex
+	shaderGraphNodes  = make(map[string]*sgNode)
+	shaderGraphGraphs = make(map[string]*sgGraph)
+	shaderGraphSeq    int
+	shaderGraphMu     sync.Mutex
 
 	// Anim state machine
-	animStates     = make(map[string]*animStateData)
+	animStates      = make(map[string]*animStateData)
 	animTransitions = make(map[string][]*animTransition)
-	animParams     = make(map[string]float64)   // param name -> value
-	animEntityState = make(map[string]string)   // entityId -> current state name
+	animParams      = make(map[string]float64) // param name -> value
+	animEntityState = make(map[string]string)  // entityId -> current state name
 	animStateSeq    int
 	animStateMu     sync.Mutex
 )
 
 type invData struct {
-	Slots    []struct{ ItemID string; Amount int }
+	Slots []struct {
+		ItemID string
+		Amount int
+	}
 	MaxSlots int
 }
 
@@ -154,17 +178,22 @@ type animStateData struct {
 }
 
 type animTransition struct {
-	From, To string
+	From, To  string
 	Condition string
 }
 
 type tilemapData struct {
-	Tiles      [][]int
-	TileSize   int
-	Solid      map[int]bool
-	LayerID    string
+	Tiles       [][]int
+	TileWidth   int
+	TileHeight  int
+	Solid       map[int]bool
+	LayerID     string
 	ParallaxX   float32
 	ParallaxY   float32
+	OffsetX     float32
+	OffsetY     float32
+	TilesetPath string
+	Tileset     rl.Texture2D
 }
 
 func ensureTilemapSize(tm *tilemapData, w, h int) {
@@ -185,11 +214,86 @@ func ensureTilemapSize(tm *tilemapData, w, h int) {
 }
 
 type tilemapFile struct {
-	TileSize int      `json:"tileSize"`
-	Width    int      `json:"width"`
-	Height   int      `json:"height"`
-	Tiles    [][]int   `json:"tiles"`
-	Solid    []int     `json:"solid,omitempty"`
+	TileSize   int     `json:"tileSize,omitempty"`
+	TileWidth  int     `json:"tileWidth,omitempty"`
+	TileHeight int     `json:"tileHeight,omitempty"`
+	Width      int     `json:"width"`
+	Height     int     `json:"height"`
+	Tiles      [][]int `json:"tiles"`
+	Solid      []int   `json:"solid,omitempty"`
+	Tileset    string  `json:"tileset,omitempty"`
+}
+
+func normalizeTileDimensions(tileWidth, tileHeight, legacyTileSize int) (int, int) {
+	if tileWidth <= 0 {
+		tileWidth = legacyTileSize
+	}
+	if tileHeight <= 0 {
+		tileHeight = legacyTileSize
+	}
+	if tileWidth <= 0 {
+		tileWidth = 32
+	}
+	if tileHeight <= 0 {
+		tileHeight = 32
+	}
+	return tileWidth, tileHeight
+}
+
+func releaseTilemapTileset(tm *tilemapData) {
+	if tm == nil || tm.TilesetPath == "" {
+		if tm != nil {
+			tm.TilesetPath = ""
+			tm.Tileset = rl.Texture2D{}
+		}
+		return
+	}
+	tilemapTextureMu.Lock()
+	defer tilemapTextureMu.Unlock()
+	if refs := tilemapTextureRefs[tm.TilesetPath]; refs > 1 {
+		tilemapTextureRefs[tm.TilesetPath] = refs - 1
+	} else {
+		if tex, ok := tilemapTextureCache[tm.TilesetPath]; ok && tex.ID != 0 {
+			rl.UnloadTexture(tex)
+		}
+		delete(tilemapTextureCache, tm.TilesetPath)
+		delete(tilemapTextureRefs, tm.TilesetPath)
+	}
+	tm.TilesetPath = ""
+	tm.Tileset = rl.Texture2D{}
+}
+
+func assignTilemapTileset(tm *tilemapData, path string) error {
+	if tm == nil {
+		return fmt.Errorf("tilemap is nil")
+	}
+	path = strings.TrimSpace(path)
+	if tm.TilesetPath == path {
+		return nil
+	}
+	releaseTilemapTileset(tm)
+	if path == "" {
+		return nil
+	}
+	tilemapTextureMu.Lock()
+	if tex, ok := tilemapTextureCache[path]; ok && tex.ID != 0 {
+		tilemapTextureRefs[path]++
+		tm.TilesetPath = path
+		tm.Tileset = tex
+		tilemapTextureMu.Unlock()
+		return nil
+	}
+	tex := rl.LoadTexture(path)
+	if tex.ID == 0 {
+		tilemapTextureMu.Unlock()
+		return fmt.Errorf("failed to load tileset texture: %s", path)
+	}
+	tilemapTextureCache[path] = tex
+	tilemapTextureRefs[path] = 1
+	tm.TilesetPath = path
+	tm.Tileset = tex
+	tilemapTextureMu.Unlock()
+	return nil
 }
 
 func tilemapLoad(path string) (string, error) {
@@ -204,9 +308,7 @@ func tilemapLoad(path string) (string, error) {
 	if f.Width <= 0 || f.Height <= 0 {
 		f.Width, f.Height = 1, 1
 	}
-	if f.TileSize <= 0 {
-		f.TileSize = 32
-	}
+	tileWidth, tileHeight := normalizeTileDimensions(f.TileWidth, f.TileHeight, f.TileSize)
 	tiles := f.Tiles
 	if len(tiles) != f.Height || (len(tiles) > 0 && len(tiles[0]) != f.Width) {
 		tiles = make([][]int, f.Height)
@@ -218,13 +320,23 @@ func tilemapLoad(path string) (string, error) {
 	for _, s := range f.Solid {
 		solid[s] = true
 	}
+	tilesetPath := strings.TrimSpace(f.Tileset)
+	if tilesetPath != "" && !filepath.IsAbs(tilesetPath) {
+		tilesetPath = filepath.Join(filepath.Dir(path), tilesetPath)
+	}
 	tilemapMu.Lock()
 	tilemapSeq++
 	id := fmt.Sprintf("tm_%d", tilemapSeq)
-	tilemaps[id] = &tilemapData{
-		Tiles: tiles, TileSize: f.TileSize, Solid: solid,
+	tm := &tilemapData{
+		Tiles: tiles, TileWidth: tileWidth, TileHeight: tileHeight, Solid: solid,
 	}
+	tilemaps[id] = tm
 	tilemapMu.Unlock()
+	if tilesetPath != "" {
+		if err := assignTilemapTileset(tm, tilesetPath); err != nil {
+			return "", err
+		}
+	}
 	return id, nil
 }
 
@@ -238,17 +350,56 @@ func tilemapSave(id string, tm *tilemapData, path string) error {
 		w = len(tm.Tiles[0])
 	}
 	f := tilemapFile{
-		TileSize: tm.TileSize,
-		Width:    w,
-		Height:   h,
-		Tiles:    tm.Tiles,
-		Solid:    solid,
+		TileSize:   tm.TileWidth,
+		TileWidth:  tm.TileWidth,
+		TileHeight: tm.TileHeight,
+		Width:      w,
+		Height:     h,
+		Tiles:      tm.Tiles,
+		Solid:      solid,
+		Tileset:    tm.TilesetPath,
 	}
 	raw, err := json.MarshalIndent(f, "", "  ")
 	if err != nil {
 		return err
 	}
 	return os.WriteFile(path, raw, 0644)
+}
+
+func drawTilemapByID(id string, offsetX, offsetY float32) {
+	tilemapMu.RLock()
+	tm := tilemaps[id]
+	tilemapMu.RUnlock()
+	if tm == nil || len(tm.Tiles) == 0 {
+		return
+	}
+	tileWidth, tileHeight := normalizeTileDimensions(tm.TileWidth, tm.TileHeight, tm.TileWidth)
+	drawX := tm.OffsetX + offsetX
+	drawY := tm.OffsetY + offsetY
+	tileset := tm.Tileset
+	columns := 0
+	if tileset.ID != 0 && tileWidth > 0 {
+		columns = int(tileset.Width) / tileWidth
+	}
+	for y := 0; y < len(tm.Tiles); y++ {
+		for x := 0; x < len(tm.Tiles[y]); x++ {
+			tid := tm.Tiles[y][x]
+			if tid <= 0 {
+				continue
+			}
+			px := drawX + float32(x*tileWidth)
+			py := drawY + float32(y*tileHeight)
+			if tileset.ID != 0 && columns > 0 {
+				frame := tid - 1
+				srcX := float32((frame % columns) * tileWidth)
+				srcY := float32((frame / columns) * tileHeight)
+				src := rl.Rectangle{X: srcX, Y: srcY, Width: float32(tileWidth), Height: float32(tileHeight)}
+				rl.DrawTextureRec(tileset, src, rl.Vector2{X: px, Y: py}, rl.White)
+			} else {
+				rl.DrawRectangle(int32(px), int32(py), int32(tileWidth), int32(tileHeight), rl.Gray)
+			}
+		}
+	}
 }
 
 // valueNoise2D returns deterministic noise in [0,1] for procedural gen.
@@ -583,7 +734,11 @@ func RegisterGame(v *vm.VM) {
 				start = a.Start + (a.Target-a.Start)*t
 			}
 		}
-		animValue[key] = struct{ Start, Target float64; StartT time.Time; Dur time.Duration }{start, target, time.Now(), dur}
+		animValue[key] = struct {
+			Start, Target float64
+			StartT        time.Time
+			Dur           time.Duration
+		}{start, target, time.Now(), dur}
 		animMu.Unlock()
 		return start, nil
 	})
@@ -606,7 +761,11 @@ func RegisterGame(v *vm.VM) {
 				a0 = prev.A0 + (prev.A1-prev.A0)*t
 			}
 		}
-		animColor[key] = struct{ R0, G0, B0, A0, R1, G1, B1, A1 float64; StartT time.Time; Dur time.Duration }{r0, g0, b0, a0, r, g, b, a, time.Now(), dur}
+		animColor[key] = struct {
+			R0, G0, B0, A0, R1, G1, B1, A1 float64
+			StartT                         time.Time
+			Dur                            time.Duration
+		}{r0, g0, b0, a0, r, g, b, a, time.Now(), dur}
 		animMu.Unlock()
 		return nil, nil
 	})
@@ -628,7 +787,11 @@ func RegisterGame(v *vm.VM) {
 				z0 = prev.Z0 + (prev.Z1-prev.Z0)*t
 			}
 		}
-		animPosition[key] = struct{ X0, Y0, Z0, X1, Y1, Z1 float64; StartT time.Time; Dur time.Duration }{x0, y0, z0, x, y, z, time.Now(), dur}
+		animPosition[key] = struct {
+			X0, Y0, Z0, X1, Y1, Z1 float64
+			StartT                 time.Time
+			Dur                    time.Duration
+		}{x0, y0, z0, x, y, z, time.Now(), dur}
 		animMu.Unlock()
 		return nil, nil
 	})
@@ -650,7 +813,11 @@ func RegisterGame(v *vm.VM) {
 				r0 = prev.R0 + (prev.R1-prev.R0)*t
 			}
 		}
-		animRotation[key] = struct{ P0, Y0, R0, P1, Y1, R1 float64; StartT time.Time; Dur time.Duration }{p0, y0, r0, p, y, r, time.Now(), dur}
+		animRotation[key] = struct {
+			P0, Y0, R0, P1, Y1, R1 float64
+			StartT                 time.Time
+			Dur                    time.Duration
+		}{p0, y0, r0, p, y, r, time.Now(), dur}
 		animMu.Unlock()
 		return nil, nil
 	})
@@ -690,9 +857,19 @@ func RegisterGame(v *vm.VM) {
 		tilemapSeq++
 		id := fmt.Sprintf("tm_%d", tilemapSeq)
 		tilemaps[id] = &tilemapData{
-			Tiles: tiles, TileSize: tw, Solid: make(map[int]bool),
+			Tiles: tiles, TileWidth: tw, TileHeight: th, Solid: make(map[int]bool),
 		}
 		tilemapMu.Unlock()
+		return id, nil
+	})
+	v.RegisterForeign("TilemapLoadByPath", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("TilemapLoadByPath requires (path)")
+		}
+		id, err := tilemapLoad(toString(args[0]))
+		if err != nil {
+			return nil, nil
+		}
 		return id, nil
 	})
 	v.RegisterForeign("LoadTilemap", func(args []interface{}) (interface{}, error) {
@@ -702,11 +879,7 @@ func RegisterGame(v *vm.VM) {
 		path := toString(args[0])
 		id, err := tilemapLoad(path)
 		if err != nil {
-			tilemapMu.Lock()
-			tilemapSeq++
-			id = fmt.Sprintf("tm_%d", tilemapSeq)
-			tilemaps[id] = &tilemapData{Tiles: [][]int{}, TileSize: 32, Solid: make(map[int]bool)}
-			tilemapMu.Unlock()
+			return nil, nil
 		}
 		return id, nil
 	})
@@ -760,22 +933,31 @@ func RegisterGame(v *vm.VM) {
 			return nil, fmt.Errorf("DrawTilemap requires (mapId)")
 		}
 		id := toString(args[0])
-		tilemapMu.RLock()
-		tm := tilemaps[id]
-		tilemapMu.RUnlock()
-		if tm == nil || len(tm.Tiles) == 0 {
-			return nil, nil
+		offsetX := float32(0)
+		offsetY := float32(0)
+		if len(args) >= 2 {
+			offsetX = float32(toFloat64(args[1]))
 		}
-		for y := 0; y < len(tm.Tiles); y++ {
-			for x := 0; x < len(tm.Tiles[y]); x++ {
-				tid := tm.Tiles[y][x]
-				if tid != 0 {
-					px := float32(x * tm.TileSize)
-					py := float32(y * tm.TileSize)
-					rl.DrawRectangle(int32(px), int32(py), int32(tm.TileSize), int32(tm.TileSize), rl.Gray)
-				}
-			}
+		if len(args) >= 3 {
+			offsetY = float32(toFloat64(args[2]))
 		}
+		drawTilemapByID(id, offsetX, offsetY)
+		return nil, nil
+	})
+	v.RegisterForeign("TilemapDrawByMapId", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("TilemapDrawByMapId requires (mapId [, x, y])")
+		}
+		id := toString(args[0])
+		offsetX := float32(0)
+		offsetY := float32(0)
+		if len(args) >= 2 {
+			offsetX = float32(toFloat64(args[1]))
+		}
+		if len(args) >= 3 {
+			offsetY = float32(toFloat64(args[2]))
+		}
+		drawTilemapByID(id, offsetX, offsetY)
 		return nil, nil
 	})
 	setTileByMapId := func(args []interface{}) (interface{}, error) {
@@ -821,16 +1003,60 @@ func RegisterGame(v *vm.VM) {
 		tilemapMu.RLock()
 		tm := tilemaps[id]
 		tilemapMu.RUnlock()
-		if tm == nil || tm.TileSize <= 0 {
+		if tm == nil {
 			return false, nil
 		}
-		tx := int(wx) / tm.TileSize
-		ty := int(wy) / tm.TileSize
+		tileWidth, tileHeight := normalizeTileDimensions(tm.TileWidth, tm.TileHeight, tm.TileWidth)
+		if tileWidth <= 0 || tileHeight <= 0 {
+			return false, nil
+		}
+		tx := int(wx) / tileWidth
+		ty := int(wy) / tileHeight
 		if ty < 0 || ty >= len(tm.Tiles) || tx < 0 || tx >= len(tm.Tiles[ty]) {
 			return false, nil
 		}
 		tid := tm.Tiles[ty][tx]
 		return tm.Solid[tid], nil
+	})
+	v.RegisterForeign("TilemapSetTileset", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("TilemapSetTileset requires (tilemapId, texturePath)")
+		}
+		id := toString(args[0])
+		texturePath := toString(args[1])
+		tilemapMu.RLock()
+		tm := tilemaps[id]
+		tilemapMu.RUnlock()
+		if tm == nil {
+			return nil, fmt.Errorf("unknown tilemap: %s", id)
+		}
+		return nil, assignTilemapTileset(tm, texturePath)
+	})
+	v.RegisterForeign("TilemapSetTilesetByMapId", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("TilemapSetTilesetByMapId requires (tilemapId, texturePath)")
+		}
+		id := toString(args[0])
+		texturePath := toString(args[1])
+		tilemapMu.RLock()
+		tm := tilemaps[id]
+		tilemapMu.RUnlock()
+		if tm == nil {
+			return nil, fmt.Errorf("unknown tilemap: %s", id)
+		}
+		return nil, assignTilemapTileset(tm, texturePath)
+	})
+	v.RegisterForeign("TilemapDeleteByMapId", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("TilemapDeleteByMapId requires (tilemapId)")
+		}
+		id := toString(args[0])
+		tilemapMu.Lock()
+		tm := tilemaps[id]
+		delete(tilemaps, id)
+		tilemapMu.Unlock()
+		releaseTilemapTileset(tm)
+		return nil, nil
 	})
 	v.RegisterForeign("TilemapSetLayer", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
@@ -1039,7 +1265,7 @@ func RegisterGame(v *vm.VM) {
 		tilemapMu.Lock()
 		tilemapSeq++
 		id := fmt.Sprintf("dungeon_%d", tilemapSeq)
-		tm := &tilemapData{Tiles: make([][]int, h), TileSize: 32, Solid: map[int]bool{0: true}}
+		tm := &tilemapData{Tiles: make([][]int, h), TileWidth: 32, TileHeight: 32, Solid: map[int]bool{0: true}}
 		for y := 0; y < h; y++ {
 			tm.Tiles[y] = make([]int, w)
 			for x := 0; x < w; x++ {
@@ -1091,7 +1317,7 @@ func RegisterGame(v *vm.VM) {
 		tilemapMu.Lock()
 		tilemapSeq++
 		id := fmt.Sprintf("city_%d", tilemapSeq)
-		tm := &tilemapData{Tiles: make([][]int, h), TileSize: 16, Solid: map[int]bool{1: true}}
+		tm := &tilemapData{Tiles: make([][]int, h), TileWidth: 16, TileHeight: 16, Solid: map[int]bool{1: true}}
 		for y := 0; y < h; y++ {
 			tm.Tiles[y] = make([]int, w)
 			for x := 0; x < w; x++ {
@@ -1219,7 +1445,10 @@ func RegisterGame(v *vm.VM) {
 		invMu.Lock()
 		invSeq++
 		id := fmt.Sprintf("inv_%d", invSeq)
-		inventories[id] = &invData{Slots: make([]struct{ ItemID string; Amount int }, 0, size), MaxSlots: size}
+		inventories[id] = &invData{Slots: make([]struct {
+			ItemID string
+			Amount int
+		}, 0, size), MaxSlots: size}
 		invMu.Unlock()
 		return id, nil
 	})
@@ -1241,7 +1470,10 @@ func RegisterGame(v *vm.VM) {
 				}
 			}
 			if len(inv.Slots) < inv.MaxSlots {
-				inv.Slots = append(inv.Slots, struct{ ItemID string; Amount int }{itemID, amount})
+				inv.Slots = append(inv.Slots, struct {
+					ItemID string
+					Amount int
+				}{itemID, amount})
 			}
 		}
 		invMu.Unlock()

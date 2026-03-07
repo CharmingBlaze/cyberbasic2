@@ -331,6 +331,7 @@ EnableFrustumCulling 1   ' Skip objects outside camera view
 
 CyberBASIC2 now has a real first-pass shadow system aimed at being usable across low-, mid-, and higher-end machines without changing your scene setup.
 
+- global shadows start enabled by default
 - `EnableShadows()` / `DisableShadows()` toggle the global shadow system.
 - `EnableShadows(lightId)` / `DisableShadows(lightId)` mark a specific DBP light as the preferred shadow caster.
 - `SetShadowQuality("low"|"medium"|"mid"|"high")` applies hardware-oriented presets.
@@ -351,7 +352,7 @@ Current limitations:
 
 Recommended usage tiers:
 
-- Simple: create a directional light, then call `EnableShadows()`
+- Simple: create a directional light and let the default global shadow path work automatically
 - Standard: add `SetShadowQuality("medium")` or `SetShadowQuality("high")`
 - Advanced: call `EnableShadows(lightId)` on the directional light you want to cast shadows, then fine-tune `SetShadowMapSize` and `SetShadowBias`
 

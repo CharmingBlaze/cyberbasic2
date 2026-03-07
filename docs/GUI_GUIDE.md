@@ -5,6 +5,15 @@ CyberBASIC2 provides two UI options:
 1. **Full raygui** (recommended when using CGO): the real [raygui](https://github.com/raysan5/raygui) library via **Gui*** functions. You place controls by (x, y, w, h). Requires CGO (gen2brain/raylib-go/raygui).
 2. **Pure-Go layout UI**: **BeginUI()** / **EndUI()** with a vertical cursor; widgets (Label, Button, Slider, etc.) advance the layout. No CGO; use when building with CGO_ENABLED=0.
 
+## Support Matrix
+
+| Path | Best for | Layout model | CGO required | Styling | Recommended status |
+|------|----------|--------------|--------------|---------|--------------------|
+| `Gui*` / DBP `UI*` | Full menus, settings screens, draggable windows, richer widgets | Explicit rectangles `(x, y, w, h)` | Yes | raygui styles and `LoadUIStyle` | Primary full-featured path |
+| `BeginUI` / `EndUI` | HUDs, debug panels, simple forms, no-CGO builds | Automatic vertical/horizontal/grid layout | No | Minimal built-in look only | Lightweight fallback path |
+
+`UI*` commands are DBP-style wrappers over the rectangle-based `Gui*` controls. If you want the fullest current GUI path, use `Gui*` directly or use `UI*` with the same rectangle-oriented mental model.
+
 ## Table of Contents
 
 1. [Full raygui (Gui* functions)](#full-raygui-gui-functions)
@@ -40,6 +49,7 @@ WEND
 
 - **GuiTextBox(id, x, y, w, h, text)** returns the current text; use the same string **id** each frame so the buffer is preserved.
 - **GuiDropdownBox(id, x, y, w, h, itemsText, active)** uses itemsText like `"Low;Medium;High"` and returns the new 0-based index.
+- DBP wrappers map to this path: `UIButton`, `UILabel`, `UICheckbox`, `UISlider`, `UITextBox`, `UIProgressBar`.
 
 ---
 
@@ -110,6 +120,17 @@ All coordinates and sizes in pixels (x, y, width, height).
 | **GuiLine** | (x, y, w, h, text) | — | Line |
 | **GuiPanel** | (x, y, w, h, text) | — | Panel |
 
+DBP-style rectangle wrappers:
+
+| Command | Arguments | Returns | Notes |
+|---------|-----------|---------|-------|
+| **UIButton** | (id, x, y, w, h, text) | 1 or 0 | `id` is accepted for DBP-style parity; click behavior comes from `GuiButton` |
+| **UILabel** | (x, y, text) or (id, x, y, text) or (id, x, y, w, h, text) | — | Short forms use a default label size |
+| **UICheckbox** | (id, x, y, text, checked) | 1 or 0 | Wraps `GuiCheckBox` |
+| **UISlider** | (id, x, y, w, min, max, value) or (id, x, y, w, h, text, value, min, max) | float | Wraps `GuiSlider` |
+| **UITextBox** | (id, x, y, w, h, text) | string | Wraps `GuiTextBoxId` |
+| **UIProgressBar** | (id, x, y, w, h, text, value, min, max) | float | Wraps `GuiProgressBar` |
+
 ### Layout engine (BeginUI / pure-Go)
 
 Use **BeginLayout**(mode) to set layout direction. Modes: **LAYOUT_VERTICAL** (0), **LAYOUT_HORIZONTAL** (1), **LAYOUT_GRID** (2). For grid, pass columns: `BeginLayout(LAYOUT_GRID, 3)`.
@@ -161,7 +182,8 @@ WEND
 
 ## Notes
 
-- **Full raygui:** Requires CGO (e.g. `go build` with CGO_ENABLED=1 and a C compiler). If you build with CGO_ENABLED=0 (e.g. purego raylib on Windows), use the pure-Go **BeginUI** / **EndUI** widgets instead.
+- **Full raygui path:** Requires CGO (e.g. `go build` with CGO_ENABLED=1 and a C compiler). If you build with CGO_ENABLED=0, prefer the pure-Go **BeginUI** / **EndUI** widgets instead.
+- **Choose one path per screen:** For production menus, prefer the rectangle-based `Gui*` / `UI*` path. For simple HUDs or no-CGO builds, prefer `BeginUI`.
 - **TextBox / GuiTextBox:** Use a stable string id (e.g. "tb1") so the same buffer is used each frame. Click to focus; type to edit; click outside to unfocus.
 - **Dropdown / GuiDropdownBox:** itemsText uses semicolons: "Item1;Item2;Item3". activeIndex is 0-based.
 - **Slider / ProgressBar:** value, min, max are numbers; Slider returns the new value after dragging.

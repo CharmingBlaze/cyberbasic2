@@ -11,7 +11,7 @@ All notable changes to CyberBasic are documented here. The project follows a sin
 - **Physics API simplified:** 2D and 3D physics now use **flat names** only: **CreateWorld2D**, **Step2D**, **CreateBody2D**, **GetPositionX2D** / **GetPositionY2D**, etc., and **CreateWorld3D**, **Step3D**, **CreateBox3D**, **GetPositionX3D**, etc. The **BOX2D.*** and **BULLET.*** namespaces are no longer registered in the VM.
 - **Backward compatibility:** The compiler rewrites legacy `BOX2D.*` and `BULLET.*` calls to the corresponding flat names at compile time, so existing scripts continue to work.
 - **Box2D flat API:** Added **CreateBody2D**, **DestroyBody2D**, **GetBodyCount2D**, **GetBodyId2D**, **CreateBodyAtScreen2D** to the flat API; removed all BOX2D.* VM registrations.
-- **Bullet flat API:** Added **SetWorldGravity3D**, **DestroyBody3D**, **RayCastFromDir3D**; removed all BULLET.* VM registrations. **3D constraint joints** (CreateHingeJoint3D, etc.) remain stubbed in the pure-Go engine and are documented as not implemented.
+- **Bullet flat API:** Added **SetWorldGravity3D**, **DestroyBody3D**, **RayCastFromDir3D**; removed all BULLET.* VM registrations. The shipped `purego-fallback` backend now exposes backend/feature queries and returns explicit errors for unsupported 3D joints and related missing fallback features.
 - **Gogen:** Generated Go code now emits flat-style physics calls (e.g. `box2d.CreateWorld2D`, `bullet.Step3D`) instead of namespaced names.
 - **Documentation:** API_REFERENCE, COMMAND_REFERENCE, 2D_PHYSICS_GUIDE, 3D_PHYSICS_GUIDE, FAQ, GAME_DEVELOPMENT_GUIDE, and related docs updated to use flat names only; one-line deprecation note for BOX2D/BULLET namespaces.
 - **Examples and templates:** All BOX2D.* and BULLET.* usage in examples and templates replaced with flat names.
@@ -19,7 +19,7 @@ All notable changes to CyberBasic are documented here. The project follows a sin
 ### Physics, UI, and audio (full implementation)
 
 - **Box2D:** All joint types implemented (Revolute, Prismatic, Weld, Rope, Pulley, Gear, Wheel); joint ID storage; **SetJointLimits2D**, **SetJointMotor2D**, **DestroyJoint2D**. Distance joint returns jointId.
-- **Bullet:** Body properties implemented and used in Step and collision: friction, restitution, linear/angular damping, kinematic, gravity scale, linear/angular factor, CCD. Setters: SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, SetGravity3D, SetLinearFactor3D, SetAngularFactor3D, SetCCD3D. 3D constraint joints remain stubs.
+- **Bullet:** Body properties implemented and used in Step and collision: friction, restitution, linear/angular damping, kinematic, gravity scale, linear/angular factor, CCD. Setters: SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, SetGravity3D, SetLinearFactor3D, SetAngularFactor3D, SetCCD3D. Added clearer fallback gating plus simple default-world helpers like **SetBodyPosition** / **GetBodyPosition**.
 - **UI (raygui):** **GuiLoadStyle**(filePath), **GuiLoadStyleDefault**(), **GuiSetStyle**(controlId, propertyId, value), **GuiGetStyle**(controlId, propertyId) for theme and layout.
 - **Audio:** Documented that stream callbacks requiring C function pointers are not exposed from BASIC; use **UpdateAudioStream** to push samples.
 - Documentation: API_REFERENCE, COMMAND_REFERENCE, 2D_PHYSICS_GUIDE, 3D_PHYSICS_GUIDE, GUI_GUIDE, README, and GAME_DEVELOPMENT_GUIDE updated.

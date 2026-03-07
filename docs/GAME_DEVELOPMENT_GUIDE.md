@@ -288,7 +288,7 @@ WEND
 ## Physics implementation status
 
 - **Box2D (2D):** Worlds, bodies, shapes, raycast, and collision are implemented. All joint types are supported: **CreateDistanceJoint2D**, **CreateRevoluteJoint2D**, **CreatePrismaticJoint2D**, **CreateWeldJoint2D**, **CreateRopeJoint2D**, **CreatePulleyJoint2D**, **CreateGearJoint2D**, **CreateWheelJoint2D**. Use **SetJointLimits2D** and **SetJointMotor2D** to configure joints; **DestroyJoint2D** to remove them.
-- **Bullet (3D):** Worlds, bodies, shapes, raycast, step, and collision are implemented. Body properties are supported: **SetFriction3D**, **SetRestitution3D**, **SetDamping3D**, **SetKinematic3D**, **SetGravity3D**, **SetLinearFactor3D**, **SetAngularFactor3D**, **SetCCD3D**. **3D constraint joints** (CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, CreatePointToPointJoint3D, CreateFixedJoint3D, SetJointLimits3D, SetJointMotor3D) remain stubbed in the pure-Go engine.
+- **Bullet-style 3D API:** Worlds, bodies, shapes, raycast, step, and collision are implemented through the shipped `purego-fallback` backend. Body properties are supported: **SetFriction3D**, **SetRestitution3D**, **SetDamping3D**, **SetKinematic3D**, **SetGravity3D**, **SetLinearFactor3D**, **SetAngularFactor3D**, **SetCCD3D**. Use **BulletFeatureAvailable** when you need to branch on fallback support. Unsupported 3D constraint joints and other missing fallback features now return explicit errors instead of silently succeeding.
 
 See [API_REFERENCE.md](../API_REFERENCE.md) and [2D Physics Guide](2D_PHYSICS_GUIDE.md) / [3D Physics Guide](3D_PHYSICS_GUIDE.md) for the full list.
 

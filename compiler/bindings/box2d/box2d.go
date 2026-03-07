@@ -53,21 +53,21 @@ type collisionHit2D struct {
 }
 
 var (
-	worlds             = make(map[string]*box2d.B2World)
-	worldIdByPtr       = make(map[*box2d.B2World]string)
-	worldMu            sync.RWMutex
-	bodies             = make(map[string]*box2d.B2Body) // key: worldId.bodyId
-	bodiesMu           sync.RWMutex
-	joints             = make(map[string]box2d.B2JointInterface) // key: worldId + "\x00" + jointId
-	jointsMu           sync.RWMutex
-	jointSeq           int
-	layerCollision     = make(map[string]map[string]bool) // layerA -> layerB -> collide
-	layerCollisionMu   sync.RWMutex
-	bodyOrder          = make(map[string][]string) // worldId -> ordered body IDs for iteration
-	bodyOrderMu        sync.RWMutex
-	collisionBuffer2D  = make(map[string][]collisionHit2D)
+	worlds              = make(map[string]*box2d.B2World)
+	worldIdByPtr        = make(map[*box2d.B2World]string)
+	worldMu             sync.RWMutex
+	bodies              = make(map[string]*box2d.B2Body) // key: worldId.bodyId
+	bodiesMu            sync.RWMutex
+	joints              = make(map[string]box2d.B2JointInterface) // key: worldId + "\x00" + jointId
+	jointsMu            sync.RWMutex
+	jointSeq            int
+	layerCollision      = make(map[string]map[string]bool) // layerA -> layerB -> collide
+	layerCollisionMu    sync.RWMutex
+	bodyOrder           = make(map[string][]string) // worldId -> ordered body IDs for iteration
+	bodyOrderMu         sync.RWMutex
+	collisionBuffer2D   = make(map[string][]collisionHit2D)
 	collisionBuffer2DMu sync.RWMutex
-	lastRay2D          struct {
+	lastRay2D           struct {
 		hit    bool
 		x, y   float64
 		bodyId string
@@ -115,8 +115,8 @@ func (contactListener) BeginContact(contact box2d.B2ContactInterface) {
 	collisionBuffer2DMu.Unlock()
 }
 
-func (contactListener) EndContact(box2d.B2ContactInterface)   {}
-func (contactListener) PreSolve(box2d.B2ContactInterface, box2d.B2Manifold) {}
+func (contactListener) EndContact(box2d.B2ContactInterface)                         {}
+func (contactListener) PreSolve(box2d.B2ContactInterface, box2d.B2Manifold)         {}
 func (contactListener) PostSolve(box2d.B2ContactInterface, *box2d.B2ContactImpulse) {}
 
 func bodyKey(worldId, bodyId string) string { return worldId + "\x00" + bodyId }
@@ -192,6 +192,13 @@ func registerEntityGetters2D(v *vm.VM) {
 
 // registerFlat2D registers flat CreateWorld2D, Step2D, CreateBox2D, etc. (no BOX2D. prefix).
 func registerFlat2D(v *vm.VM) {
+	v.RegisterForeign("Box2DBackendName", func(args []interface{}) (interface{}, error) {
+		return "bytearena-box2d", nil
+	})
+	v.RegisterForeign("Box2DBackendMode", func(args []interface{}) (interface{}, error) {
+		return "authoritative", nil
+	})
+
 	// World
 	v.RegisterForeign("CreateWorld2D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {
@@ -757,7 +764,7 @@ func registerFlat2D(v *vm.VM) {
 	})
 
 	// Velocity
-	v.RegisterForeign("GetVelocityX2D", func(args []interface{}) (interface{}, error) {
+	getVelocityX2D := func(args []interface{}) (interface{}, error) {
 		bodiesMu.RLock()
 		b := bodies[bodyKey(toString(args[0]), toString(args[1]))]
 		bodiesMu.RUnlock()
@@ -765,8 +772,10 @@ func registerFlat2D(v *vm.VM) {
 			return 0.0, nil
 		}
 		return b.GetLinearVelocity().X, nil
-	})
-	v.RegisterForeign("GetVelocityY2D", func(args []interface{}) (interface{}, error) {
+	}
+	v.RegisterForeign("GetVelocityX2D", getVelocityX2D)
+	v.RegisterForeign("GetVelocityX2DByBodyId", getVelocityX2D)
+	getVelocityY2D := func(args []interface{}) (interface{}, error) {
 		bodiesMu.RLock()
 		b := bodies[bodyKey(toString(args[0]), toString(args[1]))]
 		bodiesMu.RUnlock()
@@ -774,7 +783,9 @@ func registerFlat2D(v *vm.VM) {
 			return 0.0, nil
 		}
 		return b.GetLinearVelocity().Y, nil
-	})
+	}
+	v.RegisterForeign("GetVelocityY2D", getVelocityY2D)
+	v.RegisterForeign("GetVelocityY2DByBodyId", getVelocityY2D)
 	v.RegisterForeign("SetVelocity2D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 4 {
 			return nil, fmt.Errorf("SetVelocity2D requires (world$, body$, vx, vy)")
@@ -790,8 +801,8 @@ func registerFlat2D(v *vm.VM) {
 	})
 
 	// Forces
-	v.RegisterForeign("ApplyForce2D", func(args []interface{}) (interface{}, error) {
-		if len(args) < 5 {
+	applyForce2D := func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
 			return nil, fmt.Errorf("ApplyForce2D requires (world$, body$, fx, fy)")
 		}
 		bodiesMu.RLock()
@@ -802,9 +813,11 @@ func registerFlat2D(v *vm.VM) {
 		}
 		b.ApplyForceToCenter(box2d.MakeB2Vec2(toFloat64(args[2]), toFloat64(args[3])), true)
 		return nil, nil
-	})
-	v.RegisterForeign("ApplyImpulse2D", func(args []interface{}) (interface{}, error) {
-		if len(args) < 5 {
+	}
+	v.RegisterForeign("ApplyForce2D", applyForce2D)
+	v.RegisterForeign("ApplyForce2DByBodyId", applyForce2D)
+	applyImpulse2D := func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
 			return nil, fmt.Errorf("ApplyImpulse2D requires (world$, body$, ix, iy)")
 		}
 		bodiesMu.RLock()
@@ -815,7 +828,9 @@ func registerFlat2D(v *vm.VM) {
 		}
 		b.ApplyLinearImpulseToCenter(box2d.MakeB2Vec2(toFloat64(args[2]), toFloat64(args[3])), true)
 		return nil, nil
-	})
+	}
+	v.RegisterForeign("ApplyImpulse2D", applyImpulse2D)
+	v.RegisterForeign("ApplyImpulse2DByBodyId", applyImpulse2D)
 	v.RegisterForeign("ApplyTorque2D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {
 			return nil, fmt.Errorf("ApplyTorque2D requires (world$, body$, torque)")
@@ -1661,7 +1676,7 @@ func GetCollisionOtherForBody(worldId, bodyId string, index int) string {
 
 // Flat-name exports for --gen-go (no namespace in generated code).
 func CreateWorld2D(worldId string, gx, gy float64) { CreateWorld(worldId, gx, gy) }
-func DestroyWorld2D(worldId string)               { DestroyWorld(worldId) }
+func DestroyWorld2D(worldId string)                { DestroyWorld(worldId) }
 func Step2D(worldId string, dt float64, velIters, posIters int) {
 	Step(worldId, dt, velIters, posIters)
 }
@@ -1686,7 +1701,7 @@ func GetBodyId2D(worldId string, index int) string {
 }
 func GetPositionX2D(worldId, bodyId string) float64 { return GetPositionX(worldId, bodyId) }
 func GetPositionY2D(worldId, bodyId string) float64 { return GetPositionY(worldId, bodyId) }
-func GetAngle2D(worldId, bodyId string) float64    { return GetAngle(worldId, bodyId) }
+func GetAngle2D(worldId, bodyId string) float64     { return GetAngle(worldId, bodyId) }
 func SetVelocity2D(worldId, bodyId string, vx, vy float64) {
 	SetLinearVelocity(worldId, bodyId, vx, vy)
 }

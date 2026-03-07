@@ -1,6 +1,6 @@
 # Level Loading API
 
-CyberBASIC2 provides a unified 3D loading pipeline. **LOAD LEVEL** loads everything automatically: meshes, materials, textures, lights, hierarchy, and optionally collision. No extra commands required for basic loading.
+CyberBASIC2 provides a unified 3D loading pipeline. **LOAD LEVEL** loads everything automatically: meshes, materials, textures, hierarchy, and optionally collision. No extra commands required for basic loading.
 
 ## Quick Start
 
@@ -21,13 +21,13 @@ WEND
 UNLOAD LEVEL 1
 ```
 
-Textures, materials, lights, hierarchy—all loaded automatically. Call `LoadLevelCollision` to enable physics colliders from the level.
+Textures, materials, and hierarchy load automatically. Call `LoadLevelCollision` to enable physics colliders from the level. GLTF punctual lights are not imported into runtime DBP lights yet, so add gameplay lights explicitly after loading if you need them.
 
 ## Core Commands
 
 | Command | Args | Description |
 |---------|------|-------------|
-| `LoadLevel` | (id, path) | Load a full level from file. Parses, uploads to GPU, creates objects and lights. |
+| `LoadLevel` | (id, path) | Load a full level from file. Parses, uploads to GPU, and creates objects. |
 | `DrawLevel` | (id) | Draw all objects in the level. Call between Start3D/End3D. |
 | `UnloadLevel` | (id) | Free all level resources (objects, textures, lights, colliders). |
 
@@ -62,9 +62,9 @@ PhysicsOn
 - **Meshes** — All geometry (empty meshes skipped)
 - **Materials** — PBR (base color, metallic, roughness); default if none
 - **Textures** — Base color, normal, metallic-roughness maps (default 1x1 white on failure)
-- **Lights** — Directional, point, spot (from GLTF KHR_lights_punctual)
+- **Lights** — Not yet imported from GLTF `KHR_lights_punctual`; create runtime lights explicitly
 - **Hierarchy** — Node transforms (position, rotation, scale)
-- **Skeleton** — From GLTF skin (for IK, animation)
+- **Skeleton** — From GLTF skin (for animation and experimental IK requests)
 - **Colliders** — Detected from naming; use LoadLevelCollision to create physics bodies
 
 ## Graceful Degradation

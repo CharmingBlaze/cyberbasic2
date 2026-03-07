@@ -48,6 +48,9 @@ func registerRuntime(v *vm.VM) {
 		}
 		return nil, nil
 	})
+	v.RegisterForeign("StepFrame", func(args []interface{}) (interface{}, error) {
+		return nil, runtime.StepFrame(v)
+	})
 }
 
 // FixedUpdateLabel returns the label set by OnFixedUpdate (for game loop integration).

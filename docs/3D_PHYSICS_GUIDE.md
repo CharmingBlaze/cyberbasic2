@@ -1,6 +1,8 @@
 # 3D Physics Guide (Bullet)
 
-Complete guide to 3D physics in CyberBASIC2 using Bullet: worlds, gravity, rigid bodies, shapes, position/rotation, velocity and forces, raycast, and integration with the hybrid loop and GAME.* helpers.
+Complete guide to 3D physics in CyberBASIC2 using the Bullet-shaped 3D physics API: worlds, gravity, rigid bodies, shapes, position/rotation, velocity and forces, raycast, and integration with the hybrid loop and GAME.* helpers.
+
+Today, the shipped 3D backend is a pure-Go fallback rather than native Bullet. You can query it at runtime with `BulletBackendName()`, `BulletBackendMode()`, `BulletNativeAvailable()`, `BulletJointsAvailable()`, and `BulletFeatureAvailable(feature$)`, which currently report `purego-fallback`, `fallback`, `0`, `0`, and per-feature support flags.
 
 ## Table of Contents
 
@@ -53,7 +55,7 @@ DestroyWorld3D("w")
 CloseWindow()
 ```
 
-The API uses **flat names** only (no namespace). Legacy **BULLET.*** in source is rewritten at compile time. **3D constraint joints** (CreateHingeJoint3D, CreateSliderJoint3D, etc.) are not implemented in the pure-Go engine. See [API Reference](../API_REFERENCE.md) section 15.
+The API uses **flat names** only (no namespace). Legacy **BULLET.*** in source is rewritten at compile time. **3D constraint joints** (CreateHingeJoint3D, CreateSliderJoint3D, etc.) are not implemented in the shipped pure-Go fallback. See [API Reference](../API_REFERENCE.md) section 15.
 
 ---
 
@@ -62,6 +64,12 @@ The API uses **flat names** only (no namespace). Legacy **BULLET.*** in source i
 - **Flat names:** **CreateWorld3D**, **SetWorldGravity3D**, **Step3D**, **CreateBox3D**, **CreateSphere3D**, **GetPositionX3D** / **GetPositionY3D** / **GetPositionZ3D**, **SetVelocity3D**, **ApplyForce3D**, **ApplyImpulse3D**, **RayCastFromDir3D** or **RayCast3D**, **RayHitX3D** / **RayHitY3D** / **RayHitZ3D**, **RayHitBody3D**, etc. Use these in all new code.
 
 All commands are **case-insensitive**. For the complete list see [API Reference](../API_REFERENCE.md) section 15.
+
+Treat the current 3D backend as:
+
+- good for simple rigid bodies, gravity, velocity-based character helpers, basic raycasts, and broad-phase collision queries
+- includes default-world helper commands such as `SetBodyPosition`, `GetBodyPosition`, `SetBodyVelocity`, and `GetBodyVelocity` for quick DBPro-style scripts
+- not a full native Bullet replacement yet for constraints, exact mesh collision, or high-fidelity narrow-phase behavior
 
 ---
 
@@ -79,12 +87,13 @@ All commands are **case-insensitive**. For the complete list see [API Reference]
 - **CreateBox3D**(worldId, bodyId, x, y, z, halfWidth, halfHeight, halfDepth, mass) — box (half-extents). mass 0 = static.
 - **CreateSphere3D**(worldId, bodyId, x, y, z, radius, mass) — sphere.
 - **CreateCapsule3D**, **CreateCylinder3D**, **CreateCone3D** — capsule, cylinder, cone (legacy names; see API Reference). In the pure-Go runtime, capsules are still approximated for collision/raycast math, but the requested capsule height is now preserved in the body's bounds instead of being ignored.
-- **CreateStaticMesh3D**, **CreateHeightmap3D** — static mesh and heightfield (legacy; see API Reference).
-- **CreateCompound3D**, **AddShapeToCompound3D** — compound bodies (multiple shapes). **SetScale3D** for scaling.
+- **CreateStaticMesh3D** currently creates a simple static placeholder body, not true triangle-mesh collision.
+- **CreateHeightmap3D**, **CreateCompound3D**, **AddShapeToCompound3D** are unsupported in the current fallback and now return explicit errors instead of silently succeeding.
+- **SetScale3D** scales fallback bounds; it is not a substitute for native compound or mesh collision.
 
 **Body properties (implemented):** **SetFriction3D**, **SetRestitution3D**, **SetDamping3D**, **SetKinematic3D**, **SetGravity3D**, **SetLinearFactor3D**, **SetAngularFactor3D**, **SetCCD3D**.
 
-**3D joints:** **BulletJointsAvailable**() returns 0 (pure-Go engine) or 1 (CGO Bullet). CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, CreatePointToPointJoint3D, CreateFixedJoint3D, SetJointLimits3D, SetJointMotor3D are stubbed in the pure-Go engine; use a full Bullet CGO build for constraint joints.
+**3D joints:** **BulletJointsAvailable**() returns 0 in the current shipped backend. CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, CreatePointToPointJoint3D, CreateFixedJoint3D, SetJointLimits3D, and SetJointMotor3D are unsupported in the pure-Go fallback and now return explicit errors.
 
 ---
 
@@ -101,7 +110,7 @@ Use these each frame after **Step3D** to draw your 3D model or to drive **GAME.C
 
 - **Velocity:** **SetVelocity3D**(worldId, bodyId, vx, vy, vz). **GetVelocityX3D** / **GetVelocityY3D** / **GetVelocityZ3D**.
 - **Angular velocity:** **SetAngularVelocity3D**, **GetAngularVelocityX3D/Y3D/Z3D** (see API Reference).
-- **Forces:** **ApplyForce3D**(worldId, bodyId, fx, fy, fz). **ApplyImpulse3D**(worldId, bodyId, ix, iy, iz). **ApplyTorque3D**, **ApplyTorqueImpulse3D** for rotation.
+- **Forces:** **ApplyForce3D**(worldId, bodyId, fx, fy, fz). **ApplyImpulse3D**(worldId, bodyId, ix, iy, iz). `ApplyTorque3D` and `ApplyTorqueImpulse3D` are legacy names but are unsupported in the current fallback and now return explicit errors.
 
 ---
 
@@ -145,6 +154,11 @@ See [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md#3d-physics-bullet).
 
 | Command | Arguments | Returns | Description |
 |---------|-----------|---------|-------------|
+| **BulletBackendName** | () | string | Backend name (`purego-fallback`) |
+| **BulletBackendMode** | () | string | Backend mode (`fallback`) |
+| **BulletNativeAvailable** | () | 0/1 | Whether a native Bullet backend is available |
+| **BulletJointsAvailable** | () | 0/1 | Whether 3D constraint joints are implemented |
+| **BulletFeatureAvailable** | (featureName$) | 0/1 | Query per-feature support in the shipped backend |
 | **CreateWorld3D** | (worldId, gx, gy, gz) | — | Create world |
 | **SetWorldGravity3D** | (worldId, x, y, z) | — | Set gravity |
 | **Step3D** | (worldId, dt) | — | Step simulation |

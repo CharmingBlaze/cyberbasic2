@@ -346,8 +346,12 @@ Note: Raylib has no built-in dynamic lights. The light registry stores state; vi
 
 ### 3D Physics (Collision Shapes, Rigid Body)
 - `MakeBoxCollider(id, sx, sy, sz)` / `MakeSphereCollider(id, radius)` / `MakeCapsuleCollider(id, radius, height)`
+- `MakeMeshCollider(id, meshID)` - Unsupported in the shipped 3D fallback; returns an explicit error
+- `SetBodyPosition(bodyId$, x, y, z)` / `GetBodyPosition(bodyId$)` - Default-world vector helpers for string body IDs
+- `SetBodyVelocity(bodyId$, vx, vy, vz)` / `GetBodyVelocity(bodyId$)` - Default-world velocity helpers for string body IDs
 - `MakeRigidBodyId(id, x, y, z, mass)` - Create rigid body with int ID
 - `SetRigidBodyPosition(id, x, y, z)` / `SetRigidBodyVelocity(id, vx, vy, vz)`
+- `GetBodyX/Y/Z(bodyId$)` / `GetBodyVX/VY/VZ(bodyId$)` - Default-world queries for string body IDs
 - `GetRigidBodyX/Y/Z(id)` / `GetRigidBodyMass(id)` / `GetRigidBodySpeed(id)` / `GetRigidBodyAngularVelocity(id)`
 
 ### Level Loading (dbp_level.go)
@@ -362,7 +366,7 @@ Note: Raylib has no built-in dynamic lights. The light registry stores state; vi
 
 ### IK (dbp_ik.go)
 - `IKEnable(objectID, onOff)` - Enable/disable IK for object
-- `IKSolveTwoBone(objectID, boneA$, boneB$, targetX, targetY, targetZ)` - Two-bone IK solver
+- `IKSolveTwoBone(objectID, boneA$, boneB$, targetX, targetY, targetZ)` - Experimental two-bone IK solve request
 
 ### Model / Mesh / Animation
 - `LoadMesh(id, path)` / `GetModelBounds(objectID)` / `GetMeshVertexCount(id)` / `GetMeshTriangleCount(id)`

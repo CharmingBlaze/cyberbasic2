@@ -20,7 +20,7 @@ func PhysicsNamespaceToFlat(name string) string {
 var physicsNamespaceFlatMap = map[string]string{
 	// Box2D
 	"box2d.createworld":        "createworld2d",
-	"box2d.destroyworld":        "destroyworld2d",
+	"box2d.destroyworld":       "destroyworld2d",
 	"box2d.step":               "step2d",
 	"box2d.createbody":         "createbody2d",
 	"box2d.destroybody":        "destroybody2d",
@@ -35,13 +35,13 @@ var physicsNamespaceFlatMap = map[string]string{
 	"box2d.applyforce":         "applyforce2d",
 	// Box2D GetPosition/GetLinearVelocity have no single flat equivalent; use GetPositionX2D/GetPositionY2D and GetVelocityX2D/GetVelocityY2D.
 	// Bullet
-	"bullet.createworld":           "createworld3d",
-	"bullet.destroyworld":          "destroyworld3d",
-	"bullet.setgravity":            "setworldgravity3d",
-	"bullet.step":                  "step3d",
-	"bullet.createbox":             "createbox3d",
-	"bullet.createsphere":          "createsphere3d",
-	"bullet.destroybody":           "destroybody3d",
+	"bullet.createworld":          "createworld3d",
+	"bullet.destroyworld":         "destroyworld3d",
+	"bullet.setgravity":           "setworldgravity3d",
+	"bullet.step":                 "step3d",
+	"bullet.createbox":            "createbox3d",
+	"bullet.createsphere":         "createsphere3d",
+	"bullet.destroybody":          "destroybody3d",
 	"bullet.setposition":          "setposition3d",
 	"bullet.getpositionx":         "getpositionx3d",
 	"bullet.getpositiony":         "getpositiony3d",
@@ -75,7 +75,7 @@ const MaxConstIndex = 255
 // checkConstIndex returns an error if idx exceeds MaxConstIndex. kind is appended to the message, e.g. " for dict key".
 func checkConstIndex(idx int, kind string) error {
 	if idx > MaxConstIndex {
-		return fmt.Errorf("too many constants" + kind)
+		return fmt.Errorf("%s", "too many constants"+kind)
 	}
 	return nil
 }

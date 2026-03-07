@@ -1,1 +1,0 @@
-DIM score AS INTEGER

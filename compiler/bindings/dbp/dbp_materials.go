@@ -102,13 +102,46 @@ func registerMaterials(v *vm.VM) {
 		if len(args) < 2 {
 			return nil, fmt.Errorf("SetMaterialMetalness(id, value) requires 2 arguments")
 		}
-		// raylib Material may not have metalness; store for future use
+		id := toInt(args[0])
+		value := toFloat32(args[1])
+		if value < 0 {
+			value = 0
+		}
+		if value > 1 {
+			value = 1
+		}
+		materialsMu.Lock()
+		mat, ok := materials[id]
+		if ok && mat.Maps != nil {
+			if metalMap := mat.GetMap(rl.MapMetalness); metalMap != nil {
+				metalMap.Value = value
+			}
+			materials[id] = mat
+		}
+		materialsMu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("SetMaterialRoughness", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
 			return nil, fmt.Errorf("SetMaterialRoughness(id, value) requires 2 arguments")
 		}
+		id := toInt(args[0])
+		value := toFloat32(args[1])
+		if value < 0 {
+			value = 0
+		}
+		if value > 1 {
+			value = 1
+		}
+		materialsMu.Lock()
+		mat, ok := materials[id]
+		if ok && mat.Maps != nil {
+			if roughMap := mat.GetMap(rl.MapRoughness); roughMap != nil {
+				roughMap.Value = value
+			}
+			materials[id] = mat
+		}
+		materialsMu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("SetMaterialTexture", func(args []interface{}) (interface{}, error) {

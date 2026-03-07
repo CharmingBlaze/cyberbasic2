@@ -232,7 +232,6 @@ emitCompound:
 	return nil
 }
 
-
 // compileSelectCaseStatement compiles SELECT CASE expr ... CASE val: block ... END SELECT
 func (c *Compiler) compileSelectCaseStatement(s *parser.SelectCaseStatement, chunk *vm.Chunk) error {
 	if err := c.compileExpression(s.Expr, chunk); err != nil {
@@ -604,41 +603,15 @@ func (c *Compiler) emitFrameWrap(chunk *vm.Chunk, name string) {
 	chunk.Write(byte(0))
 }
 
-// emitHybridLoopBody emits the hybrid update/draw loop body: GetFrameTime, StepAllPhysics2D/3D, update(dt), ClearRenderQueues, draw(), FlushRenderQueues.
+// emitHybridLoopBody emits a single runtime StepFrame call so all hybrid entry points share the same fixed-step behavior.
 func (c *Compiler) emitHybridLoopBody(chunk *vm.Chunk) {
-	emitForeign := func(name string, argCount int) {
-		idx := chunk.WriteConstant(strings.ToLower(name))
-		if idx > MaxConstIndex {
-			return
-		}
-		chunk.Write(byte(vm.OpCallForeign))
-		chunk.Write(byte(idx))
-		chunk.Write(byte(argCount))
+	idx := chunk.WriteConstant("stepframe")
+	if idx > MaxConstIndex {
+		return
 	}
-	emitCallUser := func(name string, argCount int) {
-		idx := chunk.WriteConstant(strings.ToLower(name))
-		if idx > MaxConstIndex {
-			return
-		}
-		chunk.Write(byte(vm.OpCallUser))
-		chunk.Write(byte(idx))
-		chunk.Write(byte(argCount))
-	}
-	// dt = GetFrameTime()
-	emitForeign("getframetime", 0)
-	// StepAllPhysics2D(dt): need dt on stack, then dup for StepAllPhysics3D
-	chunk.Write(byte(vm.OpDup))
-	emitForeign("stepallphysics2d", 1)
-	chunk.Write(byte(vm.OpDup))
-	emitForeign("stepallphysics3d", 1)
-	if c.userFuncs["update"] {
-		emitCallUser("update", 1)
-	}
-	emitForeign("clearrenderqueues", 0)
-	if c.userFuncs["draw"] {
-		emitCallUser("draw", 0)
-	}
-	emitForeign("flushrenderqueues", 0)
+	chunk.Write(byte(vm.OpCallForeign))
+	chunk.Write(byte(idx))
+	chunk.Write(byte(0))
 }
 
 // compileWhileStatement compiles a WHILE loop

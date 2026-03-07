@@ -99,7 +99,7 @@ main()
 
 ## DBP-style (OnStart/OnUpdate/OnDraw)
 
-**Zero boilerplate:** Define `OnStart()`, `OnUpdate(dt)`, and `OnDraw()`—no `InitWindow`, no `WHILE` loop. The runtime creates the window and runs the loop. Use `UseUnifiedRenderer` and `SYNC` for the unified 3D→2D→GUI pipeline. See [DBP Parity](DBP_PARITY.md).
+**Zero boilerplate:** Define `OnStart()`, `OnUpdate(dt)`, and `OnDraw()`—no `InitWindow`, no `WHILE` loop. The runtime creates the window, runs the same fixed-step accumulator path used by the hybrid loop, then calls `OnUpdate(dt)` and `OnDraw()`. Use `UseUnifiedRenderer` and `SYNC` for the unified 3D→2D→GUI pipeline. See [DBP Parity](DBP_PARITY.md).
 
 ## Hybrid update/draw loop
 
@@ -108,11 +108,15 @@ main()
 If you define **`update(dt)`** and/or **`draw()`** (as Sub or Function) and use a game loop (`WHILE NOT WindowShouldClose()` or `REPEAT ... UNTIL WindowShouldClose()`), the compiler replaces the loop body with an automatic pipeline:
 
 1. **GetFrameTime** → `dt`
-2. **StepAllPhysics2D(dt)** and **StepAllPhysics3D(dt)** (all registered worlds)
-3. **update(dt)** (if defined)
-4. **ClearRenderQueues**
-5. **draw()** (if defined) — all Draw*/Gui* calls inside `draw()` are **queued** (2D, 3D, GUI)
-6. **FlushRenderQueues** — BeginDrawing, ClearBackground, then render queue2D, queue3D, queueGUI in order, EndDrawing
+2. **Accumulate scaled frame time** into the runtime fixed-step clock
+3. Run **zero or more fixed steps** at `FixedDeltaTime()`:
+   - `StepAllPhysics2D(FixedDeltaTime())`
+   - `StepAllPhysics3D(FixedDeltaTime())`
+   - `OnFixedUpdate(label$)` callback if registered
+4. **update(dt)** (if defined)
+5. **ClearRenderQueues**
+6. **draw()** (if defined) — all Draw*/Gui* calls inside `draw()` are **queued** (2D, 3D, GUI)
+7. **FlushRenderQueues** — BeginDrawing, ClearBackground, then render queue2D, queue3D, queueGUI in order, EndDrawing
 
 You do not call `BeginDrawing`/`EndDrawing` or `BeginMode2D`/`BeginMode3D` yourself; the engine does it. Example:
 

@@ -162,7 +162,7 @@ LoadObject 4, "character.gltf"
 | `GetLevelObjectCount` | (id) | Object count |
 | `GetLevelObject` | (id, index) | Get object ID at index |
 
-**LoadLevel** builds meshes, materials, textures, and DBP objects automatically. Call **LoadLevelCollision** after loading to enable physics colliders. Colliders are detected from GLTF node names (`col_*`, `collision_*`, `Collision*`). GLTF `KHR_lights_punctual` import is still not implemented, so do not rely on punctual lights embedded in GLTF files yet.
+**LoadLevel** builds meshes, materials, textures, and DBP objects automatically. Call **LoadLevelCollision** after loading to enable physics colliders. Colliders are detected from GLTF node names (`col_*`, `collision_*`, `Collision*`). Imported GLTF punctual lights are still not a dependable shipping path, so prefer explicit `MakeLight` setup for production scenes.
 
 **Example:**
 ```basic
@@ -354,9 +354,9 @@ tag$ = GetObjectTag 1
 | Command | Args | Description |
 |---------|------|-------------|
 | `IKEnable` | (objectID, onOff) | Enable/disable IK for object |
-| `IKSolveTwoBone` | (objectID, boneA$, boneB$, targetX, targetY, targetZ) | Solve two-bone IK for target position |
+| `IKSolveTwoBone` | (objectID, boneA$, boneB$, targetX, targetY, targetZ) | Experimental two-bone IK solve request |
 
-Requires object with skeleton (from GLTF skin). Bones identified by name. No-op if no skeleton or bones missing.
+Requires object with skeleton (from GLTF skin). Bones are identified by name. Current status: the solver validates skeleton data and computes an internal two-bone solution, but visible skinned-pose application is not fully integrated yet, so treat this as preparatory/experimental rather than finished runtime IK.
 
 ---
 
@@ -373,6 +373,8 @@ Requires object with skeleton (from GLTF skin). Bones identified by name. No-op 
 
 ## 16. 3D Physics
 
+The current 3D physics layer is a Bullet-shaped API backed by the shipped pure-Go fallback, not native Bullet. Use `BulletBackendName()`, `BulletBackendMode()`, `BulletNativeAvailable()`, `BulletJointsAvailable()`, and `BulletFeatureAvailable(feature$)` when you need to branch on runtime capability.
+
 | Command | Args | Description |
 |---------|------|-------------|
 | `PhysicsOn` | () | Enable 3D physics |
@@ -383,12 +385,22 @@ Requires object with skeleton (from GLTF skin). Bones identified by name. No-op 
 | `MakeBoxCollider` | (id, sx, sy, sz) | Static box collider (int ID) |
 | `MakeSphereCollider` | (id, radius) | Static sphere collider |
 | `MakeCapsuleCollider` | (id, radius, height) | Static capsule collider |
-| `MakeMeshCollider` | (id, meshID) | Mesh collider (stub) |
+| `MakeMeshCollider` | (id, meshID) | Mesh collider helper; unsupported in the shipped fallback |
 | `ApplyForce` | (id, fx, fy, fz) | Apply force |
 | `ApplyImpulse` | (id, ix, iy, iz) | Apply impulse |
 | `SetGravity` | (x, y, z) | Set gravity |
+| `SetBodyPosition` | (bodyId$, x, y, z) | Set position for default-world string body |
+| `GetBodyPosition` | (bodyId$) | Returns `[x, y, z]` for default-world string body |
+| `SetBodyVelocity` | (bodyId$, vx, vy, vz) | Set velocity for default-world string body |
+| `GetBodyVelocity` | (bodyId$) | Returns `[vx, vy, vz]` for default-world string body |
 | `SetRigidBodyPosition` | (id, x, y, z) | Set position (int ID) |
 | `SetRigidBodyVelocity` | (id, vx, vy, vz) | Set velocity |
+| `GetBodyX` | (bodyId$) | Position X for default-world string body |
+| `GetBodyY` | (bodyId$) | Position Y for default-world string body |
+| `GetBodyZ` | (bodyId$) | Position Z for default-world string body |
+| `GetBodyVX` | (bodyId$) | Velocity X for default-world string body |
+| `GetBodyVY` | (bodyId$) | Velocity Y for default-world string body |
+| `GetBodyVZ` | (bodyId$) | Velocity Z for default-world string body |
 | `GetRigidBodyX` | (id) | Position X |
 | `GetRigidBodyY` | (id) | Position Y |
 | `GetRigidBodyZ` | (id) | Position Z |
@@ -398,6 +410,14 @@ Requires object with skeleton (from GLTF skin). Bones identified by name. No-op 
 | `GetVelocityX` | (id) | Velocity X |
 | `GetVelocityY` | (id) | Velocity Y |
 | `GetVelocityZ` | (id) | Velocity Z |
+
+Notes:
+
+- `MakeSphereCollider(id, radius)` and `MakeCapsuleCollider(id, radius, height)` now accept the documented argument counts.
+- `MakeMeshCollider` now returns a clear unsupported-feature error in the current fallback.
+- `GetBodyX/Y/Z` and `GetBodyVX/VY/VZ` provide a more 2D-style default-world query path for string body IDs.
+- `Spherecast` is still a swept-bounds helper, not exact Bullet geometry.
+- Unsupported low-level 3D features such as joints, torque-only APIs, heightmaps, and compounds now return explicit errors instead of silently succeeding.
 
 ---
 
@@ -461,7 +481,7 @@ dot = Dot3D x1, y1, z1, x2, y2, z2
 | `GetLightColorG` | (id) | Light color G |
 | `GetLightColorB` | (id) | Light color B |
 
-For the easiest setup, create a directional light with `MakeLight(id, 1)`, orient it with `RotateLight`, then call `EnableShadows()`. If you want explicit control over which directional light casts shadows, call `EnableShadows(lightId)` or `EnableLightShadows(lightId)`.
+By default, the global shadow system starts enabled. For the easiest setup, create a directional light with `MakeLight(id, 1)` and orient it with `RotateLight`; the first directional light can then act as the default caster automatically. If you want explicit control over which directional light casts shadows, call `EnableShadows(lightId)` or `EnableLightShadows(lightId)`. Call `DisableShadows()` when you want the lowest-cost non-shadow path.
 
 Current scope: the renderer supports one active directional shadow caster in the main pass. `SetShadowQuality("low"|"medium"|"high")` is the easiest way to scale cost for lower-end, mid-range, or higher-end PCs.
 
@@ -476,6 +496,8 @@ Imported GLTF PBR values are preserved by default. Use **SetObjectRoughness**, *
 | `MakeMaterial` | (id) | Create material |
 | `CreatePBRMaterial` | (id) | Create material with PBR defaults (metallic=0, roughness=0.5) |
 | `SetMaterialPBR` | (id, metallic, roughness, normalTextureID) | Set metallic, roughness, normal map |
+| `SetMaterialMetalness` | (id, value) | Set material metalness scalar (0-1) |
+| `SetMaterialRoughness` | (id, value) | Set material roughness scalar (0-1) |
 | `SetMaterialColor` | (id, r, g, b) | Set color |
 | `SetMaterialTexture` | (id, textureID) | Set texture |
 | `ApplyMaterial` | (id, objectID) | Apply to object |
