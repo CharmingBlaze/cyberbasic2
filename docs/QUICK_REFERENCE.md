@@ -166,7 +166,7 @@ Define **`update(dt)`** and/or **`draw()`** (Sub or Function) and use a game loo
 
 ```basic
 IsKeyDown(KEY_W)
-IsKeyPressed(KEY_SPACE)
+IsKeyPressed(KEY_SPACE)   REM or IsKeyPressed(32)
 GetAxisX()   // -1, 0, or 1 for A/D
 GetAxisY()   // -1, 0, or 1 for W/S
 GetMouseX()
@@ -186,6 +186,18 @@ END ON
 ```
 
 PollInputEvents is called automatically at frame start; handlers run when you use IsKeyDown, IsKeyPressed, etc.
+
+## Random, Timer, Wait
+
+```basic
+Random()        REM 0..1 float
+Random(100)     REM 0..100 float
+GetRandomValue(1, 6)   REM int 1..6 (raylib)
+Timer()         REM seconds since start
+ResetTimer()    REM reset timer
+WaitSeconds(1.5)   REM yield in coroutine (non-blocking)
+Sleep(500)      REM block 500ms (avoid in game loop)
+```
 
 ## Coroutines (optional)
 

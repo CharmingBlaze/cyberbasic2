@@ -28,6 +28,7 @@ Run: `cyberbasic examples/hello_world.bas`
 ```basic
 SUB OnStart()
   ' init
+  UseUnifiedRenderer()
 END SUB
 
 SUB OnUpdate(dt AS FLOAT)
@@ -37,10 +38,11 @@ END SUB
 SUB OnDraw()
   ClearBackground(0, 0, 0, 255)
   DrawCircle(400, 300, 50, 255, 100, 100, 255)
+  SYNC
 END SUB
 ```
 
-No `InitWindow`, no `WHILE` loop—the runtime provides them.
+No `InitWindow`, no `WHILE` loop—the runtime provides them. With `UseUnifiedRenderer`, call `SYNC` at the end of `OnDraw` to end the frame.
 
 ### 3. DBP-Style 2D
 

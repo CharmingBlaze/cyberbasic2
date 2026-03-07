@@ -26,7 +26,7 @@ CyberBASIC2 supports two programming styles:
 
 **DBP-style** – No `InitWindow`, no `WHILE` loop. Define `OnStart()`, `OnUpdate(dt)`, and `OnDraw()`; the runtime provides the window and loop. See [DBP Parity](DBP_PARITY.md).
 
-**Manual loop** – You write `InitWindow`, `WHILE NOT WindowShouldClose()`, and all drawing. Full control over order of operations.
+**Manual loop** – You write `InitWindow`, `mainloop...endmain` (or `WHILE NOT WindowShouldClose()...WEND`), and all drawing. Full control over order of operations.
 
 ---
 
@@ -103,10 +103,11 @@ Run: `cyberbasic examples/first_game.bas` – or save the above and run it.
 InitWindow(800, 600, "My First Game")
 SetTargetFPS(60)
 
-WHILE NOT WindowShouldClose()
+mainloop
     ClearBackground(20, 20, 40, 255)
     DrawText("Hello, Graphics!", 300, 280, 30, 255, 255, 255, 255)
-WEND
+    SYNC
+endmain
 
 CloseWindow()
 ```
@@ -132,7 +133,7 @@ SetTargetFPS(60)
 VAR x = 400
 VAR y = 300
 
-WHILE NOT WindowShouldClose()
+mainloop
     // Move with arrow keys
     IF IsKeyDown(KEY_LEFT) THEN x = x - 5
     IF IsKeyDown(KEY_RIGHT) THEN x = x + 5
@@ -147,7 +148,8 @@ WHILE NOT WindowShouldClose()
     ClearBackground(30, 30, 50, 255)
     DrawCircle(x, y, 20, 100, 200, 255, 255)
     DrawText("Use arrow keys to move", 10, 10, 20, 255, 255, 255, 255)
-WEND
+    SYNC
+endmain
 
 CloseWindow()
 ```
@@ -218,11 +220,12 @@ DrawLine(x1, y1, x2, y2, r, g, b, a)
 InitWindow(800, 600, "Game")
 SetTargetFPS(60)
 
-WHILE NOT WindowShouldClose()
+mainloop
     // Handle input
     // Update game logic
     // Draw everything
-WEND
+    SYNC
+endmain
 
 CloseWindow()
 ```

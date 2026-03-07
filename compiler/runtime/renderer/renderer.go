@@ -5,7 +5,6 @@ import (
 	"sync"
 
 	"cyberbasic/compiler/bindings/raylib"
-	"cyberbasic/compiler/runtime/time"
 	"cyberbasic/compiler/vm"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -96,8 +95,8 @@ func (r *Renderer) SetClearColor(c rl.Color) {
 }
 
 // Frame runs one full frame: BeginDrawing → 3D pass → 2D pass → GUI pass → EndDrawing.
+// Timing is driven only by beginRuntimeFrame or BeginDrawing; do not call time.Update here or physics desyncs.
 func (r *Renderer) Frame() {
-	time.Update(rl.GetFrameTime())
 	// PollInputEvents is called once at frame start (beginRuntimeFrame); do not poll here or IsKeyPressed/IsMouseButtonPressed get cleared
 	rl.BeginDrawing()
 	rl.ClearBackground(r.clearColor)

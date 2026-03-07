@@ -17,6 +17,7 @@ CyberBASIC supports both single-word and two-word END forms where noted.
 - **ENDSUB** — ends a `SUB` block
 - **ENDIF** — ends an `IF` block
 - **WEND** — ends a `WHILE` block (no `END WHILE` variant)
+- **ENDMAIN** — ends a `mainloop` block
 - **ENDTYPE** — ends a `TYPE` block
 - **ENDMODULE** — ends a `MODULE` block
 - **ENDSELECT** — ends a `SELECT CASE` block

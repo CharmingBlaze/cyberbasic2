@@ -19,6 +19,7 @@ For the complete list of all bindings and source files, see [API Reference](../A
 | **GetTime**() | Seconds since window init (float) |
 | **WaitSeconds**(seconds) | Yield current fiber for N seconds (non-blocking; other fibers run) |
 | **WindowShouldClose**() | True when user requested close |
+| **mainloop** … **endmain** | Game loop block (preferred); equivalent to `WHILE NOT WindowShouldClose()...WEND` with frame wrap. Call **SYNC** at end of body. |
 | **DisableCursor**() | Hide and confine mouse |
 | **EnableCursor**() | Show mouse cursor |
 
@@ -26,7 +27,7 @@ For the complete list of all bindings and source files, see [API Reference](../A
 
 ## Game loop (hybrid)
 
-When you define **update(dt)** and **draw()** (Sub or Function) and use a game loop (`WHILE NOT WindowShouldClose()` or `REPEAT ... UNTIL WindowShouldClose()`), the compiler injects an automatic pipeline. You do not call BeginDrawing/EndDrawing yourself. See [Rendering and the game loop](RENDERING_AND_GAME_LOOP.md) for the full pipeline and rules for draw().
+When you define **update(dt)** and **draw()** (Sub or Function) and use a game loop (`mainloop...endmain`, `WHILE NOT WindowShouldClose()`, or `REPEAT ... UNTIL WindowShouldClose()`), the compiler injects an automatic pipeline. You do not call BeginDrawing/EndDrawing yourself. See [Rendering and the game loop](RENDERING_AND_GAME_LOOP.md) for the full pipeline and rules for draw().
 
 | Command | Description |
 |--------|-------------|
@@ -64,10 +65,10 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 
 | Command | Description |
 |--------|-------------|
-| **KeyDown**(key) / **IsKeyDown**(key) | True while key held (use KEY_W, KEY_ESCAPE, etc.) |
+| **KeyDown**(key) / **IsKeyDown**(key) | True while key held (use KEY_W, KEY_ESCAPE, KEY_SPACE, etc.) |
 | **KeyPressed**(key) / **IsKeyPressed**(key) | True once when key pressed |
 | **IsKeyReleased**(key) | True once when key released |
-| **GetKeyPressed**() | Last key pressed (code) |
+| **GetKeyPressed**() | Last key pressed (code); more reliable than IsKeyPressed for rapid keypresses (e.g. QMK mod-tap) |
 | **GetMouseX**() **GetMouseY**() | Mouse position |
 | **GetMousePosition**() | Mouse position as [x, y] |
 | **IsMouseButtonDown**(button) | True while button held |
@@ -428,7 +429,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 |--------|-------------|
 | **BeginFrame**() | Start frame (alias BeginDrawing) |
 | **EndFrame**() | End frame (alias EndDrawing) |
-| **RunGameLoop**(UpdateFunction) | Not in API — use `WHILE NOT WindowShouldClose()` … `WEND` with update/draw, or define `update(dt)` and `draw()` for hybrid loop, or `OnStart`/`OnUpdate`/`OnDraw` for DBP-style. |
+| **RunGameLoop**(UpdateFunction) | Not in API — use `mainloop...endmain` or `WHILE NOT WindowShouldClose()...WEND` with update/draw, or define `update(dt)` and `draw()` for hybrid loop, or `OnStart`/`OnUpdate`/`OnDraw` for DBP-style. |
 
 ---
 
@@ -499,7 +500,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **TimerStart**(name) | **TimerElapsed**(name) → seconds | **CollisionBox**(x,y,z, w,h,d) → boxId | **CheckCollision**(boxIdA, boxIdB) | **RayCast**(ox,oy,oz, dx,dy,dz [, boxId]) → distance or −1 |
 
 ### Game loop (extended)
-| **SetUpdateFunction**(func) **SetDrawFunction**(func) **Run**() | No-op; use `WHILE NOT WindowShouldClose()` … `WEND` and call your update/draw code. |
+| **SetUpdateFunction**(func) **SetDrawFunction**(func) **Run**() | No-op; use `mainloop...endmain` or `WHILE NOT WindowShouldClose()...WEND` and call your update/draw code. |
 
 ### Debugging & development
 | **ShowFPS**(x, y) | **Log**(value) (stderr) | **Assert**(condition, message) (std) |
@@ -1085,13 +1086,14 @@ DisableCursor()
 VAR cube = LoadCube(2)
 SetModelColor(cube, 255, 200, 100, 255)
 
-WHILE NOT WindowShouldClose()
+mainloop
   MouseOrbitCamera()
   RotateModel(cube, 45)
   Background(32, 32, 48)
   DrawModelSimple(cube, 0, 0, 0)
   DrawTextSimple("Mouse: orbit  Wheel: zoom", 10, 10)
-WEND
+  SYNC
+endmain
 
 EnableCursor()
 UnloadModel(cube)

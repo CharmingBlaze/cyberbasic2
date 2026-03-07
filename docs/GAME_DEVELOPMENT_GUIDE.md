@@ -23,13 +23,13 @@ Complete guide to making games with CyberBASIC2: game loop, input, GAME.* helper
 
 ## Game loop pattern
 
-Every game uses the same structure. Use **WHILE NOT WindowShouldClose() ... WEND** (or **REPEAT ... UNTIL WindowShouldClose()**) and **DeltaTime()**:
+Every game uses the same structure. Use **mainloop...endmain** (preferred) or **WHILE NOT WindowShouldClose() ... WEND** (or **REPEAT ... UNTIL WindowShouldClose()**) and **DeltaTime()**:
 
 ```basic
 InitWindow(800, 600, "My Game")
 SetTargetFPS(60)
 
-WHILE NOT WindowShouldClose()
+mainloop
     // 1. Delta time (for movement and physics)
     VAR dt = DeltaTime()
     IF dt > 0.05 THEN LET dt = 0.016   // Clamp for physics stability
@@ -43,18 +43,19 @@ WHILE NOT WindowShouldClose()
     // 4. Draw
     ClearBackground(20, 20, 30, 255)
     // Draw 2D/3D and UI
-WEND
+    SYNC
+endmain
 
 CloseWindow()
 ```
 
-The compiler does not inject any frame or mode calls; your loop compiles as written (DBPro-style). Exception: the **hybrid loop** (see below).
+The compiler injects BeginDrawing/EndDrawing when the loop body contains draw calls. Exception: the **hybrid loop** (see below).
 
 See [2D Graphics Guide](2D_GRAPHICS_GUIDE.md) and [3D Graphics Guide](3D_GRAPHICS_GUIDE.md) for the 2D and 3D game checklists and full examples.
 
 ### Hybrid update/draw loop
 
-If you define **update(dt)** and **draw()** (as Sub or Function) and use a game loop (`WHILE NOT WindowShouldClose()` or `REPEAT ... UNTIL WindowShouldClose()`), the compiler **replaces the loop body** with an automatic pipeline: GetFrameTime → StepAllPhysics2D(dt), StepAllPhysics3D(dt) → update(dt) → ClearRenderQueues → draw() (Draw*/Gui* calls are queued) → FlushRenderQueues. You do not call BeginDrawing/EndDrawing or BeginMode2D/EndMode3D yourself. Prefer this for new games when you want a clear update/draw split and automatic physics stepping. See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop) and [examples/first_game.bas](../examples/first_game.bas).
+If you define **update(dt)** and **draw()** (as Sub or Function) and use a game loop (`mainloop...endmain`, `WHILE NOT WindowShouldClose()`, or `REPEAT ... UNTIL WindowShouldClose()`), the compiler **replaces the loop body** with an automatic pipeline: GetFrameTime → StepAllPhysics2D(dt), StepAllPhysics3D(dt) → update(dt) → ClearRenderQueues → draw() (Draw*/Gui* calls are queued) → FlushRenderQueues. You do not call BeginDrawing/EndDrawing or BeginMode2D/EndMode3D yourself. Prefer this for new games when you want a clear update/draw split and automatic physics stepping. See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop) and [examples/first_game.bas](../examples/first_game.bas).
 
 ---
 
@@ -104,10 +105,11 @@ ON KeyPressed("SPACE")
     // fire once
 END ON
 
-WHILE NOT WindowShouldClose()
+mainloop
     // PollInputEvents is automatic; use IsKeyDown, IsKeyPressed, etc.
     // ...
-WEND
+    SYNC
+endmain
 ```
 
 ---

@@ -48,6 +48,7 @@ func registerCore(v *vm.VM) {
 		}
 		rl.SetConfigFlags(flags)
 		rl.InitWindow(toInt32(args[0]), toInt32(args[1]), toString(args[2]))
+		rl.PollInputEvents() // initial poll so first frame has input
 		return nil, nil
 	})
 	v.RegisterForeign("SetTargetFPS", func(args []interface{}) (interface{}, error) {
@@ -75,8 +76,7 @@ func registerCore(v *vm.VM) {
 		if debugThrottled() {
 			fmt.Println("[DEBUG] BeginDrawing")
 		}
-		rl.PollInputEvents()
-		CaptureOrbitWheel()
+		// Poll and CaptureOrbitWheel are in SyncFrame; BeginDrawing only starts the draw
 		time.Update(rl.GetFrameTime())
 		rl.BeginDrawing()
 		return nil, nil
@@ -90,8 +90,6 @@ func registerCore(v *vm.VM) {
 	})
 	// BeginFrame(): alias for BeginDrawing (start frame)
 	v.RegisterForeign("BeginFrame", func(args []interface{}) (interface{}, error) {
-		rl.PollInputEvents()
-		CaptureOrbitWheel()
 		time.Update(rl.GetFrameTime())
 		rl.BeginDrawing()
 		return nil, nil
@@ -101,10 +99,10 @@ func registerCore(v *vm.VM) {
 		rl.EndDrawing()
 		return nil, nil
 	})
-	// SetUpdateFunction(func), SetDrawFunction(func): no-op (use WHILE NOT WindowShouldClose() ... WEND and call your update/draw logic manually).
+	// SetUpdateFunction(func), SetDrawFunction(func): no-op (use mainloop...endmain or WHILE NOT WindowShouldClose() ... WEND and call your update/draw logic manually).
 	v.RegisterForeign("SetUpdateFunction", func(args []interface{}) (interface{}, error) { return nil, nil })
 	v.RegisterForeign("SetDrawFunction", func(args []interface{}) (interface{}, error) { return nil, nil })
-	// Run(): no-op; run your game loop with WHILE NOT WindowShouldClose() ... WEND.
+	// Run(): no-op; run your game loop with mainloop...endmain or WHILE NOT WindowShouldClose() ... WEND.
 	v.RegisterForeign("Run", func(args []interface{}) (interface{}, error) { return nil, nil })
 	// Background(r, g, b): clear with RGB, alpha 255
 	v.RegisterForeign("Background", func(args []interface{}) (interface{}, error) {

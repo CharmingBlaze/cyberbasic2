@@ -99,6 +99,8 @@ func emitStatement(stmt parser.Node, spritePos *map[string]string, indent string
 		return emitFor(node, spritePos, indent)
 	case *parser.WhileStatement:
 		return emitWhile(node, spritePos, indent)
+	case *parser.MainLoopStatement:
+		return emitMainLoop(node, spritePos, indent)
 	case *parser.ReturnStatement:
 		if node.Value != nil {
 			expr, _ := emitExpr(node.Value)
@@ -426,6 +428,36 @@ func emitWhile(w *parser.WhileStatement, spritePos *map[string]string, indent st
 		b.WriteString(tab + "rl.ClearBackground(rl.NewColor(20, 20, 30, 255))\n")
 	}
 	for _, s := range w.Body.Statements {
+		line, err := emitStatement(s, spritePos, tab)
+		if err != nil {
+			return "", err
+		}
+		if line != "" {
+			b.WriteString(tab + line + "\n")
+		}
+	}
+	if injectFrame {
+		b.WriteString(tab + "rl.EndDrawing()\n")
+	}
+	b.WriteString(indent + "}")
+	return b.String(), nil
+}
+
+func emitMainLoop(m *parser.MainLoopStatement, spritePos *map[string]string, indent string) (string, error) {
+	// MAINLOOP...ENDMAIN -> for !rl.WindowShouldClose() { ... }
+	tab := indent + "\t"
+	var b strings.Builder
+	b.WriteString("for !rl.WindowShouldClose() {\n")
+	bodyStmts := []parser.Node{}
+	if m.Body != nil {
+		bodyStmts = m.Body.Statements
+	}
+	injectFrame := blockContainsDrawOrSync(bodyStmts)
+	if injectFrame {
+		b.WriteString(tab + "rl.BeginDrawing()\n")
+		b.WriteString(tab + "rl.ClearBackground(rl.NewColor(20, 20, 30, 255))\n")
+	}
+	for _, s := range bodyStmts {
 		line, err := emitStatement(s, spritePos, tab)
 		if err != nil {
 			return "", err

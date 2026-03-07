@@ -77,6 +77,8 @@ func (p *Parser) statement() (Node, error) {
 		return p.forStatement()
 	case lexer.TokenWhile:
 		return p.whileStatement()
+	case lexer.TokenMainLoop:
+		return p.mainloopStatement()
 	case lexer.TokenFunction:
 		return p.functionDecl()
 	case lexer.TokenSub:

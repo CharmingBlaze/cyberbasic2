@@ -2,7 +2,7 @@
 InitWindow(900, 700, "Input Debug")
 SetTargetFPS(60)
 
-WHILE NOT WindowShouldClose()
+mainloop
   ClearBackground(20, 20, 30, 255)
   DrawText("KEYBOARD", 10, 10, 20, 255, 200, 100, 255)
   DrawText("KeyDown(W): " + STR(IsKeyDown(87)), 10, 35, 16, 255, 255, 255, 255)
@@ -18,6 +18,6 @@ WHILE NOT WindowShouldClose()
   DrawText("Avail: " + STR(IsGamepadAvailable(0)) + " Btn0: " + STR(IsGamepadButtonDown(0, 0)) + " Axis0: " + STR(GetGamepadAxisMovement(0, 0)), 10, 275, 16, 255, 255, 255, 255)
   DrawText("ESC to close", 10, 320, 16, 150, 150, 150, 255)
   SYNC
-WEND
+endmain
 
 CloseWindow()

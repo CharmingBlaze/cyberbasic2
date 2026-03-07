@@ -25,6 +25,8 @@ func (c *Compiler) compileStatement(stmt parser.Node, chunk *vm.Chunk) error {
 		return c.compileForStatement(node, chunk)
 	case *parser.WhileStatement:
 		return c.compileWhileStatement(node, chunk)
+	case *parser.MainLoopStatement:
+		return c.compileMainLoopStatement(node, chunk)
 	case *parser.FunctionDecl:
 		return c.compileFunctionDecl(node, chunk)
 	case *parser.SubDecl:
@@ -715,6 +717,88 @@ func (c *Compiler) compileWhileStatement(whileStmt *parser.WhileStatement, chunk
 	}
 	c.loopExitStack = c.loopExitStack[:len(c.loopExitStack)-1]
 	// Patch CONTINUE WHILE jumps to condition
+	for _, pos := range c.loopContinueStack[len(c.loopContinueStack)-1] {
+		chunk.PatchJumpOffset(pos, loopStart-pos-2)
+	}
+	c.loopContinueStack = c.loopContinueStack[:len(c.loopContinueStack)-1]
+
+	return nil
+}
+
+// compileMainLoopStatement compiles MAINLOOP...ENDMAIN (equivalent to WHILE NOT WindowShouldClose()...WEND with frame wrap).
+func (c *Compiler) compileMainLoopStatement(m *parser.MainLoopStatement, chunk *vm.Chunk) error {
+	c.loopExitStack = append(c.loopExitStack, nil)
+	c.loopContinueStack = append(c.loopContinueStack, nil)
+	loopStart := len(chunk.Code)
+
+	wrapFrame := true
+	if m.Body != nil && (c.bodyCallsUserSub(m.Body.Statements) || bodyContainsFrameBoundaries(m.Body.Statements)) {
+		wrapFrame = false
+	}
+	use3D := wrapFrame && m.Body != nil && bodyContains3DDraw(m.Body.Statements)
+	body := m.Body
+	if body == nil {
+		body = &parser.Block{}
+	}
+
+	// Condition: NOT WindowShouldClose()
+	idx := chunk.WriteConstant("windowshouldclose")
+	if err := checkConstIndex(idx, ""); err != nil {
+		return err
+	}
+	chunk.Write(byte(vm.OpCallForeign))
+	chunk.Write(byte(idx))
+	chunk.Write(byte(0))
+	chunk.Write(byte(vm.OpNot))
+
+	chunk.Write(byte(vm.OpJumpIfFalse))
+	chunk.Write(byte(0))
+	chunk.Write(byte(0))
+	exitJumpPos := len(chunk.Code) - 2
+
+	if wrapFrame {
+		c.emitFrameWrap(chunk, "BeginDrawing")
+		if use3D {
+			c.emitFrameWrap(chunk, "BeginMode3D")
+		} else {
+			c.emitFrameWrap(chunk, "BeginMode2D")
+		}
+	}
+	for _, stmt := range body.Statements {
+		if wrapFrame && bodyContainsSync(body.Statements) {
+			n := unwrapStatement(stmt)
+			if gc, ok := n.(*parser.GameCommand); ok && strings.ToLower(gc.Command) == "sync" {
+				if use3D {
+					c.emitFrameWrap(chunk, "EndMode3D")
+				} else {
+					c.emitFrameWrap(chunk, "EndMode2D")
+				}
+			}
+		}
+		err := c.compileStatement(stmt, chunk)
+		if err != nil {
+			return err
+		}
+	}
+	if wrapFrame && !bodyContainsSync(body.Statements) {
+		if use3D {
+			c.emitFrameWrap(chunk, "EndMode3D")
+		} else {
+			c.emitFrameWrap(chunk, "EndMode2D")
+		}
+		c.emitFrameWrap(chunk, "EndDrawing")
+	}
+
+	chunk.Write(byte(vm.OpJump))
+	chunk.Write(byte(0))
+	chunk.Write(byte(0))
+	chunk.PatchJumpOffset(len(chunk.Code)-2, loopStart-len(chunk.Code))
+
+	chunk.PatchJumpOffset(exitJumpPos, len(chunk.Code)-exitJumpPos-2)
+	for _, pos := range c.loopExitStack[len(c.loopExitStack)-1] {
+		chunk.PatchJumpOffset(pos, len(chunk.Code)-pos-2)
+	}
+	c.loopExitStack = c.loopExitStack[:len(c.loopExitStack)-1]
 	for _, pos := range c.loopContinueStack[len(c.loopContinueStack)-1] {
 		chunk.PatchJumpOffset(pos, loopStart-pos-2)
 	}

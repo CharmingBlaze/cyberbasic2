@@ -12,6 +12,7 @@ const (
 	NodeIfStatement
 	NodeForStatement
 	NodeWhileStatement
+	NodeMainLoopStatement
 	NodeFunctionDecl
 	NodeSubDecl
 	NodeAssignment
@@ -139,6 +140,16 @@ type WhileStatement struct {
 func (w *WhileStatement) Type() NodeType { return NodeWhileStatement }
 func (w *WhileStatement) String() string {
 	return "WHILE " + w.Condition.String() + "\n" + w.Body.String() + "WEND"
+}
+
+// MainLoopStatement represents MAINLOOP...ENDMAIN (game loop, equivalent to WHILE NOT WindowShouldClose()...WEND)
+type MainLoopStatement struct {
+	Body *Block
+}
+
+func (m *MainLoopStatement) Type() NodeType { return NodeMainLoopStatement }
+func (m *MainLoopStatement) String() string {
+	return "MAINLOOP\n" + m.Body.String() + "ENDMAIN"
 }
 
 // FunctionDecl represents a function declaration (optionally inside a Module)

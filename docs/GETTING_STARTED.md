@@ -36,13 +36,13 @@ On Windows you get `cyberbasic.exe`; on Unix you get `cyberbasic`. The executabl
 ./cyberbasic examples/hello_world.bas
 ```
 
-**First game (window + WASD circle):**
+**First game (3D spinning cube + orbit camera):**
 
 ```bash
 ./cyberbasic examples/first_game.bas
 ```
 
-This opens a window, and you move a circle with WASD. See [Cheatsheet](../CHEATSHEET.md) for the “first 10 lines” of a 2D and 3D game.
+This opens a window with a 3D cube. Drag to orbit, middle-mouse drag or Page Up/Down to zoom. See [Cheatsheet](../CHEATSHEET.md) for the “first 10 lines” of a 2D and 3D game.
 
 ## Exit codes
 

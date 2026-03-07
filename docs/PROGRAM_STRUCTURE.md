@@ -57,6 +57,7 @@ PRINT x
 | IF          | IF ... THEN  | ENDIF or END IF  |
 | FOR         | FOR x = a TO b [STEP s] | NEXT   |
 | WHILE       | WHILE cond   | WEND             |
+| MAINLOOP    | mainloop     | endmain          |
 | REPEAT      | REPEAT       | UNTIL cond       |
 | SELECT CASE | SELECT CASE expr | ENDSELECT    |
 | FUNCTION    | FUNCTION name(params) | ENDFUNCTION or END FUNCTION |
@@ -83,12 +84,13 @@ VAR config = {"width": 1024, "height": 768}
 FUNCTION main()
     InitWindow(config["width"], config["height"], "Game")
     SetTargetFPS(60)
-    WHILE NOT WindowShouldClose()
+    mainloop
         // Update and draw
         IF state = 0 THEN
             // menu
         ENDIF
-    WEND
+        SYNC
+    endmain
     CloseWindow()
 ENDFUNCTION
 

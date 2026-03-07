@@ -138,6 +138,30 @@ func (p *Parser) whileStatement() (Node, error) {
 	}, nil
 }
 
+// mainloopStatement parses MAINLOOP [()] ... ENDMAIN
+func (p *Parser) mainloopStatement() (Node, error) {
+	p.advance() // Skip MAINLOOP
+	// Optional () after mainloop (e.g. mainloop() )
+	if p.match(lexer.TokenLeftParen) {
+		if !p.match(lexer.TokenRightParen) {
+			return nil, &Error{Message: "expected ) after mainloop(", Line: p.line(), Col: p.col()}
+		}
+	}
+
+	body, err := p.block(false)
+	if err != nil {
+		return nil, err
+	}
+
+	if !p.match(lexer.TokenEndMain) {
+		return nil, &Error{Message: "expected ENDMAIN", Line: p.line(), Col: p.col()}
+	}
+
+	return &MainLoopStatement{
+		Body: body,
+	}, nil
+}
+
 // functionDecl parses FUNCTION...END FUNCTION
 func (p *Parser) functionDecl() (Node, error) {
 	p.advance() // Skip FUNCTION
@@ -910,7 +934,7 @@ func (p *Parser) block(stopAtNewlineIf bool) (*Block, error) {
 	block := &Block{}
 
 	for !p.isAtEnd() && !p.check(lexer.TokenEndIf) && !p.check(lexer.TokenNext) &&
-		!p.check(lexer.TokenWend) && !p.check(lexer.TokenEnd) &&
+		!p.check(lexer.TokenWend) && !p.check(lexer.TokenEndMain) && !p.check(lexer.TokenEnd) &&
 		!p.check(lexer.TokenElseIf) && !p.check(lexer.TokenElse) &&
 		!p.check(lexer.TokenEndFunction) && !p.check(lexer.TokenEndSub) && !p.check(lexer.TokenEndModule) {
 		stmt, err := p.statement()
@@ -1045,7 +1069,7 @@ func (p *Parser) repeatStatement() (Node, error) {
 	return &RepeatStatement{Body: body, Condition: cond}, nil
 }
 
-// exitLoopStatement parses EXIT FOR, EXIT WHILE, BREAK FOR, or BREAK WHILE.
+// exitLoopStatement parses EXIT FOR, EXIT WHILE, EXIT MAINLOOP, BREAK FOR, or BREAK WHILE.
 func (p *Parser) exitLoopStatement() (Node, error) {
 	p.advance() // EXIT or BREAK
 	if p.match(lexer.TokenFor) {
@@ -1054,10 +1078,13 @@ func (p *Parser) exitLoopStatement() (Node, error) {
 	if p.match(lexer.TokenWhile) {
 		return &ExitLoopStatement{Kind: "WHILE"}, nil
 	}
-	return nil, &Error{Message: "expected FOR or WHILE after EXIT/BREAK", Line: p.line(), Col: p.col()}
+	if p.match(lexer.TokenMainLoop) {
+		return &ExitLoopStatement{Kind: "MAINLOOP"}, nil
+	}
+	return nil, &Error{Message: "expected FOR, WHILE, or MAINLOOP after EXIT/BREAK", Line: p.line(), Col: p.col()}
 }
 
-// continueLoopStatement parses CONTINUE FOR or CONTINUE WHILE.
+// continueLoopStatement parses CONTINUE FOR, CONTINUE WHILE, or CONTINUE MAINLOOP.
 func (p *Parser) continueLoopStatement() (Node, error) {
 	p.advance() // CONTINUE
 	if p.match(lexer.TokenFor) {
@@ -1066,7 +1093,10 @@ func (p *Parser) continueLoopStatement() (Node, error) {
 	if p.match(lexer.TokenWhile) {
 		return &ContinueLoopStatement{Kind: "WHILE"}, nil
 	}
-	return nil, &Error{Message: "expected FOR or WHILE after CONTINUE", Line: p.line(), Col: p.col()}
+	if p.match(lexer.TokenMainLoop) {
+		return &ContinueLoopStatement{Kind: "MAINLOOP"}, nil
+	}
+	return nil, &Error{Message: "expected FOR, WHILE, or MAINLOOP after CONTINUE", Line: p.line(), Col: p.col()}
 }
 
 // assertStatement parses ASSERT condition [, message].

@@ -7,6 +7,8 @@ var helpMap = map[string]string{
 	"settargetfps":      "SetTargetFPS(fps) – target frame rate",
 	"getframetime":      "GetFrameTime() – delta time since last frame (seconds)",
 	"windowshouldclose": "WindowShouldClose() – true when user requested close",
+	"mainloop":          "mainloop ... endmain – game loop (equivalent to WHILE NOT WindowShouldClose() ... WEND)",
+	"endmain":           "endmain – ends mainloop block",
 	"drawrectangle":     "DrawRectangle(x, y, w, h, r, g, b, a) – filled rectangle. Alias: rect(...)",
 	"rect":              "rect(x, y, w, h, color...) – alias of DrawRectangle",
 	"drawcircle":        "DrawCircle(x, y, radius, r, g, b, a) – filled circle. Alias: circle(...)",

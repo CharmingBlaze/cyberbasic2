@@ -34,6 +34,10 @@ func (t TokenType) String() string {
 		return "TokenWhile"
 	case TokenWend:
 		return "TokenWend"
+	case TokenMainLoop:
+		return "TokenMainLoop"
+	case TokenEndMain:
+		return "TokenEndMain"
 	case TokenFunction:
 		return "TokenFunction"
 	case TokenSub:
@@ -341,6 +345,8 @@ const (
 	TokenNext
 	TokenWhile
 	TokenWend
+	TokenMainLoop
+	TokenEndMain
 	TokenFunction
 	TokenSub
 	TokenModule
@@ -518,6 +524,8 @@ var KeywordMap = map[string]TokenType{
 	"NEXT":                    TokenNext,
 	"WHILE":                   TokenWhile,
 	"WEND":                    TokenWend,
+	"MAINLOOP":                TokenMainLoop,
+	"ENDMAIN":                 TokenEndMain,
 	"FUNCTION":                TokenFunction,
 	"SUB":                     TokenSub,
 	"MODULE":                  TokenModule,

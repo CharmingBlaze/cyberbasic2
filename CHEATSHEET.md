@@ -33,13 +33,14 @@ InitWindow(800, 600, "My Game")
 SetTargetFPS(60)
 VAR x = 400
 VAR y = 300
-WHILE NOT WindowShouldClose()
+mainloop
   VAR dt = DeltaTime()
   LET x = x + 100 * dt * GetAxisX()
   LET y = y + 100 * dt * GetAxisY()
   ClearBackground(20, 20, 30, 255)
   DrawCircle(x, y, 30, 255, 100, 100, 255)
-WEND
+  SYNC
+endmain
 CloseWindow()
 ```
 

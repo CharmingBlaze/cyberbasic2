@@ -8,7 +8,7 @@ How drawing and the game loop work in CyberBASIC2: three modes, frame pipeline, 
 
 - **Unify frame logic:** One frame = one update, one draw, one present.
 - **Support multiple styles:** DBP-style (OnStart/OnUpdate/OnDraw), manual loop, hybrid loop.
-- **SYNC as frame boundary:** End frame, poll input, present. Use SYNC at the end of your loop or OnDraw. SYNC polls input and presents the frame.
+- **SYNC as frame boundary:** SYNC is the update step—it polls input (for next frame), ends the frame, and swaps buffers. Use **mainloop...endmain** (preferred) or WHILE NOT WindowShouldClose()...WEND; SYNC is the update at the end.
 
 ---
 
@@ -17,7 +17,7 @@ How drawing and the game loop work in CyberBASIC2: three modes, frame pipeline, 
 | Mode | When to Use | Frame handling |
 |------|-------------|----------------|
 | **DBP-style** | Zero boilerplate, OnStart/OnUpdate/OnDraw | Runtime provides window + loop; SYNC at end of OnDraw |
-| **Manual loop** | Full control, explicit Begin/End | You write WHILE NOT WindowShouldClose(); compiler injects BeginDrawing/EndDrawing when loop body contains draw calls |
+| **Manual loop** | Full control, explicit Begin/End | Use **mainloop...endmain** (preferred) or WHILE NOT WindowShouldClose(); compiler injects BeginDrawing/EndDrawing when loop body contains draw calls |
 | **Hybrid loop** | update(dt) + draw() with empty body | Compiler replaces body with StepFrame; automatic physics + queue + flush |
 
 ---
@@ -35,7 +35,7 @@ See [DBP Parity](DBP_PARITY.md).
 
 ## Manual Loop
 
-You write the full game loop. The compiler injects `BeginDrawing`/`EndDrawing` (and optionally `BeginMode2D`/`EndMode2D`) when the loop body contains draw calls and does not contain `BeginDrawing`/`EndDrawing` (or `Draw`/`update` subs).
+Use **mainloop...endmain** (preferred) or **WHILE NOT WindowShouldClose()...WEND**. The compiler injects `BeginDrawing`/`EndDrawing` (and optionally `BeginMode2D`/`EndMode2D`) when the loop body contains draw calls and does not contain `BeginDrawing`/`EndDrawing` (or `Draw`/`update` subs).
 
 - **With SYNC:** If the loop body contains `SYNC`, the compiler omits injected `EndDrawing`; SYNC does it.
 - **Without SYNC:** Compiler injects both BeginDrawing and EndDrawing.
@@ -59,6 +59,14 @@ The compiler replaces the body with `StepFrame`. You do not call BeginDrawing/En
 
 ## Pipeline (One Frame)
 
+### Frame Pipeline Summary
+
+| Path | Flow |
+|------|------|
+| **Manual loop** | BeginDrawing (time.Update, rl.BeginDrawing) → user code → SYNC (PollInputEvents, CaptureOrbitWheel, EndDrawing) |
+| **Implicit + UseUnifiedRenderer** | beginRuntimeFrame → OnUpdate → OnDraw (queues) → SYNC → renderer.Frame (3D→2D→GUI, EndDrawing) |
+| **Implicit + Legacy** | beginRuntimeFrame → OnUpdate → BeginDrawing → OnDraw → EndDrawing (no SYNC) |
+
 ### Hybrid loop (StepFrame)
 
 1. **GetFrameTime** → dt
@@ -81,9 +89,13 @@ The compiler replaces the body with `StepFrame`. You do not call BeginDrawing/En
 | Context | SYNC does |
 |---------|-----------|
 | UseUnifiedRenderer on | Full frame (renderer.Frame: 3D→2D→GUI, swap buffers) |
-| UseUnifiedRenderer off | EndDrawing only (BeginDrawing already polled input at frame start) |
+| UseUnifiedRenderer off | PollInputEvents, CaptureOrbitWheel, EndDrawing |
 
-**Input polling:** PollInputEvents is called exactly once per frame at the start (BeginDrawing or beginRuntimeFrame). Do not poll again; a second poll clears IsKeyPressed/IsMouseButtonPressed before user code can read them.
+**SYNC semantics:** SYNC is the update step. With UseUnifiedRenderer: runs full render (3D→2D→GUI). Without: polls input, ends frame, presents. Call once per frame at the end of the loop.
+
+**Input polling:** For manual loop, SYNC polls at frame end (prepares input for next frame); InitWindow does an initial poll. For implicit loop, beginRuntimeFrame polls at frame start. Do not poll again; a second poll clears IsKeyPressed/IsMouseButtonPressed.
+
+**Timing:** `time.Update` is called once at frame start (BeginDrawing or beginRuntimeFrame). `renderer.Frame()` does not call it; doing so would cause physics desync (double accumulator advance).
 
 ---
 
@@ -155,6 +167,16 @@ SUB draw()
 END SUB
 WHILE NOT WindowShouldClose()
 WEND
+```
+
+Example with mainloop:
+
+```basic
+mainloop
+  ClearBackground(30, 30, 45, 255)
+  DrawRectangle(x, y, 40, 40, 255, 100, 100, 255)
+  SYNC
+endmain
 ```
 
 See [examples/first_game.bas](../examples/first_game.bas) and [templates/2d_game.bas](../templates/2d_game.bas).
