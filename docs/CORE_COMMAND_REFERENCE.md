@@ -1,6 +1,6 @@
 # CyberBASIC2 Core Command Reference
 
-Complete reference for the full required command set. All commands are DBP-style, modern, and compatible with raylib-go.
+Complete reference for the full required command set. All commands are DBP-style, modern, and compatible with raylib-go. For domain-specific commands with examples, see [2D Game API](2D_GAME_API.md) and [3D Game API](3D_GAME_API.md).
 
 ---
 
@@ -12,6 +12,8 @@ Complete reference for the full required command set. All commands are DBP-style
 | SET CLEAR COLOR | `SetClearColor r, g, b` | Set background clear color | Implemented |
 | SET VSYNC | `SetVsync onOff` | Enable (1) or disable (0) vertical sync. Call before InitWindow | Implemented |
 | SET FRAMERATE | `SetFramerate cap` | Target framerate (0 = uncapped). Alias for SetTargetFPS | Implemented |
+
+**When to use:** SYNC ends each frame when using UseUnifiedRenderer. SetClearColor, SetVsync, SetFramerate before InitWindow or at startup.
 
 ---
 
@@ -28,6 +30,8 @@ Complete reference for the full required command set. All commands are DBP-style
 | SET CAMERA RANGE | `SetCameraRange near, far` | Near/far clip planes | Implemented |
 | SET CAMERA ACTIVE | `SetCameraActive id` | Use camera for 3D rendering | Implemented |
 | ATTACH CAMERA TO OBJECT | `AttachCameraToObject camID, objID` | Parent camera to object | Implemented |
+
+**When to use:** Create cameras in OnStart; set position/target each frame for follow or orbit cameras. Use SetCameraActive before drawing 3D.
 
 ---
 
@@ -52,6 +56,8 @@ Complete reference for the full required command set. All commands are DBP-style
 | ATTACH OBJECT | `AttachObject childID, parentID` | Parent object | Implemented |
 | DETACH OBJECT | `DetachObject id` | Remove parent | Implemented |
 
+**When to use:** Load objects once; PositionObject, RotateObject, DrawObject each frame. Use AttachObject for hierarchies (e.g. weapon on character).
+
 ---
 
 ## 4. Material System
@@ -67,6 +73,8 @@ Complete reference for the full required command set. All commands are DBP-style
 | SET OBJECT EMISSIVE | `SetObjectEmissive id, r, g, b` | Emissive color | Implemented |
 | SET OBJECT SHADER | `SetObjectShader id, shaderID` | Custom shader | Implemented |
 | SET SHADER UNIFORM | `SetShaderUniform shaderID, name$, value` | Shader uniform | Implemented |
+
+**When to use:** Set material properties after loading; override per-object with SetObjectRoughness, SetObjectMetallic for PBR.
 
 ---
 
@@ -84,6 +92,8 @@ Complete reference for the full required command set. All commands are DBP-style
 | SET LIGHT ANGLE | `SetLightAngle id, degrees` | Cone angle for spot | Implemented |
 | ENABLE SHADOWS | `EnableShadows id` | Enable shadow casting | Implemented |
 | DISABLE SHADOWS | `DisableShadows id` | Disable shadow casting | Implemented |
+
+**When to use:** Create lights in OnStart; directional (type 1) for sun/moon. EnableShadows() turns on default shadows; SetShadowQuality("low"|"medium"|"high") for performance.
 
 ---
 

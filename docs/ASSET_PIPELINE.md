@@ -1,46 +1,120 @@
 # Asset Pipeline
 
-CyberBASIC2 has a real asset cache, but it is currently only wired into part of the loading stack.
+Central asset loading, caching, and lifecycle for models and textures. Supports reference counting and shared parsed-model reuse where wired.
 
-## Commands
+---
 
-| Command | Args | Description |
-|---------|------|-------------|
-| `LoadAsset` | (path) | Load model or texture into the shared cache; returns the path key. |
-| `UnloadAsset` | (path) | Decrement the cached refcount for that path. |
-| `AssetExists` | (path) | Returns 1 if the asset is currently cached. |
-| `PreloadAsset` | (path) | Synchronous preload; same behavior as `LoadAsset`. |
+## Purpose
+
+- **Avoid duplicate loads:** Same path loads once; subsequent loads increment refcount.
+- **Unload when done:** `UnloadAsset(path)` decrements refcount; GPU resources freed when refs reach 0.
+- **Warm cache:** `PreloadAsset` or `LoadAsset` before `LoadObject` to reuse parsed models.
+
+---
+
+## Architecture
+
+```
+User code                    Asset pipeline
+─────────────────────────────────────────────────────────────
+LoadAsset(path)     →    Parsed-model cache (by path)
+PreloadAsset(path)  →    Same as LoadAsset
+LoadObject(id,path) →    Uses cache when available
+LoadLevel(id,path)  →    Imports directly (bypasses cache)
+LoadPrefab(id,path) →    Imports directly (bypasses cache)
+UnloadAsset(path)   →    Decrement refcount; unload at 0
+```
+
+**Packages:**
+- `compiler/runtime/resources` — Model and texture cache with refcounting
+- `compiler/runtime/assets` — Parsed-model cache for GLTF/OBJ
+- `compiler/bindings/dbp` — LoadObject, LoadLevel, LoadPrefab
+
+---
+
+## API Surface
+
+| Command | Args | Returns | Description |
+|---------|------|---------|-------------|
+| `LoadAsset` | (path) | path (string) | Load model or texture; increment refcount. Returns path key. |
+| `UnloadAsset` | (path) | — | Decrement refcount; unload when refs reach 0. |
+| `AssetExists` | (path) | 1 or 0 | True if asset is currently cached. |
+| `PreloadAsset` | (path) | — | Synchronous preload; same behavior as LoadAsset. |
+
+---
 
 ## Supported Formats
 
-- Models: `.gltf`, `.glb`, `.obj`
-- Textures: `.png`, `.jpg`, `.jpeg`, `.bmp`, `.tga`, `.gif`
+| Type | Extensions |
+|------|------------|
+| Models | `.gltf`, `.glb`, `.obj` |
+| Textures | `.png`, `.jpg`, `.jpeg`, `.bmp`, `.tga`, `.gif` |
+
+---
+
+## Defaults
+
+- **Cache key:** Path string (relative or absolute).
+- **Refcount:** Starts at 1 on first load; increments on subsequent LoadAsset/LoadObject for same path.
+- **Unload:** Call `UnloadAsset(path)` only after all users (objects, levels) are gone.
+
+---
 
 ## Current Integration Status
 
-- `LoadObject(id, path)` uses the shared parsed-model cache for static model builds.
-- Animated GLTF objects still use raylib's native loader so skeletal animation continues to work.
-- `LoadLevel`, `LoadLevelWithHierarchy`, and `LoadPrefab` currently parse through the model importer directly instead of reusing the shared parsed-model cache.
-- Texture caching exists in `runtime/resources`, but `BuildModel` still uploads model textures per build instead of reusing the shared texture cache for imported model materials.
+| Entry Point | Cache-Backed | Notes |
+|-------------|--------------|-------|
+| `LoadObject(id, path)` | Yes (static) | Uses parsed-model cache for static builds. |
+| Animated GLTF | No | Uses raylib native loader for skeletal animation. |
+| `LoadLevel(id, path)` | No | Parses through importer directly. |
+| `LoadLevelWithHierarchy(id, path)` | No | Same as LoadLevel; preserves hierarchy. |
+| `LoadPrefab(id, path)` | No | Not cache-backed. |
+| Texture upload (BuildModel) | Partial | Model textures uploaded per build; shared texture cache exists but not fully wired. |
 
-## Practical Guidance
+---
 
-1. Use `PreloadAsset` or `LoadAsset` when you want to warm the parsed-model cache before a later `LoadObject`.
-2. Keep using `LoadLevel` and `LoadLevelWithHierarchy` normally, but do not assume they are currently cache-backed.
-3. Call `UnloadAsset` only after the corresponding object or texture users are gone.
+## Edge Cases
+
+- **Missing file:** Load fails; no cache entry. Check return/error.
+- **Missing textures in GLTF:** Engine uses 1×1 white placeholder.
+- **Unload before DeleteObject:** Safe; refcount prevents premature unload. Unload after DeleteObject.
+- **Same path, different cases:** Path is case-sensitive; `"Crate.glb"` and `"crate.glb"` are different keys.
+
+---
 
 ## Level vs Object Loading
 
-- `LoadObject(id, path)`: best current entry point for cache-backed model loading.
-- `LoadLevel(id, path)`: imports a whole level and builds DBP objects/materials/textures, but currently bypasses the parsed-model cache.
-- `LoadLevelWithHierarchy(id, path)`: same as `LoadLevel`, with node hierarchy preserved between mesh nodes.
-- `LoadPrefab(id, path)`: loads a reusable template; currently not cache-backed.
+| Command | Use Case | Cache |
+|---------|----------|-------|
+| `LoadObject(id, path)` | Single object, best cache support | Yes |
+| `LoadLevel(id, path)` | Full scene, meshes + materials + textures | No |
+| `LoadLevelWithHierarchy(id, path)` | Scene with node hierarchy | No |
+| `LoadPrefab(id, path)` | Reusable template | No |
 
-## What Is Cached
+---
 
-- Parsed models: cached by source path.
-- Standalone textures loaded through the resource manager: cached by path.
-- GPU model builds: not shared; each build still creates its own runtime meshes/material state.
+## Performance Considerations
+
+- **Preload during loading screen:** Call `PreloadAsset` for critical assets before gameplay.
+- **Unload unused:** Call `UnloadAsset` when switching levels or removing objects to free GPU memory.
+- **Level loads:** LoadLevel/LoadLevelWithHierarchy parse and build each time; no cache. Use for one-time level load.
+
+---
+
+## Multiplayer / Determinism
+
+Asset loading is local and does not affect network simulation. Load the same assets on server and clients for consistent rendering.
+
+---
+
+## Contributor Notes
+
+- **Parsed-model cache:** `compiler/runtime/assets/assets.go` — `LoadModelForBuild` for cache integration.
+- **Resource manager:** `compiler/runtime/resources/manager.go` — `LoadModel`, `UnloadModel`, `GetModel`, `ModelExists`, `TextureExists`.
+- **Wiring LoadLevel:** `compiler/bindings/dbp/dbp.go` — `LoadLevel` calls model importer; to add cache, route through `assets.LoadModelForBuild`.
+- **Texture reuse:** `BuildModel` in dbp_model.go uploads textures per build; integrate with `resources` for shared texture reuse.
+
+---
 
 ## Example
 
@@ -59,3 +133,12 @@ DeleteObject 1
 UnloadLevel 1
 UnloadAsset "props/crate.glb"
 ```
+
+---
+
+## See Also
+
+- [Level Loading](LEVEL_LOADING.md)
+- [3D Loading Spec](3D_LOADING_SPEC.md)
+- [Blender Workflow](BLENDER_WORKFLOW.md)
+- [Documentation Index](DOCUMENTATION_INDEX.md)

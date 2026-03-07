@@ -43,6 +43,21 @@ Conventions for CyberBASIC2 documentation so all docs feel consistent.
 - Document the directive as **`#include "path"`**. Optionally mention **IMPORT "path"** as an alias if supported.
 - Do not use "INCLUDE" without the hash (the compiler expects `#include` or `IMPORT`).
 
+## Subsystem documentation template
+
+When documenting a subsystem (e.g. Asset Pipeline, Multiplayer, Physics), include these sections for production-ready clarity:
+
+1. **Purpose** — What the subsystem does and why it exists.
+2. **Architecture** — High-level flow, packages involved, data flow.
+3. **API Surface** — Commands/functions with args, returns, description.
+4. **Defaults** — Default values, behaviors, override points.
+5. **Edge Cases** — Error conditions, boundary behavior, gotchas.
+6. **Performance Considerations** — When to preload, batch, or avoid.
+7. **Multiplayer / Determinism** — How the subsystem interacts with networked games.
+8. **Contributor Notes** — File paths, extension points, testing.
+
+See [Asset Pipeline](ASSET_PIPELINE.md) and [Rendering and the Game Loop](RENDERING_AND_GAME_LOOP.md) for examples.
+
 ## See also
 
 - [Documentation Index](DOCUMENTATION_INDEX.md)

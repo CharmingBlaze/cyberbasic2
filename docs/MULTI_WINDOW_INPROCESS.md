@@ -142,7 +142,7 @@ Optional layout: create dock areas, split them, and attach windows. Useful for e
 
 ## Example
 
-See **examples/multi_window_gui_demo.bas** for a full example: two panels, **StateSet**/ **StateGet**, **OnWindowDraw**, **WindowProcessEvents**, **WindowBeginDrawing**/ **WindowEndDrawing**, **WindowDrawAllToScreen**.
+See [templates/2d_game.bas](../templates/2d_game.bas) for a working single-window example. Multi-window demos are planned; the API supports **StateSet**/ **StateGet**, **OnWindowDraw**, **WindowProcessEvents**, **WindowBeginDrawing**/ **WindowEndDrawing**, **WindowDrawAllToScreen**.
 
 ---
 

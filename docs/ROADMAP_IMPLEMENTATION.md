@@ -44,14 +44,67 @@ This document records the current implementation status behind the roadmap audit
 
 ## Known Remaining Gaps
 
-These are still real limitations after the implementation pass:
+These are real limitations. Each has a clear work item for contributors.
 
-- Shadows are now implemented as a single-light directional shadow-map path. Point-light shadows, spot-light shadows, and cascaded shadow maps are still future work.
-- GLTF `KHR_lights_punctual` import is still not wired into runtime light creation, so level lighting must still be created explicitly in game code.
-- The asset cache is only partially integrated. `LoadLevel`, `LoadLevelWithHierarchy`, and `LoadPrefab` still bypass part of the shared parsed-model cache flow.
-- 2D physics now reports its backend as `bytearena-box2d` / `authoritative`, while 3D physics reports `purego-fallback` / `fallback`; there is still no native Bullet backend in this checkout.
-- The pure-Go Bullet layer still approximates some non-box/non-sphere behavior, especially capsule overlap and swept queries.
-- Multiplayer does not yet provide lockstep, rollback, prediction, matchmaking, or interest management.
+### Shadows
+
+| Gap | Current State | Action for Contributors |
+|-----|---------------|-------------------------|
+| Point-light shadows | Not implemented | Add point-light shadow pass in `compiler/runtime/renderer/shadow.go`; follow directional pattern |
+| Spot-light shadows | Not implemented | Add spot-light shadow pass; cone frustum math |
+| Cascaded shadow maps | Not implemented | Replace single split with cascaded splits in shadow pass; see `RenderShadowPass` |
+
+**File:** `compiler/runtime/renderer/shadow.go`, `compiler/bindings/dbp/dbp_lighting.go`
+
+### Level Lighting
+
+| Gap | Current State | Action for Contributors |
+|-----|---------------|-------------------------|
+| GLTF KHR_lights_punctual | Not wired | Parse light nodes in `compiler/bindings/model/gltf.go`; create MakeLight/PositionLight in level loader |
+
+**File:** `compiler/bindings/model/gltf.go` (TODO: parse light nodes), `compiler/bindings/dbp/dbp_level.go`
+
+### Asset Cache
+
+| Gap | Current State | Action for Contributors |
+|-----|---------------|-------------------------|
+| LoadLevel cache | Bypasses parsed-model cache | Route `LoadLevel` through `assets.LoadModelForBuild` in dbp_level.go |
+| LoadLevelWithHierarchy cache | Same | Same as LoadLevel |
+| LoadPrefab cache | Not cache-backed | Route through assets cache; add refcount on prefab load |
+| Texture reuse in BuildModel | Per-build upload | Use `resources` texture cache in `BuildModel`; key by path |
+
+**Files:** `compiler/bindings/dbp/dbp_level.go`, `compiler/bindings/dbp/dbp_prefab.go`, `compiler/bindings/dbp/dbp_model.go`, `compiler/runtime/assets/assets.go`, `compiler/runtime/resources/manager.go`
+
+### 3D Physics
+
+| Gap | Current State | Action for Contributors |
+|-----|---------------|-------------------------|
+| Native Bullet backend | Not in checkout | Optional CGO build; wire bullet C lib; see `BulletNativeAvailable()` |
+| 3D constraint joints | Stubbed; return error | Implement CreateHingeJoint3D, CreateSliderJoint3D in pure-Go or native |
+| CreateStaticMesh3D | Placeholder body | Implement triangle-mesh collision in pure-Go fallback |
+| Capsule/swept queries | Approximated | Improve overlap and spherecast math in `compiler/bindings/bullet` |
+
+**Files:** `compiler/bindings/bullet/bullet.go`, `compiler/bindings/bullet/*.go`
+
+### Multiplayer
+
+| Gap | Current State | Action for Contributors |
+|-----|---------------|-------------------------|
+| Lockstep | Not implemented | Design: fixed tick rate; clients send input per tick; server broadcasts state |
+| Rollback | Not implemented | Requires snapshot save/restore; resimulate from last confirmed state |
+| Prediction | Not implemented | Client-side prediction from input; reconcile with server state |
+| Matchmaking | Not implemented | External service or custom lobby |
+| Interest management | Not implemented | Filter SyncEntity/Replicate by distance or relevance |
+
+**File:** `compiler/bindings/net/net.go`, `docs/MULTIPLAYER_DESIGN.md`
+
+---
+
+## See Also
+
+- [ROADMAP.md](../ROADMAP.md) — Forward-looking priorities
+- [Documentation Philosophy](DOCUMENTATION_PHILOSOPHY.md)
+- [Documentation Index](DOCUMENTATION_INDEX.md)
 
 ## How To Read The Roadmap
 

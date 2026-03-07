@@ -156,7 +156,7 @@ var threeDDrawNames = map[string]bool{
 	"drawmodel": true, "drawmodelsimple": true, "drawmodelex": true, "drawmodelwires": true, "drawplane": true,
 	"drawline3d": true, "drawpoint3d": true, "drawcircle3d": true, "drawgrid": true,
 	"drawcylinder": true, "drawcylinderwires": true, "drawray": true, "drawtriangle3d": true,
-	"beginmode3d": true,
+	"drawobject": true, "beginmode3d": true,
 }
 
 // predicate3DDraw returns true if n is a Call whose normalized name is in threeDDrawNames.

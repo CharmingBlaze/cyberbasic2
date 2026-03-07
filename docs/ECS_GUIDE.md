@@ -62,4 +62,4 @@ ECS.DestroyWorld(wid)
 - You want to query "all entities with Transform and Health" and iterate.
 - You prefer composition (add/remove components) over deep inheritance.
 
-For a runnable demo see [examples/ecs_demo.bas](../examples/ecs_demo.bas) (if present). Full API list: [API_REFERENCE.md](../API_REFERENCE.md).
+For runnable examples see [examples/first_game.bas](../examples/first_game.bas) and [templates/3d_game.bas](../templates/3d_game.bas). Full API list: [API_REFERENCE.md](../API_REFERENCE.md).

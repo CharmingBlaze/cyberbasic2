@@ -70,7 +70,7 @@ WHILE NOT WindowShouldClose()
 WEND
 ```
 
-The rest of this tutorial focuses mostly on concepts and patterns. For the authoritative command matrix, use `docs/GUI_GUIDE.md`.
+The rest of this tutorial focuses mostly on concepts and patterns. For full widget reference and Gui* coordinates, see [GUI Guide](GUI_GUIDE.md).
 
 ---
 
@@ -943,6 +943,14 @@ Congratulations! You've now learned:
 
 GUI development is crucial for player experience. A well-designed interface can make the difference between a good game and a great one. Keep experimenting and refining your UI skills!
 
-**See also:** [GUI Guide](GUI_GUIDE.md), [Core Command Reference](CORE_COMMAND_REFERENCE.md) (GUI section).
+### Commands you learned
+
+- **Layout (BeginUI):** BeginUI, EndUI, Label, Button, Slider, Checkbox, TextBox, Dropdown, WindowBox, EndWindowBox
+- **Full raygui (Gui*):** GuiWindowBox, GuiLabel, GuiButton, GuiSlider, GuiCheckBox, GuiTextBox, GuiDropdownBox
+- **Layout engine:** BeginLayout, LayoutSpacing, LayoutPadding, BeginLayoutGroup, EndLayoutGroup
+
+Full reference: [GUI Guide](GUI_GUIDE.md).
+
+**See also:** [Core Command Reference](CORE_COMMAND_REFERENCE.md) (GUI section).
 
 **Happy coding!**

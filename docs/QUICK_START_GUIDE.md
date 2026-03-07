@@ -94,7 +94,7 @@ SUB OnDraw()
 END SUB
 ```
 
-Run: `cyberbasic examples/dbp_style/2d_sprites.bas` – or save the above and run it.
+Run: `cyberbasic examples/first_game.bas` – or save the above and run it.
 
 ### Option B: Manual Loop
 
@@ -288,17 +288,15 @@ Once you're comfortable with the basics, try these projects:
 - **[API_REFERENCE.md](../API_REFERENCE.md)** - All functions listed
 
 ### Examples
-The `examples/` folder contains working code for every feature:
+The `examples/` folder and `templates/` contain working code:
 ```bash
-# DBP-style (recommended for new users)
-cyberbasic examples/dbp_style/hello_world.bas
-cyberbasic examples/dbp_style/2d_sprites.bas
-cyberbasic examples/dbp_style/3d_cube_spin.bas
-
-# Manual loop examples
+# Minimal examples
+cyberbasic examples/hello_world.bas
 cyberbasic examples/first_game.bas
-cyberbasic examples/box2d_demo.bas
-cyberbasic examples/gui_demo.bas
+
+# Full templates
+cyberbasic templates/2d_game.bas
+cyberbasic templates/3d_game.bas
 ```
 
 ### Troubleshooting

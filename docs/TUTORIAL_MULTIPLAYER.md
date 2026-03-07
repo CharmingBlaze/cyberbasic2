@@ -17,7 +17,7 @@ This tutorial shows the current multiplayer workflow that matches the shipping T
 - Deterministic replay tooling
 - Matchmaking or NAT traversal
 
-See `MULTIPLAYER_DESIGN.md` for the current design/status document.
+See [MULTIPLAYER_DESIGN.md](MULTIPLAYER_DESIGN.md) for the current design/status document. For full command list and patterns, see [Multiplayer Guide](MULTIPLAYER.md).
 
 ## Pick One Delivery Style
 
@@ -163,8 +163,19 @@ END SUB
 - `SendPing` / `GetPing` are the current latency helpers.
 - Use `HostTLS` / `ConnectTLS` when you need encrypted transport.
 
+### Commands you learned
+
+- **Server:** Host, Accept, AcceptTimeout, CloseServer, ProcessNetworkEvents
+- **Client:** Connect, Disconnect, Send, Receive
+- **Messages:** SendJSON, SendTable, ReceiveJSON, ReceiveTable
+- **Rooms:** CreateRoom, JoinRoom, SendToRoom
+- **RPC:** RegisterRPC, SendRPC
+- **Entity sync:** SyncEntity, OnEntitySync
+
+Full reference: [Multiplayer Guide](MULTIPLAYER.md).
+
 ## Next Reading
 
-- `MULTIPLAYER.md` for the API guide
-- `MULTIPLAYER_DESIGN.md` for current lockstep/rollback plans
-- `3D_GAME_API.md` and `2D_GAME_API.md` for gameplay-facing command references
+- [MULTIPLAYER.md](MULTIPLAYER.md) for the API guide
+- [MULTIPLAYER_DESIGN.md](MULTIPLAYER_DESIGN.md) for current lockstep/rollback plans
+- [3D_GAME_API.md](3D_GAME_API.md) and [2D_GAME_API.md](2D_GAME_API.md) for gameplay-facing command references

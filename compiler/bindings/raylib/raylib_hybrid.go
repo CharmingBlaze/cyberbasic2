@@ -199,6 +199,7 @@ func DrawQueuesGUI(v *vm.VM) {
 }
 
 func flushRenderQueues(v *vm.VM) (interface{}, error) {
+	// PollInputEvents is called once at frame start (beginRuntimeFrame or BeginDrawing); do not poll here or IsKeyPressed/IsMouseButtonPressed get cleared
 	rl.BeginDrawing()
 	rl.ClearBackground(rl.NewColor(25, 25, 35, 255))
 	DrawQueues2D(v)

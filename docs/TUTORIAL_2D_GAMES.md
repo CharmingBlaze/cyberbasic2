@@ -21,6 +21,8 @@ Before starting, make sure you've completed:
 - **Module 1**: BASIC Programming Fundamentals (from LEARNING_PATH.md)
 - Basic understanding of variables, functions, and loops
 
+For full command list, see [2D Game API](2D_GAME_API.md) and [2D Physics Guide](2D_PHYSICS_GUIDE.md).
+
 ---
 
 ## Recommended Shipping Path
@@ -982,6 +984,15 @@ Congratulations! You've now learned:
 
 Keep practicing and experimenting with these techniques. The more you create, the better you'll become at game development with CyberBASIC2!
 
-**See also:** [Aseprite Workflow](ASEPRITE_WORKFLOW.md) for sprite sheet export with tags and slices, [2D Game API](2D_GAME_API.md) for full command reference.
+### Commands you learned
+
+- **Drawing:** DrawRect, DrawCircle, DrawLine, DrawText, DrawTexture, LoadImage, Sprite
+- **Tilemaps:** LoadTilemap, DrawTilemap, TilemapSetTileset, SetTile, GetTile
+- **Physics:** CreateWorld2D, CreateBox2D, CreateCircle2D, Step2D, GetPositionX2D, GetPositionY2D, ApplyForce2D
+- **Input:** IsKeyDown, IsKeyPressed, GetAxisX, GetAxisY, GetMouseX, GetMouseY
+
+Full reference: [2D Game API](2D_GAME_API.md), [2D Physics Guide](2D_PHYSICS_GUIDE.md).
+
+**See also:** [Aseprite Workflow](ASEPRITE_WORKFLOW.md) for sprite sheet export with tags and slices.
 
 **Happy coding!**

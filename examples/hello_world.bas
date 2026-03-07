@@ -1,0 +1,1 @@
+PRINT "Hello, CyberBASIC2!"

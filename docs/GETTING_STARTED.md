@@ -15,7 +15,7 @@ Install, build, and run your first CyberBASIC2 program.
 
 ## Prerequisites
 
-- **Go 1.19+** – [golang.org/dl](https://golang.org/dl/)
+- **Go 1.22+** – [golang.org/dl](https://golang.org/dl/)
 - No C compiler required for normal use. The runtime is written in Go and uses raylib-go, so you get a single binary. An optional **C engine** in `engine/` exists for custom builds; the recommended path is the pure-Go build. See the main [README](../README.md) for the rationale behind the Go-based architecture.
 
 ## Build the compiler
@@ -71,6 +71,8 @@ After building, the compiler is the binary you produced:
 | **All docs** | [Documentation Index](DOCUMENTATION_INDEX.md) |
 | **First 2D game** | [Cheatsheet](../CHEATSHEET.md) → [2D Graphics Guide](2D_GRAPHICS_GUIDE.md) |
 | **First 3D game** | [Cheatsheet](../CHEATSHEET.md) → [3D Graphics Guide](3D_GRAPHICS_GUIDE.md) |
+| **First GUI** | [GUI Guide](GUI_GUIDE.md) → [GUI Development Tutorial](TUTORIAL_GUI_DEVELOPMENT.md) |
+| **First multiplayer** | [Multiplayer Tutorial](TUTORIAL_MULTIPLAYER.md) → [Multiplayer Guide](MULTIPLAYER.md) |
 | **Hybrid loop** (auto physics + render) | Define `update(dt)` and `draw()`; see [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop) |
 | **Game loop + input + physics** | [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) |
 | **Minimal game templates** | [templates/2d_game.bas](../templates/2d_game.bas), [templates/3d_game.bas](../templates/3d_game.bas) – see [templates/README](../templates/README.md) |

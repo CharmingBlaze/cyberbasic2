@@ -12,11 +12,12 @@ Complete guide to making games with CyberBASIC2: game loop, input, GAME.* helper
 6. [3D physics (Bullet)](#3d-physics-bullet)
 7. [Collision callbacks (2D)](#collision-callbacks-2d)
 8. [ECS (Entity-Component System)](#ecs-entity-component-system)
-9. [Quality of life](#quality-of-life)
-10. [State machines](#state-machines)
-11. [Best practices](#best-practices)
-12. [Physics implementation status](#physics-implementation-status)
-13. [2D and 3D quick reference](#2d-and-3d-quick-reference)
+9. [Combining 2D, 3D, GUI, and Multiplayer](#combining-2d-3d-gui-and-multiplayer)
+10. [Quality of life](#quality-of-life)
+11. [State machines](#state-machines)
+12. [Best practices](#best-practices)
+13. [Physics implementation status](#physics-implementation-status)
+14. [2D and 3D quick reference](#2d-and-3d-quick-reference)
 
 ---
 
@@ -53,7 +54,7 @@ See [2D Graphics Guide](2D_GRAPHICS_GUIDE.md) and [3D Graphics Guide](3D_GRAPHIC
 
 ### Hybrid update/draw loop
 
-If you define **update(dt)** and **draw()** (as Sub or Function) and use a game loop (`WHILE NOT WindowShouldClose()` or `REPEAT ... UNTIL WindowShouldClose()`), the compiler **replaces the loop body** with an automatic pipeline: GetFrameTime → StepAllPhysics2D(dt), StepAllPhysics3D(dt) → update(dt) → ClearRenderQueues → draw() (Draw*/Gui* calls are queued) → FlushRenderQueues. You do not call BeginDrawing/EndDrawing or BeginMode2D/EndMode3D yourself. Prefer this for new games when you want a clear update/draw split and automatic physics stepping. See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop) and **examples/hybrid_update_draw_demo.bas**.
+If you define **update(dt)** and **draw()** (as Sub or Function) and use a game loop (`WHILE NOT WindowShouldClose()` or `REPEAT ... UNTIL WindowShouldClose()`), the compiler **replaces the loop body** with an automatic pipeline: GetFrameTime → StepAllPhysics2D(dt), StepAllPhysics3D(dt) → update(dt) → ClearRenderQueues → draw() (Draw*/Gui* calls are queued) → FlushRenderQueues. You do not call BeginDrawing/EndDrawing or BeginMode2D/EndMode3D yourself. Prefer this for new games when you want a clear update/draw split and automatic physics stepping. See [Program Structure](PROGRAM_STRUCTURE.md#hybrid-updatedraw-loop) and [examples/first_game.bas](../examples/first_game.bas).
 
 ---
 
@@ -92,7 +93,7 @@ IsMouseButtonPressed(MOUSE_LEFT_BUTTON)
 
 ### Events (optional)
 
-Register handlers and call **PollInputEvents()** in your loop:
+Register handlers. **PollInputEvents** is called automatically at frame start (BeginDrawing or beginRuntimeFrame). Do not call it again; a second poll clears IsKeyPressed/IsMouseButtonPressed.
 
 ```basic
 ON KeyDown("ESCAPE")
@@ -104,7 +105,7 @@ ON KeyPressed("SPACE")
 END ON
 
 WHILE NOT WindowShouldClose()
-    PollInputEvents()
+    // PollInputEvents is automatic; use IsKeyDown, IsKeyPressed, etc.
     // ...
 WEND
 ```
@@ -166,7 +167,7 @@ WEND
 DestroyWorld2D("w")
 ```
 
-See [examples/box2d_demo.bas](../examples/box2d_demo.bas) and [API_REFERENCE.md](../API_REFERENCE.md) for all 2D physics (flat) functions.
+See [examples/first_game.bas](../examples/first_game.bas) and [API_REFERENCE.md](../API_REFERENCE.md) for all 2D physics (flat) functions.
 
 ---
 
@@ -198,7 +199,7 @@ WEND
 DestroyWorld3D("w")
 ```
 
-See [templates/3d_game.bas](../templates/3d_game.bas), [examples/run_3d_physics_demo.bas](../examples/run_3d_physics_demo.bas), and [API_REFERENCE.md](../API_REFERENCE.md).
+See [templates/3d_game.bas](../templates/3d_game.bas) and [API_REFERENCE.md](../API_REFERENCE.md).
 
 ---
 
@@ -228,13 +229,58 @@ CyberBASIC2 provides ECS via a library binding. You create worlds, entities, add
 - **Query:** `ECS.Query(worldId, componentType1, ...)` → list of entity IDs to loop over  
 - **Destroy:** `ECS.DestroyEntity(worldId, entityId)`, `ECS.DestroyWorld(worldId)`
 
-See **[ECS Guide](ECS_GUIDE.md)** for the full API and [examples/ecs_demo.bas](../examples/ecs_demo.bas) for a runnable example.
+See **[ECS Guide](ECS_GUIDE.md)** for the full API and [examples/first_game.bas](../examples/first_game.bas) for a runnable example.
 
 ---
 
 ## GUI
 
 Use **BeginUI()** … **EndUI()** each frame and add widgets: **Label**, **Button**, **Slider**, **Checkbox**, **TextBox**, **Dropdown**, **ProgressBar**, **WindowBox** / **EndWindowBox**, **GroupBox** / **EndGroupBox**. Call after ClearBackground in your game loop. See **[GUI Guide](GUI_GUIDE.md)** and [API_REFERENCE.md](../API_REFERENCE.md) (section UI).
+
+---
+
+## Combining 2D, 3D, GUI, and Multiplayer
+
+You can combine all four domains in one game. Recommended order in your program:
+
+1. **Init window** – `InitWindow`, `SetTargetFPS`
+2. **Load assets** – textures, models, tilemaps (once, before the loop)
+3. **Create physics world** – `CreateWorld2D` or `CreateWorld3D` (if using physics)
+4. **Optional: start networking** – `Host(port)` for server, `Connect(host, port)` for client
+5. **Game loop** – input → physics step → draw 2D/3D → draw GUI → `ProcessNetworkEvents()`
+
+Minimal skeleton showing all four domains:
+
+```basic
+InitWindow(800, 600, "Full Game")
+SetTargetFPS(60)
+LoadImage "hero.png", 1
+CreateWorld2D("w", 0, -10)
+VAR sid = Host(9999)   ' optional: server
+
+WHILE NOT WindowShouldClose()
+  ProcessNetworkEvents()   ' handle multiplayer messages
+  VAR dt = GetFrameTime()
+  Step2D("w", dt)         ' 2D physics
+  ' update(dt) logic here
+
+  ClearBackground(30, 30, 50, 255)
+  ' Draw 2D/3D here
+  Sprite 1, 100, 100
+  ' Draw GUI last
+  BeginUI()
+  IF Button("Quit") THEN CloseWindow()
+  EndUI()
+WEND
+
+CloseServer(sid)
+CloseWindow()
+```
+
+- **2D:** [2D Game API](2D_GAME_API.md), [2D Physics Guide](2D_PHYSICS_GUIDE.md)
+- **3D:** [3D Game API](3D_GAME_API.md), [3D Physics Guide](3D_PHYSICS_GUIDE.md)
+- **GUI:** [GUI Guide](GUI_GUIDE.md)
+- **Multiplayer:** [Multiplayer Guide](MULTIPLAYER.md)
 
 ---
 

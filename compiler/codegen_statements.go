@@ -347,11 +347,23 @@ func (c *Compiler) compileRepeatStatement(r *parser.RepeatStatement, chunk *vm.C
 			}
 		}
 		for _, stmt := range r.Body.Statements {
+			// Emit EndMode2D/EndMode3D right before SYNC so 2D/3D content is flushed before EndDrawing.
+			if wrapFrame && bodyContainsSync(r.Body.Statements) {
+				n := unwrapStatement(stmt)
+				if gc, ok := n.(*parser.GameCommand); ok && strings.ToLower(gc.Command) == "sync" {
+					if use3D {
+						c.emitFrameWrap(chunk, "EndMode3D")
+					} else {
+						c.emitFrameWrap(chunk, "EndMode2D")
+					}
+				}
+			}
 			if err := c.compileStatement(stmt, chunk); err != nil {
 				return err
 			}
 		}
-		if wrapFrame {
+		if wrapFrame && !bodyContainsSync(r.Body.Statements) {
+			// When body contains SYNC, omit EndDrawing; SYNC does it.
 			if use3D {
 				c.emitFrameWrap(chunk, "EndMode3D")
 			} else {
@@ -592,6 +604,15 @@ func bodyContainsFrameBoundaries(nodes []parser.Node) bool {
 	})
 }
 
+// bodyContainsSync returns true if the body contains a SYNC GameCommand.
+// When true, omit injected EndDrawing; SYNC does it.
+func bodyContainsSync(nodes []parser.Node) bool {
+	return WalkStatements(nodes, func(n parser.Node) bool {
+		gc, ok := n.(*parser.GameCommand)
+		return ok && strings.ToLower(gc.Command) == "sync"
+	})
+}
+
 // emitFrameWrap emits a no-arg foreign call (BeginDrawing, EndDrawing, BeginMode2D, EndMode2D). Used for automatic frame wrapping.
 func (c *Compiler) emitFrameWrap(chunk *vm.Chunk, name string) {
 	idx := chunk.WriteConstant(strings.ToLower(name))
@@ -653,12 +674,24 @@ func (c *Compiler) compileWhileStatement(whileStmt *parser.WhileStatement, chunk
 			}
 		}
 		for _, stmt := range whileStmt.Body.Statements {
+			// Emit EndMode2D/EndMode3D right before SYNC so 2D/3D content is flushed before EndDrawing.
+			if wrapFrame && bodyContainsSync(whileStmt.Body.Statements) {
+				n := unwrapStatement(stmt)
+				if gc, ok := n.(*parser.GameCommand); ok && strings.ToLower(gc.Command) == "sync" {
+					if use3D {
+						c.emitFrameWrap(chunk, "EndMode3D")
+					} else {
+						c.emitFrameWrap(chunk, "EndMode2D")
+					}
+				}
+			}
 			err = c.compileStatement(stmt, chunk)
 			if err != nil {
 				return err
 			}
 		}
-		if wrapFrame {
+		if wrapFrame && !bodyContainsSync(whileStmt.Body.Statements) {
+			// When body contains SYNC, omit EndDrawing; SYNC does it.
 			if use3D {
 				c.emitFrameWrap(chunk, "EndMode3D")
 			} else {

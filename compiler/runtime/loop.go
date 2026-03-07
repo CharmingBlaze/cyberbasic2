@@ -2,6 +2,8 @@
 package runtime
 
 import (
+	"cyberbasic/compiler/bindings/raylib"
+	"cyberbasic/compiler/runtime/renderer"
 	"cyberbasic/compiler/runtime/time"
 	"cyberbasic/compiler/vm"
 
@@ -11,6 +13,8 @@ import (
 const maxFixedCatchupSteps = 8
 
 func beginRuntimeFrame(v *vm.VM) (float64, error) {
+	rl.PollInputEvents()
+	raylib.CaptureOrbitWheel()
 	dt, err := v.CallForeign("GetFrameTime", nil)
 	if err != nil {
 		return 0, err
@@ -80,7 +84,9 @@ func StepFrame(v *vm.VM) error {
 }
 
 // StepImplicitFrame runs one DBP-style implicit frame using OnUpdate/OnDraw naming.
-// It shares the same fixed-step runtime path as StepFrame so the main loop behavior stays consistent.
+// When UseUnifiedRenderer is enabled: queue path—OnDraw runs with SetInsideDraw so Draw* calls queue;
+// user writes SYNC at end of OnDraw; SYNC runs Frame() which draws from queues and presents.
+// When UseUnifiedRenderer is off: BeginDrawing, OnDraw, EndDrawing (legacy path).
 func StepImplicitFrame(v *vm.VM) error {
 	if v.Chunk() == nil {
 		return nil
@@ -98,6 +104,24 @@ func StepImplicitFrame(v *vm.VM) error {
 			return err
 		}
 	}
+
+	if renderer.IsUseUnified() {
+		// Queue path: OnDraw queues; SYNC in OnDraw runs Frame() and presents.
+		if _, err = v.CallForeign("ClearRenderQueues", nil); err != nil {
+			return err
+		}
+		if hasDraw {
+			v.SetInsideDraw(true)
+			if err = v.InvokeSub("OnDraw", nil); err != nil {
+				v.SetInsideDraw(false)
+				return err
+			}
+			v.SetInsideDraw(false)
+		}
+		return nil
+	}
+
+	// Legacy path: direct BeginDrawing/EndDrawing (beginRuntimeFrame already polled; do not poll again or IsKeyPressed gets cleared)
 	rl.BeginDrawing()
 	rl.ClearBackground(rl.NewColor(0, 0, 0, 255))
 	if hasDraw {

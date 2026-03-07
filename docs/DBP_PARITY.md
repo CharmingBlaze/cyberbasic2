@@ -21,7 +21,7 @@ PRINT "Hello from CyberBASIC 2"
 WaitKey()
 ```
 
-Run: `cyberbasic examples/dbp_style/hello_world.bas`
+Run: `cyberbasic examples/hello_world.bas`
 
 ### 2. Implicit Window + Loop
 
@@ -78,11 +78,9 @@ PRINT p.name
 
 ## Examples
 
-See `examples/dbp_style/`:
+See [examples/README.md](../examples/README.md):
 
-- `hello_world.bas` – PRINT + WAITKEY
-- `2d_sprites.bas` – implicit loop, OnStart/OnUpdate/OnDraw
-- `3d_cube_spin.bas` – LoadCube, PositionObject, YRotateObject
-- `first_person_demo.bas` – 3D camera, WASD + mouse
-- `simple_platformer.bas` – 2D platformer with implicit loop
-- `type_dot_test.bas` – TYPE with dot notation
+- `examples/hello_world.bas` – PRINT + WAITKEY
+- `examples/first_game.bas` – implicit loop, OnStart/OnUpdate/OnDraw
+- `templates/2d_game.bas` – 2D game with WASD movement
+- `templates/3d_game.bas` – 3D game with LoadCube, PositionObject, YRotateObject

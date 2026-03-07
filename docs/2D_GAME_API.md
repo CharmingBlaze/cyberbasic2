@@ -72,6 +72,8 @@ DrawSpriteRotated 1, 150, 150, 45
 DrawSpriteScaled 1, 200, 200, 2, 2
 ```
 
+**Typical usage:** Load sprites once in OnStart or before the game loop; use Sprite, DrawSpriteRotated, DrawSpriteScaled in draw() each frame.
+
 ---
 
 ## 4. Spritesheets / Animation
@@ -144,6 +146,8 @@ SetTile 1, 5, 5, 2
 t = GetTile 1, 5, 5
 DrawTilemap 1, 64, 32
 ```
+
+**Typical usage:** LoadTilemap once in OnStart or before the loop; DrawTilemap each frame in draw().
 
 Example tilemap JSON:
 
@@ -242,6 +246,8 @@ SetBody2DPosition "player", 100, 100
 ApplyForce2D "player", 10, 0
 x = GetBody2DX "player"
 ```
+
+**Typical usage:** Call Physics2DOn once before the loop; step physics each frame with StepAllPhysics2D (if using hybrid loop) or Step2D; use GetBody2DX/Y to read positions for drawing.
 
 ---
 

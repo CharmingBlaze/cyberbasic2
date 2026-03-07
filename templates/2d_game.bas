@@ -15,6 +15,7 @@ WHILE NOT WindowShouldClose()
   ClearBackground(20, 20, 30, 255)
   DrawCircle(x, y, 30, 255, 100, 100, 255)
   DrawText("WASD to move", 10, 10, 20, 255, 255, 255, 255)
+  SYNC
 WEND
 
 CloseWindow()

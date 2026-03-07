@@ -122,10 +122,23 @@ var (
 	orbitInitialized bool
 	orbitStateMu     sync.Mutex
 
+	// Manual mouse tracking for OrbitCamera (GetMouseDelta unreliable on some platforms)
+	orbitLastMouseX  float32
+	orbitLastMouseY  float32
+	orbitMouseReady  bool
+
+	// Wheel captured at frame start (GetMouseWheelMove often 0 on some setups)
+	orbitWheelThisFrame float32
+
 	// FPS MouseLook state (yaw, pitch in radians)
 	mouseLookYaw   float32
 	mouseLookPitch float32
 	mouseLookMu    sync.Mutex
+
+	// Manual mouse tracking for MouseLook (GetMouseDelta unreliable on some platforms)
+	mouseLookLastMouseX float32
+	mouseLookLastMouseY float32
+	mouseLookMouseReady bool
 
 	// Per-model state for simplified DrawModel / RotateModel / SetModelColor
 	modelColors  = make(map[string]rl.Color)
@@ -241,6 +254,15 @@ func toFloat32(v interface{}) float32 {
 		return float32(f)
 	default:
 		return 0
+	}
+}
+
+// CaptureOrbitWheel stores mouse wheel value at frame start (called right after PollInputEvents).
+func CaptureOrbitWheel() {
+	wv := rl.GetMouseWheelMoveV()
+	orbitWheelThisFrame = float32(wv.Y)
+	if orbitWheelThisFrame == 0 && wv.X != 0 {
+		orbitWheelThisFrame = float32(wv.X)
 	}
 }
 

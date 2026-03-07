@@ -133,7 +133,7 @@ WHILE NOT WindowShouldClose()
 WEND
 ```
 
-See **examples/hybrid_update_draw_demo.bas**. Scripts that do not define `update`/`draw` keep the previous behaviour (manual or compiler-wrapped Begin/End).
+See [examples/first_game.bas](../examples/first_game.bas) and [templates/2d_game.bas](../templates/2d_game.bas). Scripts that do not define `update`/`draw` keep the previous behaviour (manual or compiler-wrapped Begin/End).
 
 ---
 

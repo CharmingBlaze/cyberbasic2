@@ -2,12 +2,36 @@
 package raylib
 
 import (
+	"cyberbasic/compiler/runtime/time"
 	"cyberbasic/compiler/vm"
 	"fmt"
 	"os"
+	"sync/atomic"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
+
+// DebugRender is true when CYBERBASIC_DEBUG=render or CYBERBASIC_DEBUG=1
+func DebugRender() bool {
+	s := os.Getenv("CYBERBASIC_DEBUG")
+	return s == "1" || s == "render" || s == "true"
+}
+
+func debugRender() bool { return DebugRender() }
+
+// debugFrameCount used to throttle per-frame debug output (print every 60 frames to avoid slowdown)
+var debugFrameCount uint64
+
+// DebugThrottled returns true when debug is on and we should log this frame (every 60th to avoid slowdown).
+func DebugThrottled() bool {
+	if !debugRender() {
+		return false
+	}
+	n := atomic.AddUint64(&debugFrameCount, 1)
+	return n%60 == 1
+}
+
+func debugThrottled() bool { return DebugThrottled() }
 
 // pendingConfigFlags: if set by SetConfigFlags before InitWindow, those flags are used; else InitWindow uses VSync by default.
 var pendingConfigFlags uint32
@@ -48,15 +72,27 @@ func registerCore(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterForeign("BeginDrawing", func(args []interface{}) (interface{}, error) {
+		if debugThrottled() {
+			fmt.Println("[DEBUG] BeginDrawing")
+		}
+		rl.PollInputEvents()
+		CaptureOrbitWheel()
+		time.Update(rl.GetFrameTime())
 		rl.BeginDrawing()
 		return nil, nil
 	})
 	v.RegisterForeign("EndDrawing", func(args []interface{}) (interface{}, error) {
+		if debugThrottled() {
+			fmt.Println("[DEBUG] EndDrawing")
+		}
 		rl.EndDrawing()
 		return nil, nil
 	})
 	// BeginFrame(): alias for BeginDrawing (start frame)
 	v.RegisterForeign("BeginFrame", func(args []interface{}) (interface{}, error) {
+		rl.PollInputEvents()
+		CaptureOrbitWheel()
+		time.Update(rl.GetFrameTime())
 		rl.BeginDrawing()
 		return nil, nil
 	})
@@ -81,6 +117,9 @@ func registerCore(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterForeign("ClearBackground", func(args []interface{}) (interface{}, error) {
+		if debugThrottled() && len(args) >= 4 {
+			fmt.Printf("[DEBUG] ClearBackground(%v,%v,%v,%v)\n", args[0], args[1], args[2], args[3])
+		}
 		if len(args) == 0 {
 			rl.ClearBackground(rl.Black)
 			return nil, nil
@@ -107,10 +146,17 @@ func registerCore(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterForeign("GetFrameTime", func(args []interface{}) (interface{}, error) {
-		return float64(rl.GetFrameTime()), nil
+		dt := rl.GetFrameTime()
+		if dt < 0 {
+			dt = 0
+		}
+		if dt > 0.25 {
+			dt = 0.25
+		}
+		return float64(dt), nil
 	})
 	v.RegisterForeign("DeltaTime", func(args []interface{}) (interface{}, error) {
-		return float64(rl.GetFrameTime()), nil
+		return float64(time.DeltaTime()), nil
 	})
 	v.RegisterForeign("GetFPS", func(args []interface{}) (interface{}, error) {
 		return int(rl.GetFPS()), nil

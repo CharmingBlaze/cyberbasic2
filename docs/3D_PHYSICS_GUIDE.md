@@ -214,7 +214,7 @@ DestroyWorld3D("w")
 CloseWindow()
 ```
 
-More examples: [templates/3d_game.bas](../templates/3d_game.bas), [examples/run_3d_physics_demo.bas](../examples/run_3d_physics_demo.bas), [examples/README.md](../examples/README.md).
+More examples: [templates/3d_game.bas](../templates/3d_game.bas), [examples/README.md](../examples/README.md).
 
 ---
 

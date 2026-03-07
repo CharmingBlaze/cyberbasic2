@@ -228,7 +228,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 
 | Command | Description |
 |--------|-------------|
-| **SceneSave2D**(path) | Save 2D scene to JSON (version + placeholder data) |
+| **SceneSave2D**(path) | Save 2D scene to JSON (layers, backgrounds, sprites, tilemaps, particles, camera) |
 | **SceneLoad2D**(path) | Load 2D scene from JSON (stub: validates format) |
 
 ---
@@ -428,7 +428,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 |--------|-------------|
 | **BeginFrame**() | Start frame (alias BeginDrawing) |
 | **EndFrame**() | End frame (alias EndDrawing) |
-| **RunGameLoop**(UpdateFunction) | *Not implemented* — use `WHILE NOT WindowShouldClose()` … `WEND` and call your update/draw code inside the loop. |
+| **RunGameLoop**(UpdateFunction) | Not in API — use `WHILE NOT WindowShouldClose()` … `WEND` with update/draw, or define `update(dt)` and `draw()` for hybrid loop, or `OnStart`/`OnUpdate`/`OnDraw` for DBP-style. |
 
 ---
 
@@ -928,7 +928,7 @@ Build trees from selector/sequence/action/condition nodes; **AIRun** is a stub.
 
 ## Multiplayer replication
 
-State flags for what to sync; **NetStartServer** / **NetStartClient** are stubs. Use **Host** / **Connect** and **Send** / **Receive** for real networking.
+State flags for what to sync; **NetStartServer** / **NetStartClient** are stubs. Use **Host** / **Connect** and **Send** / **Receive** for real networking. See [MULTIPLAYER.md](MULTIPLAYER.md) for full guide.
 
 | Command | Description |
 |--------|-------------|
@@ -1098,4 +1098,4 @@ UnloadModel(cube)
 CloseWindow()
 ```
 
-See [API_REFERENCE.md](../API_REFERENCE.md) for the full binding list and [examples/spinning_cube_simple.bas](../examples/spinning_cube_simple.bas) for a runnable version.
+See [API_REFERENCE.md](../API_REFERENCE.md) for the full binding list and [templates/3d_game.bas](../templates/3d_game.bas) for a runnable 3D example.

@@ -2,6 +2,10 @@
 
 Complete guide to all CyberBASIC2 documentation.
 
+## Philosophy
+
+- **[Documentation Philosophy](DOCUMENTATION_PHILOSOPHY.md)** – DBP-style simplicity, flat API, sensible defaults, deterministic multiplayer, contributor-friendly design
+
 ## Entry Points
 
 - **[Quick Start Guide](QUICK_START_GUIDE.md)** – Get running in 5 minutes (DBP-style or manual loop)
@@ -36,9 +40,11 @@ Complete guide to all CyberBASIC2 documentation.
 
 ## Command Reference (DBP-Style)
 
-- **[Core Command Reference](CORE_COMMAND_REFERENCE.md)** – Primary DBP-style command list (SYNC, LoadObject, MakeCamera, etc.)
-- **[2D Game API](2D_GAME_API.md)** – Detailed 2D API: sprites, spritesheets, tilemaps, physics, collision
-- **[3D Game API](3D_GAME_API.md)** – Detailed 3D API: objects, camera, lighting, physics, levels
+- **[Core Command Reference](CORE_COMMAND_REFERENCE.md)** – DBP-style commands (SYNC, LoadObject, MakeCamera, etc.) with when-to-use notes
+- **[2D Game API](2D_GAME_API.md)** – Domain-specific 2D commands with examples (sprites, tilemaps, physics)
+- **[3D Game API](3D_GAME_API.md)** – Domain-specific 3D commands with examples (objects, camera, lighting)
+- **[Command Reference](COMMAND_REFERENCE.md)** – Broader raylib + physics + utilities
+- **[API Reference](../API_REFERENCE.md)** – Exhaustive flat API list (for lookup)
 - **[DBP Extended](DBP_EXTENDED.md)** – Module-by-module implementation details (for contributors)
 
 ## Game Development
@@ -125,7 +131,7 @@ Complete guide to all CyberBASIC2 documentation.
 ## Examples
 
 - **[Examples README](../examples/README.md)** – Index of example programs
-- **DBP-style (recommended for new users):** [examples/dbp_style/](../examples/dbp_style/) – hello_world, 2d_sprites, 3d_cube_spin, first_person_demo, simple_platformer
+- **Examples:** [hello_world.bas](../examples/hello_world.bas), [first_game.bas](../examples/first_game.bas)
 - **Templates:** [2D game](../templates/2d_game.bas), [3D game](../templates/3d_game.bas)
 
 ---
@@ -138,6 +144,7 @@ Complete guide to all CyberBASIC2 documentation.
 | **Learn the language step-by-step** | [Learning Path](LEARNING_PATH.md) → [Quick Reference](QUICK_REFERENCE.md) → [Language Spec](../LANGUAGE_SPEC.md) |
 | **Make a 2D game** | [2D Games Tutorial](TUTORIAL_2D_GAMES.md) → [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) → [2D Graphics Guide](2D_GRAPHICS_GUIDE.md) |
 | **Make a 3D game** | [3D Games Tutorial](TUTORIAL_3D_GAMES.md) → [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) → [3D Graphics Guide](3D_GRAPHICS_GUIDE.md) |
+| **Build a complete game (2D+3D+GUI+multiplayer)** | [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md#combining-2d-3d-gui-and-multiplayer) |
 | **Create user interfaces** | [GUI Development Tutorial](TUTORIAL_GUI_DEVELOPMENT.md) → [GUI Guide](GUI_GUIDE.md) |
 | **Add multiplayer** | [Multiplayer Tutorial](TUTORIAL_MULTIPLAYER.md) → [Multiplayer Guide](MULTIPLAYER.md) |
 | **Use 2D physics (Box2D)** | [2D Physics Guide](2D_PHYSICS_GUIDE.md) |
@@ -147,7 +154,7 @@ Complete guide to all CyberBASIC2 documentation.
 | **Use ECS** | [ECS Guide](ECS_GUIDE.md) → [API Reference](../API_REFERENCE.md) |
 | **Look up a function** | [API Reference](../API_REFERENCE.md) |
 | **Look up DBP-style commands** | [Core Command Reference](CORE_COMMAND_REFERENCE.md) → [2D Game API](2D_GAME_API.md) / [3D Game API](3D_GAME_API.md) |
-| **Use zero-boilerplate (OnStart/OnUpdate/OnDraw)** | [DBP Parity](DBP_PARITY.md) → [examples/dbp_style/](../examples/dbp_style/) |
+| **Use zero-boilerplate (OnStart/OnUpdate/OnDraw)** | [DBP Parity](DBP_PARITY.md) → [examples/first_game.bas](../examples/first_game.bas) |
 
 **Current shipped feature set:** CyberBASIC2 supports **full 2D** and **full 3D** graphics, **authoritative 2D physics** (Box2D), a **Bullet-shaped 3D physics API backed by the shipped pure-Go fallback**, **full ECS** (entity-component system), **GUI** (BeginUI, Label, Button, Slider, Checkbox, etc.), and **multiplayer** (TCP Connect/Send/Receive, Host/Accept). See the guides above for the exact current scope of each area.
 

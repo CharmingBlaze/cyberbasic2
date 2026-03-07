@@ -119,6 +119,7 @@ func main() {
 			compileOnly = true // lint = compile without running
 		case "--debug":
 			debug = true
+			os.Setenv("CYBERBASIC_DEBUG", "1") // Enable render trace (BeginDrawing, SyncFrame, etc.)
 		case "--gen-go":
 			genGo = true
 			if i+1 < len(os.Args) && len(os.Args[i+1]) > 0 && !strings.HasPrefix(os.Args[i+1], "-") {
@@ -244,6 +245,7 @@ func main() {
 	terrain.RegisterTerrain(rt.GetVM())
 	dbp.RegisterTerrain(rt.GetVM()) // DBP terrain (integer IDs) - after terrain package
 	objects.RegisterObjects(rt.GetVM())
+	dbp.RegisterDrawObjectOverlay(rt.GetVM()) // DBP DrawObject(int) - after objects so LoadCube/DrawObject work
 	procedural.RegisterProcedural(rt.GetVM())
 	water.RegisterWater(rt.GetVM())
 	dbp.RegisterWater(rt.GetVM()) // DBP water (integer IDs) - after water package so DrawWater etc. overwrite

@@ -12,7 +12,7 @@ import (
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
-// Key constants for use with IsKeyDown (ASCII/raylib values)
+// Key constants for use with IsKeyDown (ASCII/raylib values; match rl.KeyW etc.)
 const (
 	KeyW     = 87
 	KeyA     = 65
@@ -107,11 +107,11 @@ func registerGame(v *vm.VM) {
 		amount := toFloat32(args[0])
 		orbitStateMu.Lock()
 		orbitDistance -= amount * 1.5
-		if orbitDistance < 3 {
-			orbitDistance = 3
+		if orbitDistance < 4 {
+			orbitDistance = 4
 		}
-		if orbitDistance > 25 {
-			orbitDistance = 25
+		if orbitDistance > 35 {
+			orbitDistance = 35
 		}
 		orbitStateMu.Unlock()
 		return nil, nil
@@ -158,12 +158,22 @@ func registerGame(v *vm.VM) {
 		camera3D.Up = rl.Vector3{X: 0, Y: 1, Z: 0}
 		return nil, nil
 	})
-	// MouseOrbitCamera(): single call that does CameraRotateDelta(GetMouseDeltaX(), GetMouseDeltaY()), CameraZoom(GetMouseWheelMove()), UpdateCamera()
+	// MouseOrbitCamera(): single call that does orbit + zoom; uses manual position tracking (GetMouseDelta/GetMouseWheelMove unreliable on some platforms)
 	v.RegisterForeign("MouseOrbitCamera", func(args []interface{}) (interface{}, error) {
-		dx := float32(rl.GetMouseDelta().X)
-		dy := float32(rl.GetMouseDelta().Y)
-		wheel := float32(rl.GetMouseWheelMove())
+		pos := rl.GetMousePosition()
+		orbitStateMu.Lock()
+		dx, dy := float32(0), float32(0)
+		if orbitMouseReady {
+			dx = pos.X - orbitLastMouseX
+			dy = pos.Y - orbitLastMouseY
+		}
+		orbitLastMouseX = pos.X
+		orbitLastMouseY = pos.Y
+		orbitMouseReady = true
+		orbitStateMu.Unlock()
+		wheel := orbitWheelThisFrame
 		const sens = float32(0.002)
+		const distMin, distMax = float32(4), float32(35)
 		orbitStateMu.Lock()
 		if orbitDistance == 0 {
 			orbitDistance = 8
@@ -177,11 +187,11 @@ func registerGame(v *vm.VM) {
 			orbitPitch = -1.4
 		}
 		orbitDistance -= wheel * 1.5
-		if orbitDistance < 3 {
-			orbitDistance = 3
+		if orbitDistance < distMin {
+			orbitDistance = distMin
 		}
-		if orbitDistance > 25 {
-			orbitDistance = 25
+		if orbitDistance > distMax {
+			orbitDistance = distMax
 		}
 		tx, ty, tz := orbitTargetX, orbitTargetY, orbitTargetZ
 		angle, pitch, dist := orbitAngle, orbitPitch, orbitDistance
@@ -198,20 +208,42 @@ func registerGame(v *vm.VM) {
 		camera3D.Up = rl.Vector3{X: 0, Y: 1, Z: 0}
 		return nil, nil
 	})
-	// OrbitCamera(targetX, targetY, targetZ): orbit when right-mouse is held (drag = rotate), wheel = zoom anytime. Left click stays free for dropping etc.
+	// OrbitCamera(targetX, targetY, targetZ): drag to orbit, wheel to zoom; one call per frame.
 	v.RegisterForeign("OrbitCamera", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {
 			return nil, fmt.Errorf("OrbitCamera requires (targetX, targetY, targetZ)")
 		}
+		if debugThrottled() {
+			fmt.Printf("[DEBUG] OrbitCamera(target=%.1f,%.1f,%.1f)\n", toFloat32(args[0]), toFloat32(args[1]), toFloat32(args[2]))
+		}
 		tx := toFloat32(args[0])
 		ty := toFloat32(args[1])
 		tz := toFloat32(args[2])
-		rightDown := rl.IsMouseButtonDown(rl.MouseButtonRight)
-		dx := float32(rl.GetMouseDelta().X)
-		dy := float32(rl.GetMouseDelta().Y)
-		wheel := float32(rl.GetMouseWheelMove())
-		const sens = float32(0.003)
-		const zoomMul = float32(1.2)
+		pos := rl.GetMousePosition()
+		orbitStateMu.Lock()
+		dx, dy := float32(0), float32(0)
+		if orbitMouseReady {
+			dx = pos.X - orbitLastMouseX
+			dy = pos.Y - orbitLastMouseY
+		}
+		orbitLastMouseX = pos.X
+		orbitLastMouseY = pos.Y
+		orbitMouseReady = true
+		orbitStateMu.Unlock()
+		wheel := orbitWheelThisFrame
+		// Middle-mouse zoom: use manual dy (GetMouseDeltaY unreliable on some platforms)
+		if rl.IsMouseButtonDown(rl.MouseButtonMiddle) {
+			wheel -= dy * 0.5 // drag up = zoom in, drag down = zoom out
+		}
+		// Keyboard zoom fallback (wheel often returns 0 on some setups)
+		if rl.IsKeyDown(rl.KeyPageUp) {
+			wheel -= 1.0
+		}
+		if rl.IsKeyDown(rl.KeyPageDown) {
+			wheel += 1.0
+		}
+		const sens = float32(0.01)
+		const zoomMul = float32(3.0)
 		const pitchMax = float32(1.4)
 		const distMin, distMax = float32(4), float32(35)
 		orbitStateMu.Lock()
@@ -222,15 +254,14 @@ func registerGame(v *vm.VM) {
 			orbitDistance = 14
 			orbitInitialized = true
 		}
-		if rightDown {
-			orbitAngle -= dx * sens
-			orbitPitch += dy * sens
-			if orbitPitch > pitchMax {
-				orbitPitch = pitchMax
-			}
-			if orbitPitch < -pitchMax {
-				orbitPitch = -pitchMax
-			}
+		// Always apply mouse delta (drag to orbit); no right-click required
+		orbitAngle -= dx * sens
+		orbitPitch += dy * sens
+		if orbitPitch > pitchMax {
+			orbitPitch = pitchMax
+		}
+		if orbitPitch < -pitchMax {
+			orbitPitch = -pitchMax
 		}
 		orbitDistance -= wheel * zoomMul
 		if orbitDistance < distMin {
@@ -256,10 +287,19 @@ func registerGame(v *vm.VM) {
 		camera3D.Projection = rl.CameraPerspective
 		return nil, nil
 	})
-	// MouseLook(): FPS-style camera; rotate view from mouse delta (uses camera position as eye, updates target)
+	// MouseLook(): FPS-style camera; rotate view from mouse delta (uses manual position tracking; GetMouseDelta unreliable on some platforms)
 	v.RegisterForeign("MouseLook", func(args []interface{}) (interface{}, error) {
-		dx := float32(rl.GetMouseDelta().X)
-		dy := float32(rl.GetMouseDelta().Y)
+		pos := rl.GetMousePosition()
+		dx, dy := float32(0), float32(0)
+		mouseLookMu.Lock()
+		if mouseLookMouseReady {
+			dx = pos.X - mouseLookLastMouseX
+			dy = pos.Y - mouseLookLastMouseY
+		}
+		mouseLookLastMouseX = pos.X
+		mouseLookLastMouseY = pos.Y
+		mouseLookMouseReady = true
+		mouseLookMu.Unlock()
 		const sens = float32(0.002)
 		mouseLookMu.Lock()
 		mouseLookYaw -= dx * sens

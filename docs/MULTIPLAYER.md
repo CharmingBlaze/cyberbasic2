@@ -24,12 +24,12 @@ You can use **event-based callbacks** instead of polling **Receive**. Define the
 
 **You must call ProcessNetworkEvents() once per frame** (e.g. at the start of **update**(dt) or at the top of your main loop). It drains the internal event queue and invokes the Subs above if they are defined.
 
-**StartServer**(port) is the preferred way to start a server (same as **Host**(port); returns serverId or null). **Broadcast**(text) sends `text` to every connection (all clients).
+**Host**(port) and **StartServer**(port) are aliases; both return serverId or null. **Broadcast**(text) sends `text` to every connection (all clients).
 
 **Minimal server example:**
 
 ```basic
-VAR sid = StartServer(1234)
+VAR sid = Host(1234)
 IF IsNull(sid) THEN PRINT "Failed to start server" : END
 
 SUB OnClientConnect(id)
@@ -241,8 +241,7 @@ Room variants: **SendToRoomInt**(roomId, value), **SendToRoomFloat**(roomId, val
 
 ## Server
 
-1. **StartServer**(port) — preferred way to start a server (same as **Host**). Returns a serverId or null on failure.
-2. **Host**(port) — start listening on the given port. Returns a serverId (e.g. "server_1") or null on failure.
+1. **Host**(port) — start listening on the given port. Returns a serverId (e.g. "server_1") or null on failure. **StartServer**(port) is an alias.
 3. **Accept**(serverId) — wait for one client to connect (blocking). Returns a connectionId (e.g. "conn_1") or null on error.
 4. Use **Send**(connectionId, text) and **Receive**(connectionId) to talk to that client.
 5. **CloseServer**(serverId) — stop listening.
@@ -338,7 +337,7 @@ Replication note:
 | Function | Description |
 |----------|-------------|
 | **ProcessNetworkEvents**() | Drain the network event queue and call OnClientConnect / OnClientDisconnect / OnMessage if defined. Call once per frame. |
-| **StartServer**(port) | Start a server (alias for Host). Returns serverId or null. |
+| **Host**(port) / **StartServer**(port) | Start a server. Both are aliases. Returns serverId or null. |
 | **Broadcast**(text) | Send text to every connection. Same limits as Send. |
 | **Connect**(host, port) | Connect to a server. Returns connectionId or null. |
 | **ConnectTLS**(host, port) | Connect with TLS encryption. Returns connectionId or null. |
@@ -349,7 +348,6 @@ Replication note:
 | **ReceiveJSON**(connectionId) | Read next line; return it only if valid JSON, else null. Non-blocking. |
 | **ReceiveTable**(connectionId) | Read next message; if valid JSON, return as dictionary, else null. Non-blocking. |
 | **Disconnect**(connectionId) | Close the connection (and remove from all rooms). |
-| **Host**(port) | Start a server. Returns serverId or null. |
 | **HostTLS**(port, certFile, keyFile) | Start a TLS server. Returns serverId or null. |
 | **Accept**(serverId) | Wait for a client (blocking). Returns connectionId or null. |
 | **AcceptTimeout**(serverId, timeoutMs) | Wait for a client with timeout. Returns connectionId or null. |
@@ -383,6 +381,8 @@ Replication note:
 | **GetRemoteEntity**(entityId) | Last synced state (dict with x, y, z). Returns null if none. |
 
 For the complete list of all network commands and signatures see [API Reference](../API_REFERENCE.md) section 18.
+
+**Typical usage:** Server: call Host(port) once, then Accept or AcceptTimeout in the game loop to add clients. Client: call Connect(host, port) once. Both: call ProcessNetworkEvents() once per frame to deliver messages via callbacks, or use Receive/ReceiveJSON/ReceiveTable for polling. Send messages with Send, SendJSON, or SendTable.
 
 ---
 

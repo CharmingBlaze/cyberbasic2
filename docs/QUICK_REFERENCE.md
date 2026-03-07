@@ -185,7 +185,7 @@ ON KeyPressed("SPACE")
 END ON
 ```
 
-Call `PollInputEvents()` in your game loop for events to run.
+PollInputEvents is called automatically at frame start; handlers run when you use IsKeyDown, IsKeyPressed, etc.
 
 ## Coroutines (optional)
 

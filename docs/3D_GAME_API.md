@@ -74,6 +74,8 @@ PointCameraAt 0, 0, 0
 SetCameraFOV 60
 ```
 
+**Typical usage:** Set camera position and target once when switching views, or each frame for follow/orbit cameras (e.g. GAME.CameraOrbit).
+
 ---
 
 ## 4. Camera Queries
@@ -145,6 +147,8 @@ MakeCube 1, 2
 MakeSphere 2, 1.5
 LoadObject 4, "character.gltf"
 ```
+
+**Typical usage:** Load objects once in OnStart or before the loop; use PositionObject, RotateObject, DrawObject in the loop each frame.
 
 ---
 
@@ -485,6 +489,8 @@ dot = Dot3D x1, y1, z1, x2, y2, z2
 By default, the global shadow system starts enabled. For the easiest setup, create a directional light with `MakeLight(id, 1)` and orient it with `RotateLight`; the first directional light can then act as the default caster automatically. If you want explicit control over which directional light casts shadows, call `EnableShadows(lightId)` or `EnableLightShadows(lightId)`. Call `DisableShadows()` when you want the lowest-cost non-shadow path.
 
 Current scope: the renderer supports one active directional shadow caster in the main pass. `SetShadowQuality("low"|"medium"|"high")` is the easiest way to scale cost for lower-end, mid-range, or higher-end PCs.
+
+**Typical usage:** Create lights once in OnStart or before the loop; PositionLight and RotateLight can be called each frame to animate (e.g. moving sun).
 
 ---
 

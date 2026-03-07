@@ -38,9 +38,8 @@ No changes to lexer/parser/compiler are needed; the compiler emits `OpCallForeig
 ## Examples
 
 - **examples/first_game.bas** – First game: InitWindow, SetTargetFPS, WHILE NOT WindowShouldClose(), IsKeyDown(KEY_W), ClearBackground, DrawCircle, CloseWindow.
-- **examples/simple_box2d_demo.bas** – 2D physics (flat API), no POP().
-- **examples/box2d_demo.bas** – 2D physics + raylib window, click to spawn boxes.
-- **examples/run_3d_physics_demo.bas** – 3D physics (flat API) + raylib 3D.
+- **templates/2d_game.bas** – 2D game with physics-ready structure.
+- **templates/3d_game.bas** – 3D physics (flat API) + raylib 3D.
 
 Use flat physics names: CreateWorld2D, Step2D, CreateWorld3D, Step3D, etc.
 

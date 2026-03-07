@@ -707,6 +707,13 @@ func RegisterDBP(v *vm.VM) {
 		objectsMu.Lock()
 		obj, ok := objects[id]
 		objectsMu.Unlock()
+		if raylib.DebugThrottled() {
+			meshCnt := int32(0)
+			if ok {
+				meshCnt = obj.model.MeshCount
+			}
+			fmt.Printf("[DEBUG] DrawObject(%d) ok=%v visible=%v meshCount=%d\n", id, ok, ok && obj.visible, meshCnt)
+		}
 		if !ok {
 			return nil, fmt.Errorf("LoadObject: unknown object id %d", id)
 		}
@@ -1892,5 +1899,57 @@ func RegisterDBP(v *vm.VM) {
 	})
 	v.RegisterForeign("ESCAPEKEY", func(args []interface{}) (interface{}, error) {
 		return rl.IsKeyDown(rl.KeyEscape), nil
+	})
+}
+
+// RegisterDrawObjectOverlay re-registers DrawObject(id) for integer IDs (LoadCube, MakeCube, etc.).
+// Call after objects.RegisterObjects so DBP-style DrawObject(1) works.
+func RegisterDrawObjectOverlay(v *vm.VM) {
+	v.RegisterForeign("DrawObject", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DrawObject(id) requires 1 argument")
+		}
+		id := toInt(args[0])
+		if raylib.DebugRender() {
+			fmt.Printf("[DEBUG] DrawObject(%d) ENTER\n", id)
+		}
+		objectsMu.Lock()
+		obj, ok := objects[id]
+		objectsMu.Unlock()
+		if raylib.DebugRender() {
+			meshCnt := int32(0)
+			if ok {
+				meshCnt = obj.model.MeshCount
+			}
+			fmt.Printf("[DEBUG] DrawObject(%d) ok=%v visible=%v meshCount=%d\n", id, ok, ok && obj.visible, meshCnt)
+		}
+		if !ok {
+			return nil, fmt.Errorf("LoadObject: unknown object id %d", id)
+		}
+		if !obj.visible {
+			return nil, nil
+		}
+		if obj.model.MeshCount == 0 {
+			return nil, nil
+		}
+		world := getObjectWorldState(id)
+		center, radius := objectWorldBounds(obj, world)
+		if !renderer.IsShadowPassActive() && raylib.ObjectBoundsShouldCull3D(center, radius) {
+			return nil, nil
+		}
+		UpdateObjectAnimation(id, obj)
+		applyObjectPBR(obj)
+		pos := world.position
+		rotAxis, rotAngle := quaternionToAxisAngle(world.rotation)
+		scale := world.scale
+		tint := rl.NewColor(obj.colorR, obj.colorG, obj.colorB, obj.colorA)
+		withObjectShadowShader(obj, &obj.model, func() {
+			if obj.wireframe {
+				rl.DrawModelWiresEx(obj.model, pos, rotAxis, rotAngle, scale, tint)
+			} else {
+				rl.DrawModelEx(obj.model, pos, rotAxis, rotAngle, scale, tint)
+			}
+		})
+		return nil, nil
 	})
 }

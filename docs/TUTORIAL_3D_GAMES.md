@@ -22,6 +22,8 @@ Before starting, make sure you've completed:
 - **Module 2**: 2D Game Development (recommended for foundation)
 - Basic understanding of coordinates and vectors
 
+For full command list, see [3D Game API](3D_GAME_API.md) and [3D Physics Guide](3D_PHYSICS_GUIDE.md).
+
 ---
 
 ## Lesson 1: Understanding 3D Space
@@ -962,6 +964,15 @@ Congratulations! You've now learned:
 
 Keep practicing and experimenting with these 3D techniques. The transition from 2D to 3D opens up incredible possibilities for game design and player experiences!
 
-**See also:** [Blender Workflow](BLENDER_WORKFLOW.md) for exporting 3D models (GLTF, FBX, OBJ), [3D Game API](3D_GAME_API.md) for full command reference.
+### Commands you learned
+
+- **Objects:** MakeCube, MakeSphere, LoadObject, PositionObject, RotateObject, DrawObject
+- **Camera:** SetCamera3D, SetCameraPosition, PointCameraAt, GAME.CameraOrbit
+- **Physics:** CreateWorld3D, CreateBox3D, CreateSphere3D, Step3D, GetPositionX3D/Y3D/Z3D, GAME.MoveWASD
+- **Lighting:** MakeLight, PositionLight, SetLightColor, EnableShadows
+
+Full reference: [3D Game API](3D_GAME_API.md), [3D Physics Guide](3D_PHYSICS_GUIDE.md).
+
+**See also:** [Blender Workflow](BLENDER_WORKFLOW.md) for exporting 3D models (GLTF, FBX, OBJ).
 
 **Happy coding!**

@@ -1,6 +1,32 @@
 # Multiplayer Design
 
-This document describes the current multiplayer architecture, what is implemented today, and what still belongs to future roadmap work.
+Current multiplayer architecture, implementation status, deterministic patterns, and roadmap gaps.
+
+---
+
+## Purpose
+
+- **TCP transport:** Connect, Host, Send, Receive for client/server games.
+- **Deterministic foundation:** Fixed-step simulation so server and clients can stay in sync.
+- **Event + polling:** ProcessNetworkEvents for callbacks; Receive* for polling.
+
+---
+
+## Architecture
+
+```
+Client                          Server
+──────                          ──────
+Connect(host, port)    →        Host(port)
+Send(msg)              →        Accept / AcceptTimeout
+Receive()              ←        Send(msg)
+ProcessNetworkEvents   ←        ProcessNetworkEvents
+OnMessage, OnEntitySync         OnClientConnect, OnMessage
+```
+
+**Packages:** `compiler/bindings/net` — Host, Connect, Send, Receive, RPC, SyncEntity, ProcessNetworkEvents.
+
+---
 
 ## Current Transport
 
@@ -105,3 +131,33 @@ Still roadmap work:
 - True deterministic multiplayer model
 - Rollback / prediction toolchain
 - Higher-level replication and session services
+
+---
+
+## Determinism Guidance
+
+For deterministic or semi-deterministic multiplayer:
+
+1. **Fixed step:** Use `FixedUpdate(rate)` and `OnFixedUpdate(label$)`. Run physics and gameplay state changes there.
+2. **Input over state:** Clients send input (keys, commands); server runs simulation and broadcasts state. Avoid sending raw floats for positions every frame if you need determinism.
+3. **Same order:** Ensure server and clients process inputs in the same order. ProcessNetworkEvents processes queued messages in order.
+4. **No frame-dependent logic in sim:** Avoid `GetFrameTime()` or frame count in OnFixedUpdate. Use `FixedDeltaTime()` for step size.
+
+---
+
+## Contributor Notes
+
+- **Net package:** `compiler/bindings/net/net.go` — RegisterNet, Host, Connect, Send, Receive, ProcessNetworkEvents
+- **RPC:** `RegisterRPC(name, handler)`; handlers invoked when ProcessNetworkEvents runs
+- **SyncEntity:** Sends entity position; receiver gets OnEntitySync(entityId, x, y, z)
+- **TLS:** HostTLS, ConnectTLS for encrypted transport
+- **Testing:** Use loopback (127.0.0.1) for local tests; no mock transport in tests yet
+
+---
+
+## See Also
+
+- [Multiplayer](MULTIPLAYER.md) — Full API and examples
+- [Tutorial Multiplayer](TUTORIAL_MULTIPLAYER.md)
+- [Rendering and the Game Loop](RENDERING_AND_GAME_LOOP.md) — Fixed-step integration
+- [Documentation Index](DOCUMENTATION_INDEX.md)

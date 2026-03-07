@@ -131,6 +131,8 @@ DBP-style rectangle wrappers:
 | **UITextBox** | (id, x, y, w, h, text) | string | Wraps `GuiTextBoxId` |
 | **UIProgressBar** | (id, x, y, w, h, text, value, min, max) | float | Wraps `GuiProgressBar` |
 
+**Typical usage:** Call Gui* or BeginUI/EndUI inside your draw loop, after ClearBackground. In the hybrid loop, put GUI calls inside draw() so they are queued with other draw calls.
+
 ### Layout engine (BeginUI / pure-Go)
 
 Use **BeginLayout**(mode) to set layout direction. Modes: **LAYOUT_VERTICAL** (0), **LAYOUT_HORIZONTAL** (1), **LAYOUT_GRID** (2). For grid, pass columns: `BeginLayout(LAYOUT_GRID, 3)`.

@@ -176,10 +176,18 @@ func register3D(v *vm.VM) {
 		return int(rl.CameraOrthographic), nil
 	})
 	v.RegisterForeign("BeginMode3D", func(args []interface{}) (interface{}, error) {
+		if debugThrottled() {
+			fmt.Printf("[DEBUG] BeginMode3D camPos=(%.1f,%.1f,%.1f) target=(%.1f,%.1f,%.1f)\n",
+				camera3D.Position.X, camera3D.Position.Y, camera3D.Position.Z,
+				camera3D.Target.X, camera3D.Target.Y, camera3D.Target.Z)
+		}
 		rl.BeginMode3D(camera3D)
 		return nil, nil
 	})
 	v.RegisterForeign("EndMode3D", func(args []interface{}) (interface{}, error) {
+		if debugThrottled() {
+			fmt.Println("[DEBUG] EndMode3D")
+		}
 		rl.EndMode3D()
 		return nil, nil
 	})

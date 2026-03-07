@@ -390,9 +390,10 @@ func (r *Runtime) InitializeGraphics(width, height int, title string) error {
 	return nil
 }
 
-// ShouldClose returns true when the user requested to close the window
+// ShouldClose returns true when the user requested to close the window.
+// Uses rl.IsWindowReady() so it works when window was opened via InitWindow or runtime.OpenWindow.
 func (r *Runtime) ShouldClose() bool {
-	if !r.graphics.windowOpen {
+	if !rl.IsWindowReady() {
 		return false
 	}
 	return rl.WindowShouldClose()
@@ -459,19 +460,13 @@ func (r *Runtime) IsKeyPressed(keyName string) bool {
 	return rl.IsKeyPressed(k)
 }
 
-// Sync runs one frame: draw everything and present (raylib BeginDrawing / EndDrawing)
+// Sync runs one frame. Delegates to SyncFrame so SYNC (statement) and Sync() (foreign) behave identically.
+// Uses rl.IsWindowReady() so SYNC works when window was opened via InitWindow (raylib) or runtime.OpenWindow.
 func (r *Runtime) Sync() error {
-	if !r.graphics.windowOpen {
+	if !rl.IsWindowReady() {
 		return nil
 	}
-	rl.BeginDrawing()
-	rl.ClearBackground(rl.NewColor(20, 20, 30, 255))
-	for _, sprite := range r.sprites {
-		if sprite.Visible {
-			r.DrawSprite(sprite.ID)
-		}
-	}
-	rl.EndDrawing()
+	SyncFrame()
 	return nil
 }
 

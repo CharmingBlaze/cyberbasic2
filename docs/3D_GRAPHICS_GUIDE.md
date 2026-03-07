@@ -387,4 +387,4 @@ All 3D-relevant commands in one place. See [API_REFERENCE.md](../API_REFERENCE.m
 - [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) — 3D physics, GAME.CameraOrbit, GAME.MoveWASD
 - [3D Physics Guide](3D_PHYSICS_GUIDE.md) — Bullet worlds, bodies, forces
 - [Command Reference](COMMAND_REFERENCE.md) — commands by feature
-- [examples/README.md](../examples/README.md) — 3D examples (e.g. run_3d_physics_demo.bas)
+- [examples/README.md](../examples/README.md) — 3D examples (see [templates/3d_game.bas](../templates/3d_game.bas))

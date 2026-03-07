@@ -210,7 +210,7 @@ DestroyWorld2D("w")
 CloseWindow()
 ```
 
-More examples: [examples/box2d_demo.bas](../examples/box2d_demo.bas), [examples/box2d_physics_demo.bas](../examples/box2d_physics_demo.bas), [examples/README.md](../examples/README.md).
+More examples: [examples/first_game.bas](../examples/first_game.bas), [templates/2d_game.bas](../templates/2d_game.bas), [examples/README.md](../examples/README.md).
 
 ---
 
