@@ -182,3 +182,45 @@ func TestMakeMeshColliderReturnsClearFallbackError(t *testing.T) {
 		t.Fatalf("expected MakeMeshCollider to return an unsupported-feature error")
 	}
 }
+
+func TestDeleteBody2DAndDeleteBody3DUseDefaultWorld(t *testing.T) {
+	v := vm.NewVM()
+
+	destroy2DCalls := 0
+	destroy3DCalls := 0
+	var destroy2DArgs []interface{}
+	var destroy3DArgs []interface{}
+
+	v.RegisterForeign("DestroyBody2D", func(args []interface{}) (interface{}, error) {
+		destroy2DCalls++
+		destroy2DArgs = append([]interface{}{}, args...)
+		return nil, nil
+	})
+	v.RegisterForeign("DestroyBody3D", func(args []interface{}) (interface{}, error) {
+		destroy3DCalls++
+		destroy3DArgs = append([]interface{}{}, args...)
+		return nil, nil
+	})
+
+	registerPhysics(v)
+
+	if _, err := v.CallForeign("DeleteBody2D", []interface{}{"player"}); err != nil {
+		t.Fatalf("DeleteBody2D failed: %v", err)
+	}
+	if destroy2DCalls != 1 {
+		t.Fatalf("expected one DestroyBody2D call, got %d", destroy2DCalls)
+	}
+	if len(destroy2DArgs) != 2 || destroy2DArgs[0] != defaultPhysicsWorld2D || destroy2DArgs[1] != "player" {
+		t.Fatalf("unexpected DestroyBody2D args: %#v", destroy2DArgs)
+	}
+
+	if _, err := v.CallForeign("DeleteBody3D", []interface{}{"orb"}); err != nil {
+		t.Fatalf("DeleteBody3D failed: %v", err)
+	}
+	if destroy3DCalls != 1 {
+		t.Fatalf("expected one DestroyBody3D call, got %d", destroy3DCalls)
+	}
+	if len(destroy3DArgs) != 2 || destroy3DArgs[0] != defaultPhysicsWorld3D || destroy3DArgs[1] != "orb" {
+		t.Fatalf("unexpected DestroyBody3D args: %#v", destroy3DArgs)
+	}
+}

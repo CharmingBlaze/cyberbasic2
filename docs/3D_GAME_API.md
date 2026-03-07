@@ -386,6 +386,7 @@ The current 3D physics layer is a Bullet-shaped API backed by the shipped pure-G
 | `MakeSphereCollider` | (id, radius) | Static sphere collider |
 | `MakeCapsuleCollider` | (id, radius, height) | Static capsule collider |
 | `MakeMeshCollider` | (id, meshID) | Mesh collider helper; unsupported in the shipped fallback |
+| `DeleteBody3D` | (bodyId) | Remove body from default world |
 | `ApplyForce` | (id, fx, fy, fz) | Apply force |
 | `ApplyImpulse` | (id, ix, iy, iz) | Apply impulse |
 | `SetGravity` | (x, y, z) | Set gravity |

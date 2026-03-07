@@ -518,6 +518,8 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **Physics2DStep**(dt) | Step world `"default"` |
 | **CreateBox2D**(world$, body$, x, y, w, h, mass, isDynamic) | Create box body → bodyId |
 | **CreateCircle2D**(world$, body$, x, y, radius, mass, isDynamic) | Create circle body |
+| **MakeCircle2D**(id, x, y, radius, density) | Simple wrapper: circle in default world |
+| **DestroyBody2D**(world$, body$) **DeleteBody2D**(bodyId) | Remove body (DeleteBody2D uses default world) |
 | **GetPositionX2D**(world$, body$) **GetPositionY2D**(…) | Body position |
 | **SetVelocity2D**(world$, body$, vx, vy) **ApplyForce2D**(…) **ApplyImpulse2D**(…) | Velocity and forces |
 | **CreateDistanceJoint2D**(worldId, bodyAId, bodyBId, length) | Distance joint → jointId |
@@ -543,6 +545,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **SetBodyPosition**(bodyId, x, y, z) **GetBodyPosition**(bodyId) | Default-world body position helper |
 | **SetBodyVelocity**(bodyId, vx, vy, vz) **GetBodyVelocity**(bodyId) | Default-world linear velocity helper |
 | **GetBodyX/Y/Z**(bodyId) **GetBodyVX/VY/VZ**(bodyId) | Default-world scalar position / velocity helpers |
+| **DestroyBody3D**(worldId, bodyId) **DeleteBody3D**(bodyId) | Remove body (DeleteBody3D uses default world) |
 | **CheckCollision3D**(bodyIdA, bodyIdB) | → true if AABBs overlap |
 | **SetFriction3D** **SetRestitution3D** **SetDamping3D** **SetKinematic3D** **SetGravity3D** **SetLinearFactor3D** **SetAngularFactor3D** **SetCCD3D** | Body properties (implemented) |
 *Use flat names (CreateWorld3D, Step3D, CreateBox3D, RayCastFromDir3D, etc.). Legacy `BULLET.*` is rewritten at compile time. The shipped 3D backend currently reports `BulletBackendName() = "purego-fallback"` and `BulletBackendMode() = "fallback"`. Use `BulletFeatureAvailable(name)` for per-feature gating. Unsupported 3D constraint joints and other missing fallback features now return explicit errors instead of silently succeeding.* |

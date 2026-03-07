@@ -218,6 +218,7 @@ See [docs/WORLD_WATER_TERRAIN.md](WORLD_WATER_TERRAIN.md) for full reference and
 - `PhysicsStep(dt)` - Step all 3D worlds
 - `MakeRigidBody(bodyId$, x, y, z, mass)` - Create sphere rigid body
 - `MakeStaticBody(bodyId$, x, y, z, sizeX, sizeY, sizeZ)` - Create static box
+- `DeleteBody3D(bodyId)` — remove body from default world
 - `GetVelocityX/Y/Z(bodyId$)` - Get velocity (use bullet's ApplyForce/ApplyImpulse)
 - `GetPositionX/Y/Z(bodyId$)` - Get position
 - **2D (Box2D):** `PhysicsOn2D(gx?, gy?)` / `PhysicsOff2D`
@@ -299,7 +300,8 @@ Note: Raylib has no built-in dynamic lights. The light registry stores state; vi
 - `RectCollides(x1,y1,w1,h1, x2,y2,w2,h2)` / `PointInRect(x,y, rx,ry,rw,rh)` / `CircleCollides(...)` / `PointInCircle(...)`
 
 ### 2D Physics
-- `Physics2DOn` / `Physics2DOff` / `MakeBody2D(id, mass)` / `MakeStatic2D(id)`
+- `Physics2DOn` / `Physics2DOff` / `MakeBody2D(id, mass)` / `MakeStatic2D(id)` / `MakeCircle2D(id, x, y, radius, density)`
+- `DeleteBody2D(bodyId)` — remove body from default world
 - `SetBody2DPosition(id, x, y)` / `SetBody2DVelocity(id, vx, vy)` / `ApplyForce2D(id, fx, fy)` / `ApplyImpulse2D(id, ix, iy)`
 - `GetBody2DX(id)` / `GetBody2DY(id)` / `GetBody2DVX(id)` / `GetBody2DVY(id)`
 

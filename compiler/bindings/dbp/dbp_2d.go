@@ -852,6 +852,26 @@ func register2DPhysics(v *vm.VM) {
 		id := toString(args[0])
 		return v.CallForeign("MakeStaticBody2D", []interface{}{id, 0, 0, 10, 1})
 	})
+	v.RegisterForeign("MakeCircle2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("MakeCircle2D(id, x, y, radius, density) requires 5 arguments")
+		}
+		id := toString(args[0])
+		x, y := toFloat64_2d(args[1]), toFloat64_2d(args[2])
+		radius := toFloat64_2d(args[3])
+		density := toFloat64_2d(args[4])
+		if radius <= 0 {
+			radius = 0.5
+		}
+		if density <= 0 {
+			density = 1.0
+		}
+		_, err := v.CallForeign("CreateCircle2D", []interface{}{"default", id, x, y, radius, density, 1})
+		if err != nil {
+			return nil, err
+		}
+		return id, nil
+	})
 	v.RegisterForeign("SetBody2DPosition", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {
 			return nil, fmt.Errorf("SetBody2DPosition(id, x, y) requires 3 arguments")

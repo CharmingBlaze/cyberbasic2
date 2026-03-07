@@ -221,6 +221,8 @@ Uses the default Box2D world. These commands are simple DBPro-style wrappers ove
 | `Physics2DOff` | () | Disable 2D physics |
 | `MakeBody2D` | (id, mass) | Create rigid body (default size 1x1) |
 | `MakeStatic2D` | (id) | Create static body |
+| `MakeCircle2D` | (id, x, y, radius, density) | Create circle body at position |
+| `DeleteBody2D` | (bodyId) | Remove body from default world |
 | `SetBody2DPosition` | (id, x, y) | Set position |
 | `SetBody2DVelocity` | (id, vx, vy) | Set velocity |
 | `ApplyForce2D` | (id, fx, fy) | Apply force to center |

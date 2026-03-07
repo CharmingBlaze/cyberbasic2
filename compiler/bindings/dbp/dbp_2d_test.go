@@ -144,3 +144,40 @@ func Test2DPhysicsWrappersUseInternalAliases(t *testing.T) {
 		t.Fatalf("unexpected impulse args: %#v", impulseArgs)
 	}
 }
+
+func TestMakeCircle2DCallsCreateCircle2D(t *testing.T) {
+	v := vm.NewVM()
+
+	createCircleCalls := 0
+	var createCircleArgs []interface{}
+
+	v.RegisterForeign("CreateCircle2D", func(args []interface{}) (interface{}, error) {
+		createCircleCalls++
+		createCircleArgs = append([]interface{}{}, args...)
+		return nil, nil
+	})
+
+	register2DPhysics(v)
+
+	// MakeCircle2D requires a world; CreateCircle2D will be called with "default"
+	// but the world must exist. We're only testing the wrapper forwards correctly.
+	// The test uses a mock CreateCircle2D, so no real world is needed.
+	got, err := v.CallForeign("MakeCircle2D", []interface{}{"ball", 100.0, 200.0, 15.0, 1.5})
+	if err != nil {
+		t.Fatalf("MakeCircle2D failed: %v", err)
+	}
+	if got != "ball" {
+		t.Fatalf("expected MakeCircle2D to return body id 'ball', got %v", got)
+	}
+	if createCircleCalls != 1 {
+		t.Fatalf("expected one CreateCircle2D call, got %d", createCircleCalls)
+	}
+	if len(createCircleArgs) != 7 {
+		t.Fatalf("expected 7 args to CreateCircle2D, got %d: %#v", len(createCircleArgs), createCircleArgs)
+	}
+	if createCircleArgs[0] != "default" || createCircleArgs[1] != "ball" ||
+		createCircleArgs[2] != 100.0 || createCircleArgs[3] != 200.0 ||
+		createCircleArgs[4] != 15.0 || createCircleArgs[5] != 1.5 || createCircleArgs[6] != 1 {
+		t.Fatalf("unexpected CreateCircle2D args: %#v", createCircleArgs)
+	}
+}

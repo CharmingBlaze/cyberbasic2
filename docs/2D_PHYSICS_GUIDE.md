@@ -63,7 +63,7 @@ All commands are **case-insensitive**. For the complete list see [API Reference]
 Two usage styles exist:
 
 - explicit-world Box2D commands such as `CreateWorld2D`, `CreateBox2D`, `Step2D`, and `ApplyForce2D(worldId, bodyId, fx, fy)`
-- simple default-world wrappers such as `Physics2DOn`, `MakeBody2D`, `MakeStatic2D`, `SetBody2DPosition`, `ApplyForce2D(bodyId, fx, fy)`, and `ApplyImpulse2D(bodyId, ix, iy)` in the DBP/game API layer
+- simple default-world wrappers such as `Physics2DOn`, `MakeBody2D`, `MakeStatic2D`, `MakeCircle2D(id, x, y, radius, density)`, `SetBody2DPosition`, `ApplyForce2D(bodyId, fx, fy)`, `ApplyImpulse2D(bodyId, ix, iy)`, and `DeleteBody2D(bodyId)` in the DBP/game API layer
 
 ---
 
@@ -71,7 +71,7 @@ Two usage styles exist:
 
 - **Create a world:** **CreateWorld2D**(worldId, gravityX, gravityY). Gravity is in m/s² (e.g. 0, -10 for downward).
 - **Step the simulation:** **Step2D**(worldId, dt [, velocityIters, positionIters]). Call once per frame with delta time (e.g. GetFrameTime()). Clamp dt (e.g. max 0.05) for stability.
-- **Destroy:** **DestroyWorld2D**(worldId). **DestroyBody2D**(worldId, bodyId) to remove a body.
+- **Destroy:** **DestroyWorld2D**(worldId). **DestroyBody2D**(worldId, bodyId) to remove a body. **DeleteBody2D**(bodyId) removes a body from the default world (simple wrapper).
 - **Body IDs:** You pass a string bodyId when creating shapes (e.g. "player", "ground"); use the same id for GetPositionX2D, SetVelocity2D, etc.
 
 ---
@@ -80,6 +80,7 @@ Two usage styles exist:
 
 - **CreateBox2D**(worldId, bodyId, x, y, width, height, mass, isDynamic) — axis-aligned box. mass 0 = static; isDynamic 1 = dynamic.
 - **CreateCircle2D**(worldId, bodyId, x, y, radius, mass, isDynamic) — circle.
+- **MakeCircle2D**(id, x, y, radius, density) — simple wrapper: creates a dynamic circle in the default world. radius and density default to 0.5 and 1.0 if ≤ 0.
 - **CreatePolygon2D**(worldId, bodyId, x, y, mass, isDynamic, v1x, v1y, v2x, v2y, v3x, v3y, …) — polygon (vertices relative to body center).
 - **CreateEdge2D**(worldId, bodyId, x1, y1, x2, y2) — line segment (static).
 - **CreateChain2D** — chain of edges (stubbed in current build; see API Reference).

@@ -154,7 +154,7 @@ Complete reference for the full required command set. All commands are DBP-style
 | Command | Syntax | Status |
 |---------|--------|--------|
 | MAKE RIGIDBODY | `MakeRigidBodyId id, x, y, z, mass` | Implemented |
-| DELETE RIGIDBODY | `DestroyBody3D worldId, bodyId` | Implemented |
+| DELETE RIGIDBODY | `DestroyBody3D worldId, bodyId` or `DeleteBody3D bodyId` (default world) | Implemented |
 | MAKE COLLIDER BOX | `MakeBoxCollider id, sx, sy, sz` | Implemented |
 | MAKE COLLIDER SPHERE | `MakeSphereCollider id, radius` | Implemented |
 | MAKE COLLIDER CAPSULE | `MakeCapsuleCollider id, radius, height` | Implemented |

@@ -266,6 +266,12 @@ func registerPhysics(v *vm.VM) {
 	v.RegisterForeign("MakeMeshCollider", func(args []interface{}) (interface{}, error) {
 		return nil, fmt.Errorf("MakeMeshCollider is not supported by the shipped 3D fallback backend; use simpler colliders or gate with BulletFeatureAvailable(\"mesh_collider\")")
 	})
+	v.RegisterForeign("DeleteBody3D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteBody3D(bodyId) requires 1 argument")
+		}
+		return v.CallForeign("DestroyBody3D", []interface{}{defaultPhysicsWorld3D, toString(args[0])})
+	})
 
 	v.RegisterForeign("MakeRigidBodyId", func(args []interface{}) (interface{}, error) {
 		if len(args) < 5 {
@@ -480,5 +486,11 @@ func registerPhysics(v *vm.VM) {
 			return v.CallForeign("GetVelocityY2DByBodyId", []interface{}{toString(args[0]), toString(args[1])})
 		}
 		return v.CallForeign("GetVelocityY2DByBodyId", []interface{}{defaultPhysicsWorld2D, toString(args[0])})
+	})
+	v.RegisterForeign("DeleteBody2D", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("DeleteBody2D(bodyId) requires 1 argument")
+		}
+		return v.CallForeign("DestroyBody2D", []interface{}{defaultPhysicsWorld2D, toString(args[0])})
 	})
 }
