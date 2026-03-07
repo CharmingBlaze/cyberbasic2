@@ -40,7 +40,7 @@ CyberBASIC 2 integrates **full** implementations of industry-standard libraries.
   <small>2D Physics</small>
 </td>
 <td width="25%" align="center">
-  <img src="https://upload.wikimedia.org/wikipedia/commons/thumb/2/2d/Bullet_Physics_Library_Logo.png/220px-Bullet_Physics_Library_Logo.png" alt="Bullet Physics" width="120"><br>
+  <img src="assets/bullet_logo.png" alt="Bullet Physics" width="120"><br>
   <strong>Bullet Physics</strong><br>
   <small>3D Physics</small>
 </td>
