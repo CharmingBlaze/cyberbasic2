@@ -20,8 +20,8 @@ User code                    Asset pipeline
 LoadAsset(path)     →    Parsed-model cache (by path)
 PreloadAsset(path)  →    Same as LoadAsset
 LoadObject(id,path) →    Uses cache when available
-LoadLevel(id,path)  →    Imports directly (bypasses cache)
-LoadPrefab(id,path) →    Imports directly (bypasses cache)
+LoadLevel(id,path)  →    Uses cache (assets.LoadModelForBuild); UnloadLevel decrements
+LoadPrefab(id,path) →    Uses cache; DeletePrefab decrements
 UnloadAsset(path)   →    Decrement refcount; unload at 0
 ```
 
@@ -66,10 +66,10 @@ UnloadAsset(path)   →    Decrement refcount; unload at 0
 |-------------|--------------|-------|
 | `LoadObject(id, path)` | Yes (static) | Uses parsed-model cache for static builds. |
 | Animated GLTF | No | Uses raylib native loader for skeletal animation. |
-| `LoadLevel(id, path)` | No | Parses through importer directly. |
-| `LoadLevelWithHierarchy(id, path)` | No | Same as LoadLevel; preserves hierarchy. |
-| `LoadPrefab(id, path)` | No | Not cache-backed. |
-| Texture upload (BuildModel) | Partial | Model textures uploaded per build; shared texture cache exists but not fully wired. |
+| `LoadLevel(id, path)` | Yes | Routed through assets.LoadModelForBuild; UnloadLevel calls UnloadModelForBuild. |
+| `LoadLevelWithHierarchy(id, path)` | Yes | Same as LoadLevel; preserves hierarchy. |
+| `LoadPrefab(id, path)` | Yes | Uses assets.LoadModelForBuild; DeletePrefab calls UnloadModelForBuild. |
+| Texture upload (BuildModel) | Yes | Uses resources.LoadTexture; levels track texturePaths and UnloadTexture on unload. |
 
 ---
 
@@ -87,17 +87,17 @@ UnloadAsset(path)   →    Decrement refcount; unload at 0
 | Command | Use Case | Cache |
 |---------|----------|-------|
 | `LoadObject(id, path)` | Single object, best cache support | Yes |
-| `LoadLevel(id, path)` | Full scene, meshes + materials + textures | No |
-| `LoadLevelWithHierarchy(id, path)` | Scene with node hierarchy | No |
-| `LoadPrefab(id, path)` | Reusable template | No |
+| `LoadLevel(id, path)` | Full scene, meshes + materials + textures | Yes |
+| `LoadLevelWithHierarchy(id, path)` | Scene with node hierarchy | Yes |
+| `LoadPrefab(id, path)` | Reusable template | Yes |
 
 ---
 
 ## Performance Considerations
 
-- **Preload during loading screen:** Call `PreloadAsset` for critical assets before gameplay.
+- **Preload during loading screen:** Call `PreloadAsset` for critical assets before gameplay. Load levels, models, and textures at startup (e.g. in OnStart or before mainloop); avoid loading heavy assets mid-frame.
 - **Unload unused:** Call `UnloadAsset` when switching levels or removing objects to free GPU memory.
-- **Level loads:** LoadLevel/LoadLevelWithHierarchy parse and build each time; no cache. Use for one-time level load.
+- **Level and prefab cache:** LoadLevel and LoadPrefab now use the asset cache; repeated loads of the same path reuse parsed models. UnloadLevel and DeletePrefab decrement refs automatically.
 
 ---
 

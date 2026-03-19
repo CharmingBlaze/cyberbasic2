@@ -326,7 +326,7 @@ WEND
 
 1. **Use CONST for configuration** – e.g. `CONST ScreenW = 800`, `CONST FPS = 60`, `CONST Gravity = -18`.
 2. **Clamp delta time** – `IF dt > 0.05 THEN LET dt = 0.016` (or use `GAME.ClampDelta(0.05)`) before physics step.
-3. **Load resources once** – Load textures, fonts, models at startup; unload in cleanup.
+3. **Load resources once** – Load textures, fonts, models, and levels at startup (OnStart or before mainloop); unload in cleanup. Avoid loading heavy assets mid-frame. See [Asset Pipeline](ASSET_PIPELINE.md).
 4. **Use GetAxisX/GetAxisY** for simple 2D movement.
 5. **Organize with functions** – e.g. `UpdatePlayer()`, `DrawPlayer()`, `UpdateEnemies()` called from the main loop.
 6. **Draw each frame** – ClearBackground and your draw calls in the loop.

@@ -165,7 +165,7 @@ func RegisterStd(v *vm.VM) {
 		err = os.WriteFile(toString(args[1]), data, 0644)
 		return err == nil, err
 	})
-	v.RegisterForeign("ListDir", func(args []interface{}) (interface{}, error) {
+	listDirImpl := func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("ListDir(path) requires 1 argument")
 		}
@@ -181,7 +181,9 @@ func RegisterStd(v *vm.VM) {
 		}
 		dirMu.Unlock()
 		return len(lastDirEntries), nil
-	})
+	}
+	v.RegisterForeign("ListDir", listDirImpl)
+	v.RegisterForeign("Dir", listDirImpl) // DBP-style alias for ListDir
 	v.RegisterForeign("DirectoryList", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("DirectoryList(path) requires 1 argument")
@@ -380,18 +382,6 @@ func RegisterStd(v *vm.VM) {
 		}
 		return string(r[start0:end]), nil
 	})
-	v.RegisterForeign("Instr", func(args []interface{}) (interface{}, error) {
-		if len(args) < 2 {
-			return 0, nil
-		}
-		s := toString(args[0])
-		sub := toString(args[1])
-		idx := strings.Index(s, sub)
-		if idx < 0 {
-			return 0, nil
-		}
-		return idx + 1, nil
-	})
 	v.RegisterForeign("Upper", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return "", nil
@@ -473,6 +463,42 @@ func RegisterStd(v *vm.VM) {
 			return 0, nil
 		}
 		return len([]rune(toString(args[0]))), nil
+	})
+	v.RegisterForeign("Instr", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return 0, nil
+		}
+		s := toString(args[0])
+		sub := toString(args[1])
+		runes := []rune(s)
+		subRunes := []rune(sub)
+		if len(subRunes) == 0 {
+			return 1, nil
+		}
+		start0 := 0
+		if len(args) >= 3 {
+			start1 := toInt(args[2])
+			if start1 < 1 {
+				start1 = 1
+			}
+			start0 = start1 - 1
+		}
+		if start0 >= len(runes) || start0+len(subRunes) > len(runes) {
+			return 0, nil
+		}
+		for i := start0; i <= len(runes)-len(subRunes); i++ {
+			match := true
+			for j := 0; j < len(subRunes); j++ {
+				if runes[i+j] != subRunes[j] {
+					match = false
+					break
+				}
+			}
+			if match {
+				return i + 1, nil
+			}
+		}
+		return 0, nil
 	})
 	v.RegisterForeign("Chr", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {

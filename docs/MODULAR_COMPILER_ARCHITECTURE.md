@@ -2,6 +2,8 @@
 
 Split the compiler into five clear, isolated groups. Each group has a single responsibility; no cross-boundary logic.
 
+**Implementation status:** Lexer, Parser, Semantic, and Codegen are implemented. The driver (`compiler/compiler.go`) is a thin orchestration layer: Lex → Parse → Semantic.Analyze → Codegen.Emit. All codegen logic lives in `compiler/codegen/` (codegen.go, stmt.go, expr.go, call.go, util.go).
+
 ---
 
 ## 1. Lexer Module
@@ -39,10 +41,10 @@ Split the compiler into five clear, isolated groups. Each group has a single res
 
 | Group | Path | Purpose |
 |-------|------|---------|
-| Semantic | `compiler/semantic/semantic.go` | **NEW** — semantic pass: walk AST, build symbol table, check types/scopes |
-| Semantic | `compiler/semantic/symbol.go` | **NEW** — symbol table, scopes, function signatures |
+| Semantic | `compiler/semantic/semantic.go` | Semantic pass: walk AST, build symbol table, check types/scopes |
+| Semantic | `compiler/semantic/symbol.go` | Symbol table (Result: TypeDefs, EntityNames, UserFuncs, MainStmts, Decls) |
 
-**Current state:** Today this logic lives inside `compiler.go` (e.g. `typeDefs`, `userFuncs`, first pass over `program.Statements`). Move that into a dedicated semantic package.
+**Current state:** Implemented. `semantic.Analyze(program)` returns a read-only `Result` consumed by codegen.
 
 **Input:** AST (from parser).  
 **Output:** Symbol table / annotated info (e.g. type definitions, user function/sub names, scope) for codegen. No bytecode.
@@ -55,15 +57,17 @@ Split the compiler into five clear, isolated groups. Each group has a single res
 
 | Group | Path | Purpose |
 |-------|------|---------|
-| Codegen | `compiler/codegen/codegen.go` | **NEW** — entry: takes AST + semantic info, emits `vm.Chunk` |
-| Codegen | `compiler/codegen/stmt.go` | **NEW** — compile statements (IF, FOR, WHILE, REPEAT, DIM, etc.) |
-| Codegen | `compiler/codegen/expr.go` | **NEW** — compile expressions (binary, unary, call, member, etc.) |
-| Driver | `compiler/compiler.go` | **Slim** — orchestration only: Lexer → Parser → Semantic → Codegen; no codegen logic |
+| Codegen | `compiler/codegen/codegen.go` | Entry: `Emit(program, semantic.Result)` → `*vm.Chunk` |
+| Codegen | `compiler/codegen/stmt.go` | Compile statements (IF, FOR, WHILE, REPEAT, DIM, etc.) |
+| Codegen | `compiler/codegen/expr.go` | Compile expressions (binary, unary, call, member, etc.) |
+| Codegen | `compiler/codegen/call.go` | Compile function/procedure calls |
+| Codegen | `compiler/codegen/util.go` | Helpers (physics namespace map, WalkStatements, frame/3D predicates) |
+| Driver | `compiler/compiler.go` | Orchestration only: Lex → Parse → Semantic.Analyze → Codegen.Emit |
 
-**Allowed:** Imports `parser` (AST), `vm` (Chunk, opcodes), `semantic` (symbols). Emits bytecode only.  
+**Allowed:** Imports `parser` (AST), `vm` (Chunk, opcodes), `semantic` (Result). Emits bytecode only.  
 **Not allowed:** Tokenizing, parsing, or semantic checks (those stay in Lexer/Parser/Semantic).
 
-**Refactor:** Move all `generateCode`, `compileStatement`, `compileExpression`, `compile*Statement`, `compile*Expr`, `emitFrameWrap` (if kept), etc. from `compiler.go` into `compiler/codegen/`. Keep `compiler.go` as a thin driver that calls lexer → parser → semantic.Analyze(ast) → codegen.Emit(ast, semanticInfo).
+**Current state:** Implemented. All codegen lives in `compiler/codegen/`; `compiler.go` is a thin driver.
 
 ---
 
@@ -93,14 +97,45 @@ Split the compiler into five clear, isolated groups. Each group has a single res
 
 ---
 
+## 6. Raylib Integration
+
+Raylib is the low-level graphics backend. The integration is modular and layered:
+
+- **Layering:** Raylib bindings (`bindings/raylib/`) provide the flat API (InitWindow, DrawRectangle). DBP bindings (`bindings/dbp/`) are high-level wrappers (LoadObject, DrawLevel) built on raylib.
+- **Modular bindings:** Raylib is split by domain (raylib_core.go, raylib_shapes.go, raylib_3d.go, etc.); `RegisterRaylib()` wires them.
+- **Renderer:** `compiler/runtime/renderer/` orchestrates 3D→2D→GUI; uses raylib for drawing, DBP for object draw callbacks.
+- **VM:** Foreign function registration; compiler emits `OpCallForeign`; no compile-time raylib dependency.
+
+```mermaid
+flowchart TB
+    subgraph BASIC [BASIC Source]
+        A[InitWindow DrawObject]
+    end
+    subgraph VM [VM]
+        B[OpCallForeign]
+    end
+    subgraph Bindings [Bindings]
+        C[raylib]
+        D[dbp]
+    end
+    E[raylib-go]
+    A --> B
+    B --> C
+    B --> D
+    C --> E
+    D --> C
+```
+
+---
+
 ## File-to-Group Summary
 
 | Module | Files (existing + new) |
 |--------|------------------------|
 | **Lexer** | `lexer/lexer.go`, `lexer/token.go` |
 | **Parser** | `parser/parser.go`, `parser/ast.go`, `parser/parser_test.go` |
-| **Semantic** | `semantic/semantic.go` (new), `semantic/symbol.go` (new) |
-| **Codegen** | `codegen/codegen.go` (new), `codegen/stmt.go` (new), `codegen/expr.go` (new); `compiler.go` becomes thin driver |
+| **Semantic** | `semantic/semantic.go`, `semantic/symbol.go`, `semantic/semantic_test.go` |
+| **Codegen** | `codegen/codegen.go`, `codegen/stmt.go`, `codegen/expr.go`, `codegen/call.go`, `codegen/util.go`; `compiler.go` is thin driver |
 | **Runtime** | `vm/*.go`, `bindings/**/*.go`, `runtime/runtime.go`, `gogen/gogen.go` |
 | **Tests** | `compiler_test.go` — stays in `compiler` or moves to `codegen` for codegen tests |
 

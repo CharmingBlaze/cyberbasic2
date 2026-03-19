@@ -43,6 +43,10 @@ type VM struct {
 	renderQueue2D    []RenderQueueItem
 	renderQueue3D    []RenderQueueItem
 	renderQueueGUI   []RenderQueueItem
+
+	// Debugger: breakpoints and mode
+	breakpoints map[int]bool
+	debugMode   bool
 }
 
 // RenderType classifies a foreign command for the hybrid render queue (2D, 3D, or GUI).
@@ -269,6 +273,12 @@ func (vm *VM) Run() error {
 		}
 		if vm.ip >= len(vm.chunk.Code) {
 			break
+		}
+		if vm.debugMode && vm.breakpoints != nil {
+			line := vm.chunk.LineAt(vm.ip)
+			if line > 0 && vm.breakpoints[line] {
+				return &ErrBreakpoint{Line: line}
+			}
 		}
 		if err := vm.Step(); err != nil {
 			return vm.errWithStack(err)

@@ -30,6 +30,7 @@ This table maps DarkBASIC Pro commands to CyberBASIC2 equivalents. Use it when p
 | RIGHT$(s, n) | **Right(s, n)** |
 | MID$(s, p, n) | **Mid(s, p, n)** (p 1-based) |
 | LEN(s) | **Len(s)** or **TextLength(s)** |
+| INSTR(s, sub) / INSTR(s, sub, start) | **Instr(s, sub)** or **Instr(s, sub, start)** (1-based; 0 if not found) |
 | CHR$(code) | **Chr(code)** |
 | ASC(s) | **Asc(s)** |
 | STR$(x) | **Str(x)** |
@@ -44,7 +45,7 @@ This table maps DarkBASIC Pro commands to CyberBASIC2 equivalents. Use it when p
 | OPEN TO WRITE / WRITE / CLOSE FILE | **WriteFile(path, contents)** |
 | DELETE FILE | **DeleteFile(path)** |
 | COPY FILE | **CopyFile(src, dst)** |
-| DIR / directory listing | **ListDir(path)** → count; **GetDirItem(i)** for each name |
+| DIR / directory listing | **Dir(path)** or **ListDir(path)** → count; **GetDirItem(i)** for each name |
 | EXECUTE FILE | **ExecuteFile(path)** |
 | GET DIR$ | Use **ListDir** + **GetDirItem** or current-dir API if added |
 
@@ -109,4 +110,4 @@ This table maps DarkBASIC Pro commands to CyberBASIC2 equivalents. Use it when p
 ## Summary
 
 - **Already in CyberBASIC2:** Print, file (ReadFile, WriteFile, DeleteFile, FileExists), mouse/keyboard (GetMouseX/Y, IsKeyPressed, etc.), 3D (LoadModel, SetCamera3D, DrawModel, meshes), 2D (DrawTexture, LoadTexture, shapes), audio (LoadSound, PlayMusicStream, etc.), network (Connect, Send, Receive, Host, Accept), collision (CheckCollision*, GetRayCollision*, Box2D, Bullet-shaped 3D fallback physics), GUI (Gui* raygui, BeginUI/EndUI).
-- **Added for DBP parity:** Left, Right, Mid, Len, Chr, Asc, Str, Val, Rnd, Int (std); CopyFile, ListDir, GetDirItem, ExecuteFile (std). See [DBP_GAP.md](DBP_GAP.md) for the gap list.
+- **Added for DBP parity:** Left, Right, Mid, Len, Instr, Chr, Asc, Str, Val, Rnd, Int (std); CopyFile, Dir (alias for ListDir), ListDir, GetDirItem, ExecuteFile (std). See [DBP_GAP.md](DBP_GAP.md) for the gap list.

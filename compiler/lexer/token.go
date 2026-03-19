@@ -10,6 +10,8 @@ func (t TokenType) String() string {
 		return "TokenNumber"
 	case TokenString:
 		return "TokenString"
+	case TokenInterpolatedString:
+		return "TokenInterpolatedString"
 	case TokenIdentifier:
 		return "TokenIdentifier"
 	case TokenIf:
@@ -56,6 +58,10 @@ func (t TokenType) String() string {
 		return "TokenReturn"
 	case TokenDim:
 		return "TokenDim"
+	case TokenRedim:
+		return "TokenRedim"
+	case TokenAppend:
+		return "TokenAppend"
 	case TokenAs:
 		return "TokenAs"
 	case TokenInteger:
@@ -331,6 +337,7 @@ const (
 	// Literals
 	TokenNumber TokenType = iota
 	TokenString
+	TokenInterpolatedString
 	TokenIdentifier
 
 	// Keywords
@@ -356,6 +363,8 @@ const (
 	TokenEndModule   // ENDMODULE (single-word end of module)
 	TokenReturn
 	TokenDim
+	TokenRedim
+	TokenAppend
 	TokenAs
 	TokenInteger
 	TokenStringType
@@ -525,7 +534,9 @@ var KeywordMap = map[string]TokenType{
 	"WHILE":                   TokenWhile,
 	"WEND":                    TokenWend,
 	"MAINLOOP":                TokenMainLoop,
+	"GAMELOOP":                TokenMainLoop,
 	"ENDMAIN":                 TokenEndMain,
+	"ENDLOOP":                 TokenEndMain,
 	"FUNCTION":                TokenFunction,
 	"SUB":                     TokenSub,
 	"MODULE":                  TokenModule,
@@ -535,6 +546,8 @@ var KeywordMap = map[string]TokenType{
 	"ENDMODULE":                TokenEndModule,
 	"RETURN":                  TokenReturn,
 	"DIM":                     TokenDim,
+	"REDIM":                   TokenRedim,
+	"APPEND":                  TokenAppend,
 	"AS":                      TokenAs,
 	"INTEGER":                 TokenInteger,
 	"STRING":                  TokenStringType,

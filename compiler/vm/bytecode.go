@@ -166,11 +166,13 @@ const (
 	// Matrix: MatMul(resultName, aName, bName) - R = A*B, names as constant indices
 	OpMatMul
 
-	// String: Left(s, n), Right(s, n), Mid(s, start, n), Len(s)
+	// String: Left(s, n), Right(s, n), Mid(s, start, n), Len(s), Slice(s, start, end)
 	OpLeftStr
 	OpRightStr
 	OpMidStr
 	OpLenStr
+	OpStrSlice     // str, start, end on stack -> substring (0-based, start inclusive, end exclusive)
+	OpStrSliceFrom // str, start on stack -> substring from start to end (s[start:])
 
 	// File: EOF(handle) -> boolean
 	OpEOF
@@ -184,9 +186,11 @@ const (
 	OpWriteByte // handle, value
 
 	// Arrays (multidimensional)
-	OpCreateArray // nDims, constIdx..., varIndex -> allocate and store
-	OpLoadArray   // varIndex -> pop indices..., push element
-	OpStoreArray  // varIndex -> pop value, pop indices..., store
+	OpCreateArray  // nDims, constIdx..., varIndex -> allocate and store
+	OpLoadArray    // varIndex -> pop indices..., push element
+	OpStoreArray   // varIndex -> pop value, pop indices..., store
+	OpResizeArray  // varIndex, pop dim values... -> resize dynamic array
+	OpAppendArray  // varIndex, pop value -> append to dynamic array
 
 	// Foreign API: call into Go libraries (raylib, etc.)
 	OpCallForeign

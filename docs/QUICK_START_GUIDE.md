@@ -26,7 +26,7 @@ CyberBASIC2 supports two programming styles:
 
 **DBP-style** – No `InitWindow`, no `WHILE` loop. Define `OnStart()`, `OnUpdate(dt)`, and `OnDraw()`; the runtime provides the window and loop. See [DBP Parity](DBP_PARITY.md).
 
-**Manual loop** – You write `InitWindow`, `mainloop...endmain` (or `WHILE NOT WindowShouldClose()...WEND`), and all drawing. Full control over order of operations.
+**Manual loop** – You write `InitWindow`, `mainloop...endmain` or `gameloop...endloop` (or `WHILE NOT WindowShouldClose()...WEND`), and all drawing. Use **gameloop** / **endloop** as an alternative to mainloop/endmain; both compile identically. Full control over order of operations.
 
 ---
 

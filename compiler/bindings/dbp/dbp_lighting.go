@@ -42,6 +42,26 @@ var (
 	lightsMu sync.Mutex
 )
 
+// dirToEuler converts a direction vector (e.g. from GLTF light) to pitch, yaw, roll (degrees).
+// Assumes direction is the -Z axis in local space. Roll is 0.
+func dirToEuler(dx, dy, dz float32) (pitch, yaw, roll float32) {
+	len := float32(math.Sqrt(float64(dx*dx + dy*dy + dz*dz)))
+	if len < 1e-6 {
+		return 0, 0, 0
+	}
+	dx, dy, dz = dx/len, dy/len, dz/len
+	yaw = float32(math.Atan2(float64(dx), float64(-dz))) * 180 / float32(math.Pi)
+	sinP := dy
+	if sinP > 1 {
+		sinP = 1
+	}
+	if sinP < -1 {
+		sinP = -1
+	}
+	pitch = float32(math.Asin(float64(sinP))) * 180 / float32(math.Pi)
+	return pitch, yaw, 0
+}
+
 func lightDirectionVector(l *dbpLight) rl.Vector3 {
 	q := rl.QuaternionFromEuler(
 		l.pitch*float32(math.Pi)/180,
@@ -59,13 +79,17 @@ func syncRendererShadowLights() {
 	lightsMu.Lock()
 	list := make([]renderer.ShadowLight, 0, len(lights))
 	for _, l := range lights {
-		list = append(list, renderer.ShadowLight{
+		sl := renderer.ShadowLight{
 			Type:      l.lightType,
 			Position:  rl.Vector3{X: l.x, Y: l.y, Z: l.z},
 			Direction: lightDirectionVector(l),
 			Range:     l.range_,
 			Shadows:   l.shadows,
-		})
+		}
+		if l.lightType == 2 {
+			sl.Angle = l.angle
+		}
+		list = append(list, sl)
 	}
 	lightsMu.Unlock()
 	renderer.SetShadowLights(list)
@@ -256,6 +280,16 @@ func registerLighting(v *vm.VM) {
 		}
 		renderer.SetShadowQuality(toString(args[0]))
 		return nil, nil
+	})
+	v.RegisterForeign("SetShadowCascades", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SetShadowCascades(count) requires 1 argument")
+		}
+		renderer.SetShadowCascadeCount(toInt(args[0]))
+		return nil, nil
+	})
+	v.RegisterForeign("ShadowCascadeCount", func(args []interface{}) (interface{}, error) {
+		return renderer.ShadowCascadeCount(), nil
 	})
 
 	v.RegisterForeign("DeleteLight", func(args []interface{}) (interface{}, error) {

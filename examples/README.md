@@ -8,6 +8,8 @@ Runnable examples to get started quickly.
 |---------|-------------|-----|
 | [hello_world.bas](hello_world.bas) | Minimal: prints to console | `cyberbasic examples/hello_world.bas` |
 | [first_game.bas](first_game.bas) | 3D spinning cube + mouse orbit camera (DBPRO-style: just SYNC) | `cyberbasic examples/first_game.bas` |
+| [platformer.bas](platformer.bas) | 2D platformer: WASD move, Space jump, gravity | `cyberbasic examples/platformer.bas` |
+| [ui_demo.bas](ui_demo.bas) | Immediate-mode UI: BeginUI, Label, Button | `cyberbasic examples/ui_demo.bas` |
 | [input_debug.bas](input_debug.bas) | Test all input: keyboard, mouse, gamepad (mainloop + SYNC) | `cyberbasic examples/input_debug.bas` |
 
 **DBPRO-style:** Use `SYNC` at the end of your loop; the compiler injects BeginDrawing. Input, physics, and rendering work seamlessly.

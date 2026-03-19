@@ -1,6 +1,9 @@
 package parser
 
-import "fmt"
+import (
+	"fmt"
+	"strings"
+)
 
 // NodeType represents different types of AST nodes
 type NodeType int
@@ -27,6 +30,8 @@ const (
 	NodeBlock
 	NodeReturnStatement
 	NodeDimStatement
+	NodeRedimStatement
+	NodeAppendStatement
 	NodeGameCommand
 	NodeSelectCaseStatement
 	NodeRepeatStatement
@@ -47,6 +52,8 @@ const (
 	NodeWaitFramesStatement
 	NodeJSONIndexAccess
 	NodeDictLiteral
+	NodeSliceExpr
+	NodeInterpolatedString
 )
 
 // Node represents a node in the Abstract Syntax Tree
@@ -345,6 +352,63 @@ type JSONIndexAccess struct {
 func (j *JSONIndexAccess) Type() NodeType { return NodeJSONIndexAccess }
 func (j *JSONIndexAccess) String() string { return j.Object.String() + "[\"" + j.Key + "\"]" }
 
+// SliceExpr represents s[start:end], s[i:], s[:end], s[i] string slicing, or arr[i,j] multi-dim array access.
+// 0-based (start inclusive, end exclusive).
+// HasColon: true if [expr:] or [expr:expr] or [:expr] (slice); false if [expr] or [expr,expr,...] (index).
+// Indices: non-nil for multi-dim array access arr[i,j,k]; nil for string slice/index.
+type SliceExpr struct {
+	Object   Node   // string or array expression
+	Start    Node   // 0-based start (nil = from beginning) for string slice
+	End      Node   // 0-based end exclusive (nil = to end) for string slice
+	HasColon bool   // true = slice (s[i:] or s[:] or s[i:j]), false = index
+	Indices  []Node // multi-dim array indices [i,j,k]; nil for string
+	Line     int
+	Col      int
+}
+
+func (s *SliceExpr) Type() NodeType { return NodeSliceExpr }
+func (s *SliceExpr) GetLine() int   { return s.Line }
+func (s *SliceExpr) GetCol() int    { return s.Col }
+func (s *SliceExpr) String() string {
+	if s.Indices != nil {
+		parts := make([]string, len(s.Indices))
+		for i, idx := range s.Indices {
+			parts[i] = idx.String()
+		}
+		return s.Object.String() + "[" + strings.Join(parts, ",") + "]"
+	}
+	if !s.HasColon && s.Start != nil {
+		return s.Object.String() + "[" + s.Start.String() + "]"
+	}
+	startStr := ""
+	if s.Start != nil {
+		startStr = s.Start.String()
+	}
+	endStr := ""
+	if s.End != nil {
+		endStr = s.End.String()
+	}
+	return s.Object.String() + "[" + startStr + ":" + endStr + "]"
+}
+
+// InterpolatedString represents "Hello {name}!" - compiled to "Hello " + Str(name) + "!"
+type InterpolatedString struct {
+	Parts []Node // alternating string literals and expressions
+	Line  int
+	Col   int
+}
+
+func (i *InterpolatedString) Type() NodeType { return NodeInterpolatedString }
+func (i *InterpolatedString) GetLine() int    { return i.Line }
+func (i *InterpolatedString) GetCol() int     { return i.Col }
+func (i *InterpolatedString) String() string {
+	var b string
+	for _, p := range i.Parts {
+		b += p.String()
+	}
+	return b
+}
+
 // DictPair is one key-value pair in a dict literal (key is string; value is expression).
 type DictPair struct {
 	Key   string
@@ -624,6 +688,33 @@ func (d *DimStatement) String() string {
 	}
 	return result
 }
+
+// RedimStatement represents REDIM a(n) or REDIM a(n, m) - resize dynamic array.
+type RedimStatement struct {
+	Variable   string
+	Dimensions []Node
+}
+
+func (r *RedimStatement) Type() NodeType { return NodeRedimStatement }
+func (r *RedimStatement) String() string {
+	s := "REDIM " + r.Variable + "("
+	for i, d := range r.Dimensions {
+		if i > 0 {
+			s += ", "
+		}
+		s += d.String()
+	}
+	return s + ")"
+}
+
+// AppendStatement represents APPEND a, value - append to dynamic array.
+type AppendStatement struct {
+	Variable string
+	Value    Node
+}
+
+func (a *AppendStatement) Type() NodeType { return NodeAppendStatement }
+func (a *AppendStatement) String() string { return "APPEND " + a.Variable + ", " + a.Value.String() }
 
 // SelectCaseStatement represents SELECT CASE expr ... CASE value: block ... CASE ELSE: block ... END SELECT
 type SelectCaseStatement struct {

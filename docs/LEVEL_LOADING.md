@@ -2,23 +2,31 @@
 
 CyberBASIC2 provides a unified 3D loading pipeline. **LOAD LEVEL** loads everything automatically: meshes, materials, textures, hierarchy, and optionally collision. No extra commands required for basic loading.
 
+**Purpose:** Load GLTF/OBJ levels with meshes, materials, hierarchy, and collision.
+
+### How to load a 3D level
+
+1. **Load:** `LoadLevel(id, "level.gltf")`
+2. **Optional collision:** `LoadLevelCollision(id)` then `PhysicsEnable`
+3. **Draw:** `DrawLevel(id)` between `BeginMode3D` and `EndMode3D`
+4. **Unload:** `UnloadLevel(id)` when done
+
 ## Quick Start
 
 ```basic
-LOAD LEVEL 1, "castle.gltf"
-LOAD LEVEL COLLISION 1
-PHYSICS ON
+LoadLevel 1, "castle.gltf"
+LoadLevelCollision 1
+PhysicsOn
 
-WHILE NOT WindowShouldClose()
-  START DRAW
-    CLEAR 30, 30, 50
-    START 3D
-      DRAW LEVEL 1
-    END 3D
-  END DRAW
-WEND
+mainloop
+  ClearBackground 30, 30, 50, 255
+  BeginMode3D
+  DrawLevel 1
+  EndMode3D
+  SYNC
+endmain
 
-UNLOAD LEVEL 1
+UnloadLevel 1
 ```
 
 Textures, materials, and hierarchy load automatically. Call `LoadLevelCollision` to enable physics colliders from the level. GLTF punctual lights are not imported into runtime DBP lights yet, so add gameplay lights explicitly after loading if you need them.
@@ -28,7 +36,7 @@ Textures, materials, and hierarchy load automatically. Call `LoadLevelCollision`
 | Command | Args | Description |
 |---------|------|-------------|
 | `LoadLevel` | (id, path) | Load a full level from file. Parses, uploads to GPU, and creates objects. |
-| `DrawLevel` | (id) | Draw all objects in the level. Call between Start3D/End3D. |
+| `DrawLevel` | (id) | Draw all objects in the level. Call between BeginMode3D/EndMode3D. |
 | `UnloadLevel` | (id) | Free all level resources (objects, textures, lights, colliders). |
 
 ## Level Collision
@@ -43,7 +51,7 @@ Textures, materials, and hierarchy load automatically. Call `LoadLevelCollision`
 
 **Example:**
 ```basic
-LOAD LEVEL 1, "arena.gltf"
+LoadLevel 1, "arena.gltf"
 n = LoadLevelCollision 1
 PhysicsOn
 ' Use GetLevelCollider 1, i for physics queries
@@ -130,8 +138,10 @@ Level loading is deterministic:
 - Same file on all clients yields identical scene
 - No auto-physics, auto-animation, or auto-sync unless explicitly requested
 
-## Related
+## See also
 
-- [3D_GAME_API.md](3D_GAME_API.md) — Full 3D API reference
-- [DBP_EXTENDED.md](DBP_EXTENDED.md) — DBP-style command reference
-- [3D_LOADING_SPEC.md](3D_LOADING_SPEC.md) — Design spec and safe loading rules
+- [World, Water, Terrain](WORLD_WATER_TERRAIN.md)
+- [3D Graphics Guide](3D_GRAPHICS_GUIDE.md)
+- [Asset Pipeline](ASSET_PIPELINE.md)
+- [3D Physics Guide](3D_PHYSICS_GUIDE.md)
+- [Documentation Index](DOCUMENTATION_INDEX.md)

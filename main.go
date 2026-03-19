@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"cyberbasic/compiler"
+	"cyberbasic/compiler/errors"
 	"cyberbasic/compiler/bindings/box2d"
 	"cyberbasic/compiler/bindings/bullet"
 	"cyberbasic/compiler/bindings/dbp"
@@ -59,6 +60,9 @@ func main() {
 			fmt.Println("  --debug           Enable debug output")
 			fmt.Println("  --list-commands   Print built-in command names (2D, 3D, GUI, Physics, Std)")
 			fmt.Println("  --lint            Check program (compile only, no run); same as --compile-only")
+			fmt.Println("  --repl            Interactive REPL (read-eval-print loop)")
+			fmt.Println("  --debugger        Enable debugger (breakpoints, stack trace)")
+			fmt.Println("  --break=5,10      Set breakpoints at lines 5 and 10")
 			fmt.Println("  --help            Show this help")
 			fmt.Println("  --version         Print version and exit")
 			fmt.Println("  (Multi-window: --window --parent=host:port --title=... --width=... --height=...)")
@@ -82,7 +86,14 @@ func main() {
 			i++ // skip gen-go output path
 		}
 	}
-	if filename == "" {
+	replMode := false
+	for _, arg := range os.Args {
+		if arg == "--repl" {
+			replMode = true
+			break
+		}
+	}
+	if filename == "" && !replMode {
 		// No file: default to 3D physics demo or show usage
 		exeDir := filepath.Dir(os.Args[0])
 		defaultBas := filepath.Join(exeDir, "examples", "run_3d_physics_demo.bas")
@@ -97,18 +108,25 @@ func main() {
 			} else {
 				fmt.Println("CyberBasic - A BASIC-like language with Raylib + Bullet physics")
 				fmt.Println("Usage: cyberbasic <filename.bas> [options]  (or: cyberbasic [options] <filename.bas>)")
+				fmt.Println("       cyberbasic --repl   Start interactive REPL")
 				fmt.Println("Options:")
 				fmt.Println("  --compile-only    Compile but don't run")
 				fmt.Println("  --gen-go [file]   Generate Go source that calls raylib directly")
 				fmt.Println("  --debug           Enable debug output")
+				fmt.Println("  --repl            Interactive read-eval-print loop")
 				os.Exit(1)
 			}
 		}
+	}
+	if replMode {
+		runREPL()
+		os.Exit(0)
 	}
 	compileOnly := false
 	debug := false
 	genGo := false
 	genGoOut := ""
+	var debuggerBreakpoints []int
 
 	// Parse command line arguments (all args except exe name)
 	for i := 1; i < len(os.Args); i++ {
@@ -120,6 +138,23 @@ func main() {
 		case "--debug":
 			debug = true
 			os.Setenv("CYBERBASIC_DEBUG", "1") // Enable render trace (BeginDrawing, SyncFrame, etc.)
+		case "--debugger":
+			debug = true
+		case "--break":
+			arg := ""
+			if strings.Contains(os.Args[i], "=") {
+				parts := strings.SplitN(os.Args[i], "=", 2)
+				arg = parts[1]
+			} else if i+1 < len(os.Args) && !strings.HasPrefix(os.Args[i+1], "-") {
+				i++
+				arg = os.Args[i]
+			}
+			for _, s := range strings.Split(arg, ",") {
+				var line int
+				if _, err := fmt.Sscanf(strings.TrimSpace(s), "%d", &line); err == nil && line > 0 {
+					debuggerBreakpoints = append(debuggerBreakpoints, line)
+				}
+			}
 		case "--gen-go":
 			genGo = true
 			if i+1 < len(os.Args) && len(os.Args[i+1]) > 0 && !strings.HasPrefix(os.Args[i+1], "-") {
@@ -201,13 +236,15 @@ func main() {
 
 	fmt.Printf("Compiling %s...\n", filename)
 
-	// Create compiler
+	// Create compiler and set filename so errors show source location
 	comp := compiler.New()
+	comp.Filename = filename
 
 	// Compile source code
-	chunk, err := comp.Compile(string(source))
+	sourceStr := string(source)
+	chunk, err := comp.Compile(sourceStr)
 	if err != nil {
-		fmt.Printf("Compilation error: %v\n", err)
+		errors.PrettyPrint(os.Stdout, sourceStr, filename, err)
 		os.Exit(1)
 	}
 
@@ -257,12 +294,30 @@ func main() {
 
 	fmt.Println("Running program...")
 
+	v := rt.GetVM()
+	if len(debuggerBreakpoints) > 0 {
+		bpMap := make(map[int]bool)
+		for _, l := range debuggerBreakpoints {
+			bpMap[l] = true
+		}
+		v.SetBreakpoints(bpMap)
+		v.SetDebugMode(true)
+	}
+
 	// Run the program (top-level code first)
-	err = rt.GetVM().Run()
+	err = v.Run()
 	if err != nil {
+		if bp, ok := err.(*vm.ErrBreakpoint); ok {
+			fmt.Printf("Breakpoint hit at line %d\n", bp.Line)
+			for i, f := range v.StackTrace() {
+				fmt.Printf("  #%d line %d (ip %d)\n", i, f.Line, f.IP)
+			}
+			rt.CloseWindow()
+			os.Exit(0)
+		}
 		fmt.Printf("Runtime error: %v\n", err)
 		if debug {
-			for i, f := range rt.GetVM().StackTrace() {
+			for i, f := range v.StackTrace() {
 				fmt.Printf("  #%d line %d (ip %d)\n", i, f.Line, f.IP)
 			}
 		}
@@ -288,6 +343,89 @@ func main() {
 	rt.CloseWindow()
 	fmt.Println("Program completed successfully!")
 	os.Exit(0)
+}
+
+// runREPL runs an interactive read-eval-print loop.
+func runREPL() {
+	fmt.Println("CyberBasic REPL - type statements and press Enter. Empty line or QUIT to exit.")
+	comp := compiler.New()
+	comp.Filename = "<repl>"
+	var session strings.Builder
+	scanner := bufio.NewScanner(os.Stdin)
+	for {
+		fmt.Print("> ")
+		if !scanner.Scan() {
+			break
+		}
+		line := strings.TrimSpace(scanner.Text())
+		if line == "" {
+			continue
+		}
+		if strings.EqualFold(line, "QUIT") || strings.EqualFold(line, "EXIT") {
+			fmt.Println("Goodbye!")
+			break
+		}
+		session.WriteString(line)
+		session.WriteByte('\n')
+		source := session.String()
+		chunk, err := comp.Compile(source)
+		if err != nil {
+			errors.PrettyPrint(os.Stdout, source, "<repl>", err)
+			revert := len(source) - len(line) - 1
+			if revert > 0 {
+				session.Reset()
+				session.WriteString(source[:revert])
+			} else {
+				session.Reset()
+			}
+			continue
+		}
+		rt := runtime.NewRuntime()
+		rt.GetVM().LoadChunk(chunk)
+		std.RegisterEnums(chunk.Enums)
+		rt.GetVM().SetRuntime(rt)
+		raylib.RegisterRaylib(rt.GetVM())
+		runtime.RegisterFlushOverride(rt.GetVM())
+		dbp.RegisterDBP(rt.GetVM())
+		renderer.SetDraw3D(dbp.DrawScene3D)
+		renderer.SetPreDraw2D(dbp.UpdateSpriteAnimations)
+		renderer.SetVM(rt.GetVM())
+		bullet.RegisterBullet(rt.GetVM())
+		box2d.RegisterBox2D(rt.GetVM())
+		ecs.RegisterECS(rt.GetVM())
+		net.RegisterNet(rt.GetVM())
+		scene.RegisterScene(rt.GetVM())
+		game.RegisterGame(rt.GetVM())
+		dbp.Register2D(rt.GetVM())
+		sql.RegisterSQL(rt.GetVM())
+		terrain.RegisterTerrain(rt.GetVM())
+		dbp.RegisterTerrain(rt.GetVM())
+		objects.RegisterObjects(rt.GetVM())
+		dbp.RegisterDrawObjectOverlay(rt.GetVM())
+		procedural.RegisterProcedural(rt.GetVM())
+		water.RegisterWater(rt.GetVM())
+		dbp.RegisterWater(rt.GetVM())
+		vegetation.RegisterVegetation(rt.GetVM())
+		world.RegisterWorld(rt.GetVM())
+		navigation.RegisterNavigation(rt.GetVM())
+		indoor.RegisterIndoor(rt.GetVM())
+		std.RegisterStd(rt.GetVM())
+		err = rt.GetVM().Run()
+		if err != nil {
+			fmt.Printf("Runtime error: %v\n", err)
+			revert := len(source) - len(line) - 1
+			if revert > 0 {
+				session.Reset()
+				session.WriteString(source[:revert])
+			} else {
+				session.Reset()
+			}
+			continue
+		}
+		if rt.HasImplicitHandlers() {
+			fmt.Println("(Program has OnUpdate/OnDraw - use file mode for graphics)")
+		}
+	}
 }
 
 // printCommandList prints built-in command names grouped by category (for --list-commands).

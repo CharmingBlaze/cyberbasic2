@@ -150,10 +150,15 @@ func (l *Lexer) NextToken() Token {
 		l.line++
 		l.col = 1
 	case '"':
-		tok.Type = TokenString
-		tok.Value = l.readString()
+		val, hasInterp := l.readString()
+		tok.Value = val
 		tok.Line = l.line
-		tok.Col = l.col - len(tok.Value) - 2
+		tok.Col = l.col - len(val) - 2
+		if hasInterp {
+			tok.Type = TokenInterpolatedString
+		} else {
+			tok.Type = TokenString
+		}
 		return tok
 	case '&':
 		colStart := l.col - 1
@@ -292,9 +297,11 @@ func (l *Lexer) parseIntToDecimal(s string, base int) string {
 }
 
 // readString reads a string literal and resolves escape sequences.
-// Supports: \", \\, \n, \t, \r, and \xHH (two hex digits).
-func (l *Lexer) readString() string {
+// Supports: \", \\, \n, \t, \r, \{, \}, and \xHH (two hex digits).
+// Returns (value, hasInterpolation). hasInterpolation is true if the string contains unescaped {.
+func (l *Lexer) readString() (string, bool) {
 	var b strings.Builder
+	hasInterp := false
 	l.readChar() // consume opening "
 	for l.current != '"' && l.current != 0 {
 		if l.current == '\\' {
@@ -310,6 +317,10 @@ func (l *Lexer) readString() string {
 				b.WriteRune('\t')
 			case 'r':
 				b.WriteRune('\r')
+			case '{':
+				b.WriteRune('{')
+			case '}':
+				b.WriteRune('}')
 			case 'x', 'X':
 				l.readChar()
 				hex := ""
@@ -329,11 +340,14 @@ func (l *Lexer) readString() string {
 			l.readChar()
 			continue
 		}
+		if l.current == '{' {
+			hasInterp = true
+		}
 		b.WriteRune(l.current)
 		l.readChar()
 	}
 	l.readChar() // consume closing "
-	return b.String()
+	return b.String(), hasInterp
 }
 
 // skipWhitespace skips whitespace characters (except newlines)

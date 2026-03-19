@@ -2,6 +2,10 @@
 
 Complete guide to 2D physics in CyberBASIC2 using Box2D: worlds, bodies, shapes, joints, raycast, collision, and integration with the hybrid loop and GAME.* helpers.
 
+**Purpose:** Box2D for rigid bodies, joints, and collision in 2D.
+
+**When to use 2D physics vs manual movement:** Use 2D physics when you need realistic movement, gravity, bouncing, or constraints. Use manual movement when you want full control (e.g. simple top-down movement). See [2D Graphics Guide](2D_GRAPHICS_GUIDE.md).
+
 The shipped 2D backend is the authoritative Box2D path in this repo. You can query it at runtime with `Box2DBackendName()` and `Box2DBackendMode()`, which currently return `bytearena-box2d` and `authoritative`.
 
 ## Table of Contents
@@ -216,7 +220,7 @@ More examples: [examples/first_game.bas](../examples/first_game.bas), [templates
 
 ## See also
 
-- [API Reference](../API_REFERENCE.md) (section 14 – Box2D)
-- [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) – 2D physics, GAME.* helpers, collision callbacks
-- [2D Graphics Guide](2D_GRAPHICS_GUIDE.md) – Drawing primitives and textures
-- [Command Reference](COMMAND_REFERENCE.md) – Commands by feature
+- [2D Graphics Guide](2D_GRAPHICS_GUIDE.md)
+- [2D Game API](2D_GAME_API.md)
+- [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)
+- [Documentation Index](DOCUMENTATION_INDEX.md)

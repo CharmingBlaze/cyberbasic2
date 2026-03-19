@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"cyberbasic/compiler/bindings/model"
+	"cyberbasic/compiler/runtime/assets"
 	"cyberbasic/compiler/vm"
 )
 
@@ -14,6 +15,7 @@ const prefabObjectIDBase = 500000
 
 type prefabRuntime struct {
 	model    *model.Model
+	path     string // source path for asset cache UnloadModelForBuild
 	basePath string
 }
 
@@ -30,13 +32,13 @@ func registerPrefab(v *vm.VM) {
 		}
 		id := toInt(args[0])
 		path := toString(args[1])
-		m, err := model.Load(path)
+		m, err := assets.LoadModelForBuild(path)
 		if err != nil {
 			return nil, fmt.Errorf("LoadPrefab: %w", err)
 		}
 		basePath := filepath.Dir(path)
 		prefabsMu.Lock()
-		prefabs[id] = &prefabRuntime{model: m, basePath: basePath}
+		prefabs[id] = &prefabRuntime{model: m, path: path, basePath: basePath}
 		prefabsMu.Unlock()
 		return nil, nil
 	})
@@ -86,8 +88,12 @@ func registerPrefab(v *vm.VM) {
 		}
 		id := toInt(args[0])
 		prefabsMu.Lock()
+		pr := prefabs[id]
 		delete(prefabs, id)
 		prefabsMu.Unlock()
+		if pr != nil && pr.path != "" {
+			assets.UnloadModelForBuild(pr.path)
+		}
 		return nil, nil
 	})
 	v.RegisterForeign("PrefabExists", func(args []interface{}) (interface{}, error) {

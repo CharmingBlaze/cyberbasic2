@@ -1,6 +1,7 @@
 package bullet
 
 import (
+	"math"
 	"testing"
 
 	"cyberbasic/compiler/vm"
@@ -34,12 +35,13 @@ func TestBulletBackendMetadata(t *testing.T) {
 		t.Fatalf("unexpected native flag: %v", native)
 	}
 
-	joints, err := v.CallForeign("BulletFeatureAvailable", []interface{}{"joints"})
+	// BulletJointsAvailable: 1 = PointToPoint and Fixed joints supported
+	jointsAvail, err := v.CallForeign("BulletJointsAvailable", nil)
 	if err != nil {
-		t.Fatalf("BulletFeatureAvailable(joints) failed: %v", err)
+		t.Fatalf("BulletJointsAvailable failed: %v", err)
 	}
-	if joints != 0 {
-		t.Fatalf("expected joints to be unavailable, got %v", joints)
+	if jointsAvail != 1 {
+		t.Fatalf("expected BulletJointsAvailable 1 (PointToPoint/Fixed), got %v", jointsAvail)
 	}
 
 	sphere, err := v.CallForeign("BulletFeatureAvailable", []interface{}{"sphere"})
@@ -59,13 +61,9 @@ func TestBulletUnsupportedFeaturesReturnErrors(t *testing.T) {
 		"CreateHeightmap3D",
 		"CreateCompound3D",
 		"AddShapeToCompound3D",
-		"ApplyTorque3D",
-		"ApplyTorqueImpulse3D",
 		"CreateHingeJoint3D",
 		"CreateSliderJoint3D",
 		"CreateConeTwistJoint3D",
-		"CreatePointToPointJoint3D",
-		"CreateFixedJoint3D",
 		"SetJointLimits3D",
 		"SetJointMotor3D",
 	} {
@@ -106,5 +104,71 @@ func TestBulletSimpleBodyHelpers(t *testing.T) {
 	gotVel, ok := vel.([]interface{})
 	if !ok || len(gotVel) != 3 || gotVel[0] != 7.0 || gotVel[1] != 8.0 || gotVel[2] != 9.0 {
 		t.Fatalf("unexpected body velocity: %#v", vel)
+	}
+}
+
+func TestApplyTorqueImpulse3DChangesAngularVelocity(t *testing.T) {
+	v := vm.NewVM()
+	RegisterBullet(v)
+	if _, err := v.CallForeign("CreateWorld3D", []interface{}{"w", 0.0, -9.81, 0.0}); err != nil {
+		t.Fatalf("CreateWorld3D failed: %v", err)
+	}
+	if _, err := v.CallForeign("CreateBox3D", []interface{}{"w", "b", 0.0, 0.0, 0.0, 1.0, 1.0, 1.0, 1.0}); err != nil {
+		t.Fatalf("CreateBox3D failed: %v", err)
+	}
+	if _, err := v.CallForeign("ApplyTorqueImpulse3D", []interface{}{"w", "b", 1.0, 0.0, 0.0}); err != nil {
+		t.Fatalf("ApplyTorqueImpulse3D failed: %v", err)
+	}
+	avx, _ := v.CallForeign("GetAngularVelocityX3D", []interface{}{"w", "b"})
+	avy, _ := v.CallForeign("GetAngularVelocityY3D", []interface{}{"w", "b"})
+	avz, _ := v.CallForeign("GetAngularVelocityZ3D", []interface{}{"w", "b"})
+	if toF(avx) == 0 && toF(avy) == 0 && toF(avz) == 0 {
+		t.Fatalf("ApplyTorqueImpulse3D did not change angular velocity: got %v, %v, %v", avx, avy, avz)
+	}
+}
+
+func toF(v interface{}) float64 {
+	switch x := v.(type) {
+	case float64:
+		return x
+	case int:
+		return float64(x)
+	default:
+		return 0
+	}
+}
+
+func TestPointToPointJointKeepsBodiesConnected(t *testing.T) {
+	v := vm.NewVM()
+	RegisterBullet(v)
+	if _, err := v.CallForeign("CreateWorld3D", []interface{}{"w", 0.0, -9.81, 0.0}); err != nil {
+		t.Fatalf("CreateWorld3D failed: %v", err)
+	}
+	if _, err := v.CallForeign("CreateSphere3D", []interface{}{"w", "a", 0.0, 2.0, 0.0, 0.5, 1.0}); err != nil {
+		t.Fatalf("CreateSphere3D failed: %v", err)
+	}
+	if _, err := v.CallForeign("CreateSphere3D", []interface{}{"w", "b", 0.0, 4.0, 0.0, 0.5, 1.0}); err != nil {
+		t.Fatalf("CreateSphere3D failed: %v", err)
+	}
+	// PointToPoint at body centers (0,0,0) in local space for both
+	if _, err := v.CallForeign("CreatePointToPointJoint3D", []interface{}{"w", "j", "a", "b", 0.0, 0.0, 0.0, 0.0, 0.0, 0.0}); err != nil {
+		t.Fatalf("CreatePointToPointJoint3D failed: %v", err)
+	}
+	// Step a few times
+	for i := 0; i < 20; i++ {
+		if _, err := v.CallForeign("Step3D", []interface{}{"w", 0.016}); err != nil {
+			t.Fatalf("Step3D failed: %v", err)
+		}
+	}
+	ax, _ := v.CallForeign("GetPositionX3D", []interface{}{"w", "a"})
+	ay, _ := v.CallForeign("GetPositionY3D", []interface{}{"w", "a"})
+	az, _ := v.CallForeign("GetPositionZ3D", []interface{}{"w", "a"})
+	bx, _ := v.CallForeign("GetPositionX3D", []interface{}{"w", "b"})
+	by, _ := v.CallForeign("GetPositionY3D", []interface{}{"w", "b"})
+	bz, _ := v.CallForeign("GetPositionZ3D", []interface{}{"w", "b"})
+	dist := math.Sqrt(math.Pow(toF(bx)-toF(ax), 2) + math.Pow(toF(by)-toF(ay), 2) + math.Pow(toF(bz)-toF(az), 2))
+	// Joint constrains centers to coincide; distance should be near 0 (within solver tolerance)
+	if dist > 0.5 {
+		t.Fatalf("PointToPoint joint did not keep bodies connected: distance=%v (ax=%v ay=%v az=%v bx=%v by=%v bz=%v)", dist, ax, ay, az, bx, by, bz)
 	}
 }

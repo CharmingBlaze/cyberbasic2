@@ -2,6 +2,10 @@
 
 Complete guide to 3D graphics in CyberBASIC2 using the raylib API.
 
+**Purpose:** 3D rendering for FPS, third-person, and open worlds.
+
+**When to use 3D:** Use 3D when your game has depth, perspective, and a 3D camera. See [Level Loading](LEVEL_LOADING.md), [World, Water, Terrain](WORLD_WATER_TERRAIN.md), and [3D Physics Guide](3D_PHYSICS_GUIDE.md) for related systems.
+
 ## Table of Contents
 
 1. [Getting started](#getting-started)
@@ -11,8 +15,9 @@ Complete guide to 3D graphics in CyberBASIC2 using the raylib API.
 5. [3D game checklist](#3d-game-checklist)
 6. [Complete 3D game example](#complete-3d-game-example)
 7. [3D editor and level builder](#3d-editor-and-level-builder)
-8. [Full 3D command reference](#full-3d-command-reference)
-9. [See also](#see-also)
+8. [3D Performance](#3d-performance)
+9. [Full 3D command reference](#full-3d-command-reference)
+10. [See also](#see-also)
 
 ---
 
@@ -310,9 +315,9 @@ See [API_REFERENCE.md](../API_REFERENCE.md) (3D editor and level builder) for al
 
 ---
 
-## Optimization: Culling and PBR
+## 3D Performance
 
-### Frustum and distance culling
+### Culling
 
 **DrawObject** and **DrawLevel** skip objects outside the camera frustum or beyond the culling distance when enabled:
 
@@ -327,34 +332,51 @@ EnableFrustumCulling 1   ' Skip objects outside camera view
 
 2D culling: **Enable2DCulling**(1) skips sprites outside the 2D camera view + margin.
 
-### Shadow mapping
+### Shadows
 
-CyberBASIC2 now has a real first-pass shadow system aimed at being usable across low-, mid-, and higher-end machines without changing your scene setup.
+- **SetShadowQuality**("low"|"medium"|"mid"|"high") — hardware-oriented presets; use "low" on weak hardware. Sets cascade count (low=1, medium=3, high=4).
+- **SetShadowCascades**(count) — override cascade count (1, 3, or 4) for directional shadows.
+- **ShadowCascadeCount**() — return current cascade count.
+- **SetShadowMapSize**(width, height) — override resolution manually.
+- **SetShadowBias**(bias) — adjust acne/peter-panning tradeoffs.
+- **EnableShadows**() / **DisableShadows**() — toggle global shadow system.
+- **EnableShadows**(lightId) / **DisableShadows**(lightId) — mark a light as shadow caster. Works for directional (type 1), spot (type 2), and point (type 0) lights.
 
-- global shadows start enabled by default
-- `EnableShadows()` / `DisableShadows()` toggle the global shadow system.
-- `EnableShadows(lightId)` / `DisableShadows(lightId)` mark a specific DBP light as the preferred shadow caster.
-- `SetShadowQuality("low"|"medium"|"mid"|"high")` applies hardware-oriented presets.
-- `SetShadowMapSize(width, height)` overrides the preset resolution manually.
-- `SetShadowBias(bias)` adjusts acne/peter-panning tradeoffs.
+### Preload strategy
 
-Supported now:
+Load levels, models, and textures at startup (e.g. in OnStart or before mainloop). Avoid loading heavy assets mid-frame. See [Asset Pipeline](ASSET_PIPELINE.md).
 
-- one active shadow-casting **directional** light in the main pass
-- one shadow map
-- low/mid/high quality scaling for weaker to stronger hardware
+### Physics stability
 
-Current limitations:
+Clamp delta time for physics to avoid instability on frame spikes:
 
-- point-light and spot-light shadows are still future work
-- cascaded shadow maps are not implemented yet
-- the current implementation is designed around the unified renderer path and DBP object drawing
+```basic
+VAR dt = GetFrameTime()
+IF dt > 0.05 THEN LET dt = 0.016
+Step3D("w", dt)
+```
 
-Recommended usage tiers:
+### LOD (Level of Detail)
 
-- Simple: create a directional light and let the default global shadow path work automatically
-- Standard: add `SetShadowQuality("medium")` or `SetShadowQuality("high")`
-- Advanced: call `EnableShadows(lightId)` on the directional light you want to cast shadows, then fine-tune `SetShadowMapSize` and `SetShadowBias`
+- **SetTerrainLOD**(terrainId, lodLevel) — reduce terrain detail at distance.
+- **TreeSystemSetLOD**(systemId, near, mid, far) — LOD distances for trees.
+- **TreeSystemEnableInstancing**(systemId, on) — enable instancing for trees.
+- **GrassSetLOD**(grassId, dist) — LOD distance for grass.
+- **GrassEnableInstancing**(grassId, on) — enable instancing for grass.
+
+### FPS monitoring
+
+- **GetFPS**() — current frames per second.
+- **ShowFPS**(x, y) — draw FPS at screen position.
+- **GAME.ShowDebug**() or **ShowDebug**(extraText) — draw FPS (and optional second line) for quick debugging.
+
+### Performance checklist
+
+- [ ] Enable culling (SetCullingDistance, EnableFrustumCulling)
+- [ ] Set shadow quality (SetShadowQuality "low" or "medium" on weak hardware)
+- [ ] Preload assets at startup
+- [ ] Clamp physics dt (e.g. max 0.05)
+- [ ] Use LOD for terrain, trees, grass when available
 
 ### PBR (Physically Based Rendering)
 
@@ -383,8 +405,8 @@ All 3D-relevant commands in one place. See [API_REFERENCE.md](../API_REFERENCE.m
 
 ## See also
 
-- [API Reference](../API_REFERENCE.md) — full list of 3D and camera functions
-- [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) — 3D physics, GAME.CameraOrbit, GAME.MoveWASD
-- [3D Physics Guide](3D_PHYSICS_GUIDE.md) — Bullet worlds, bodies, forces
-- [Command Reference](COMMAND_REFERENCE.md) — commands by feature
-- [examples/README.md](../examples/README.md) — 3D examples (see [templates/3d_game.bas](../templates/3d_game.bas))
+- [3D Physics Guide](3D_PHYSICS_GUIDE.md)
+- [Level Loading](LEVEL_LOADING.md)
+- [World, Water, Terrain](WORLD_WATER_TERRAIN.md)
+- [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)
+- [Documentation Index](DOCUMENTATION_INDEX.md)

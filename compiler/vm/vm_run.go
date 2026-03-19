@@ -1175,6 +1175,46 @@ func (vm *VM) executeInstruction(instruction byte) error {
 			return fmt.Errorf("stack underflow for Len")
 		}
 		vm.push(len(valueToString(vm.pop())))
+	case OpStrSlice:
+		if len(vm.stack) < 3 {
+			return fmt.Errorf("stack underflow for StrSlice")
+		}
+		endVal := vm.pop()
+		startVal := vm.pop()
+		s := valueToString(vm.pop())
+		start := 0
+		if startVal != nil {
+			start = valueToInt(startVal)
+		}
+		end := len(s)
+		if endVal != nil {
+			end = valueToInt(endVal)
+		}
+		if start < 0 {
+			start = 0
+		}
+		if end > len(s) {
+			end = len(s)
+		}
+		if start >= len(s) || start >= end {
+			vm.push("")
+		} else {
+			vm.push(s[start:end])
+		}
+	case OpStrSliceFrom:
+		if len(vm.stack) < 2 {
+			return fmt.Errorf("stack underflow for StrSliceFrom")
+		}
+		start := valueToInt(vm.pop())
+		s := valueToString(vm.pop())
+		if start < 0 {
+			start = 0
+		}
+		if start >= len(s) {
+			vm.push("")
+		} else {
+			vm.push(s[start:])
+		}
 	case OpEOF:
 		if len(vm.stack) == 0 {
 			return fmt.Errorf("stack underflow for EOF")
@@ -1330,6 +1370,63 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		}
 		vm.stack[varIndex] = arr
 
+	case OpResizeArray:
+		if vm.ip+2 >= len(vm.chunk.Code) {
+			return fmt.Errorf("unexpected end of code for OpResizeArray")
+		}
+		nDims := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		varIndex := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		if nDims < 1 || nDims > 8 {
+			return fmt.Errorf("invalid OpResizeArray nDims: %d", nDims)
+		}
+		dims := make([]int, nDims)
+		size := 1
+		for i := nDims - 1; i >= 0; i-- {
+			if len(vm.stack) == 0 {
+				return fmt.Errorf("stack underflow for OpResizeArray dim %d", i)
+			}
+			dims[i] = valueToInt(vm.pop())
+			if dims[i] < 0 {
+				dims[i] = 0
+			}
+			size *= dims[i]
+		}
+		arr := make([]Value, size)
+		for i := range arr {
+			arr[i] = 0
+		}
+		for varIndex >= len(vm.stack) {
+			vm.stack = append(vm.stack, nil)
+		}
+		vm.stack[varIndex] = arr
+		for name, idx := range vm.chunk.Variables {
+			if idx == varIndex {
+				vm.chunk.SetVarDims(name, dims)
+				break
+			}
+		}
+
+	case OpAppendArray:
+		if vm.ip >= len(vm.chunk.Code) {
+			return fmt.Errorf("unexpected end of code for OpAppendArray")
+		}
+		varIndex := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		if len(vm.stack) == 0 {
+			return fmt.Errorf("stack underflow for OpAppendArray value")
+		}
+		value := vm.pop()
+		for varIndex >= len(vm.stack) {
+			vm.stack = append(vm.stack, nil)
+		}
+		arr, ok := vm.stack[varIndex].([]Value)
+		if !ok {
+			return fmt.Errorf("OpAppendArray: variable %d is not an array", varIndex)
+		}
+		vm.stack[varIndex] = append(arr, value)
+
 	case OpLoadArray:
 		if vm.ip >= len(vm.chunk.Code) {
 			return fmt.Errorf("unexpected end of code for OpLoadArray")
@@ -1352,6 +1449,9 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		arr, ok := vm.stack[varIndex].([]Value)
 		if !ok {
 			return fmt.Errorf("OpLoadArray: slot %d is not an array", varIndex)
+		}
+		if len(dims) == 0 {
+			dims = []int{len(arr)}
 		}
 		idx := 0
 		stride := 1
@@ -1390,6 +1490,9 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		arr, ok := vm.stack[varIndex].([]Value)
 		if !ok {
 			return fmt.Errorf("OpStoreArray: slot %d is not an array", varIndex)
+		}
+		if dims == nil || len(dims) == 0 {
+			dims = []int{len(arr)}
 		}
 		// Stack is [..., value, index0, index1, ...] with index1 on top; pop indices first, then value
 		idx := 0

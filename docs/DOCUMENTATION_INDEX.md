@@ -8,6 +8,7 @@ Complete guide to all CyberBASIC2 documentation.
 
 ## Entry Points
 
+- **[Concepts (2D vs 3D vs physics)](CONCEPTS.md)** – One-page overview for new users
 - **[Quick Start Guide](QUICK_START_GUIDE.md)** – Get running in 5 minutes (DBP-style or manual loop)
 - **[Getting Started](GETTING_STARTED.md)** – Installation, building, running your first program
 - **[Learning Path](LEARNING_PATH.md)** – Complete structured curriculum from beginner to advanced
@@ -155,6 +156,11 @@ Complete guide to all CyberBASIC2 documentation.
 | **Look up a function** | [API Reference](../API_REFERENCE.md) |
 | **Look up DBP-style commands** | [Core Command Reference](CORE_COMMAND_REFERENCE.md) → [2D Game API](2D_GAME_API.md) / [3D Game API](3D_GAME_API.md) |
 | **Use zero-boilerplate (OnStart/OnUpdate/OnDraw)** | [DBP Parity](DBP_PARITY.md) → [examples/first_game.bas](../examples/first_game.bas) |
+| **Add water to my 3D scene** | [World, Water, Terrain](WORLD_WATER_TERRAIN.md#1-water-commands-simple-to-advanced) |
+| **Add terrain (heightmap, procedural)** | [World, Water, Terrain](WORLD_WATER_TERRAIN.md#2-terrain-commands-simple-to-advanced) |
+| **Load a 3D level (GLTF/OBJ)** | [Level Loading](LEVEL_LOADING.md) |
+| **Build a full 3D world (level + water + terrain + sky)** | [3D Graphics Guide](3D_GRAPHICS_GUIDE.md) → [World, Water, Terrain](WORLD_WATER_TERRAIN.md) → [Level Loading](LEVEL_LOADING.md) |
+| **Optimize 3D performance** | [3D Graphics Guide](3D_GRAPHICS_GUIDE.md#optimization-culling-and-pbr) |
 
 **Current shipped feature set:** CyberBASIC2 supports **full 2D** and **full 3D** graphics, **authoritative 2D physics** (Box2D), a **Bullet-shaped 3D physics API backed by the shipped pure-Go fallback**, **full ECS** (entity-component system), **GUI** (BeginUI, Label, Button, Slider, Checkbox, etc.), and **multiplayer** (TCP Connect/Send/Receive, Host/Accept). See the guides above for the exact current scope of each area.
 

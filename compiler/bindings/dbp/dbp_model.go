@@ -7,15 +7,18 @@ import (
 	"sync"
 
 	"cyberbasic/compiler/bindings/model"
+	"cyberbasic/compiler/runtime/resources"
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
 
 // BuildResult holds the result of building a model into runtime resources.
+// TexturePaths are the paths passed to the texture cache (for UnloadLevel to release refs).
 type BuildResult struct {
-	ObjectIDs   []int
-	TextureIDs  []int
-	MaterialIDs []int
-	LightIDs    []int
+	ObjectIDs    []int
+	TextureIDs   []int
+	TexturePaths []string // paths loaded via resources cache; empty for spawns that do not own refs
+	MaterialIDs  []int
+	LightIDs     []int
 }
 
 // nextTexID, nextMatID for level-scoped resources
@@ -73,7 +76,7 @@ func buildModelInternal(m *model.Model, objectIDBase int, basePath string, withH
 	lightBase := levelLightCounter
 	levelBuildMu.Unlock()
 
-	// Load textures - use default on failure or empty path
+	// Load textures via resource cache when path is set; use default on failure or empty path
 	for i, tex := range m.Textures {
 		t := getDefaultTexture()
 		if tex.Path != "" {
@@ -81,9 +84,12 @@ func buildModelInternal(m *model.Model, objectIDBase int, basePath string, withH
 			if !filepath.IsAbs(path) && basePath != "" {
 				path = filepath.Join(basePath, path)
 			}
-			loaded := rl.LoadTexture(path)
-			if loaded.ID != 0 {
-				t = loaded
+			if _, err := resources.LoadTexture(path); err == nil {
+				cached := resources.GetTexture(path)
+				if cached.ID != 0 {
+					t = cached
+					res.TexturePaths = append(res.TexturePaths, path)
+				}
 			}
 		}
 		tid := objectIDBase + 10000 + i
@@ -285,22 +291,30 @@ func buildModelInternal(m *model.Model, objectIDBase int, basePath string, withH
 	}
 
 	// Create lights
+	lightsMu.Lock()
 	for i, light := range m.Lights {
-		lightsMu.Lock()
 		lid := objectIDBase + 30000 + lightBase + i
 		if lid <= 0 {
 			lid = 1
 		}
-		lights[lid] = &dbpLight{
+		dl := &dbpLight{
 			lightType: light.Type,
 			x:         light.X, y: light.Y, z: light.Z,
 			r: light.R, g: light.G, b: light.B,
 			intensity: light.Intensity,
 			range_:    light.Range,
 		}
-		lightsMu.Unlock()
+		dl.pitch, dl.yaw, dl.roll = dirToEuler(light.DirX, light.DirY, light.DirZ)
+		if light.Type == 2 {
+			dl.angle = light.OuterCone
+			if dl.angle <= 0 {
+				dl.angle = 45
+			}
+		}
+		lights[lid] = dl
 		res.LightIDs = append(res.LightIDs, lid)
 	}
+	lightsMu.Unlock()
 	if len(m.Lights) > 0 {
 		syncRendererShadowLights()
 	}

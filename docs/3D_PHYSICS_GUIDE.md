@@ -2,7 +2,16 @@
 
 Complete guide to 3D physics in CyberBASIC2 using the Bullet-shaped 3D physics API: worlds, gravity, rigid bodies, shapes, position/rotation, velocity and forces, raycast, and integration with the hybrid loop and GAME.* helpers.
 
-Today, the shipped 3D backend is a pure-Go fallback rather than native Bullet. You can query it at runtime with `BulletBackendName()`, `BulletBackendMode()`, `BulletNativeAvailable()`, `BulletJointsAvailable()`, and `BulletFeatureAvailable(feature$)`, which currently report `purego-fallback`, `fallback`, `0`, `0`, and per-feature support flags.
+**Purpose:** Bullet-style 3D physics for characters, projectiles, and simple collision.
+
+**When to use 3D physics:** Use 3D physics when you need gravity, collision, or raycasting in a 3D world. See [3D Graphics Guide](3D_GRAPHICS_GUIDE.md).
+
+Today, the shipped 3D backend is a pure-Go fallback rather than native Bullet. You can query it at runtime with `BulletBackendName()`, `BulletBackendMode()`, `BulletNativeAvailable()`, `BulletJointsAvailable()`, and `BulletFeatureAvailable(feature$)`, which currently report `purego-fallback`, `fallback`, `0`, `1` (PointToPoint/Fixed joints), and per-feature support flags.
+
+**What's supported today (shipped build, no CGO)**
+
+- **Supported:** CreateWorld3D, SetWorldGravity3D, Step3D, CreateBox3D, CreateSphere3D, CreateCapsule3D, CreateCylinder3D, CreateCone3D; GetPositionX/Y/Z3D, SetPosition3D, SetVelocity3D, ApplyForce3D, ApplyImpulse3D, **ApplyTorque3D**, **ApplyTorqueImpulse3D**; body properties (SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, SetCCD3D, etc.); **CreatePointToPointJoint3D**, **CreateFixedJoint3D**; **CreateStaticMesh3D** (loads OBJ, uses AABB collision); RayCastFromDir3D / RayCast3D and RayHit*; DestroyBody3D, DestroyWorld3D. Good for characters, projectiles, simple collisions, and basic constraints.
+- **Not in fallback:** CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, SetJointLimits3D, SetJointMotor3D, CreateHeightmap3D, CreateCompound3D, AddShapeToCompound3D, and exact triangle-mesh narrow-phase collision. Call **BulletFeatureAvailable()** or **BulletNativeAvailable()** before using these; see [ROADMAP_IMPLEMENTATION.md](ROADMAP_IMPLEMENTATION.md) for the full gap list.
 
 ## Table of Contents
 
@@ -87,7 +96,7 @@ Treat the current 3D backend as:
 - **CreateBox3D**(worldId, bodyId, x, y, z, halfWidth, halfHeight, halfDepth, mass) — box (half-extents). mass 0 = static.
 - **CreateSphere3D**(worldId, bodyId, x, y, z, radius, mass) — sphere.
 - **CreateCapsule3D**, **CreateCylinder3D**, **CreateCone3D** — capsule, cylinder, cone (legacy names; see API Reference). In the pure-Go runtime, capsules are still approximated for collision/raycast math, but the requested capsule height is now preserved in the body's bounds instead of being ignored.
-- **CreateStaticMesh3D** currently creates a simple static placeholder body, not true triangle-mesh collision.
+- **CreateStaticMesh3D**(worldId, bodyId, meshPath$) loads an OBJ file from meshPath and creates a static body with AABB collision. If the mesh fails to load, a 1×1×1 box placeholder is used.
 - **CreateHeightmap3D**, **CreateCompound3D**, **AddShapeToCompound3D** are unsupported in the current fallback and now return explicit errors instead of silently succeeding.
 - **SetScale3D** scales fallback bounds; it is not a substitute for native compound or mesh collision.
 
@@ -220,7 +229,7 @@ More examples: [templates/3d_game.bas](../templates/3d_game.bas), [examples/READ
 
 ## See also
 
-- [API Reference](../API_REFERENCE.md) (section 15 – Bullet)
-- [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) – 3D physics, GAME.CameraOrbit, GAME.MoveWASD
-- [3D Graphics Guide](3D_GRAPHICS_GUIDE.md) – Cameras, models, lighting
-- [Command Reference](COMMAND_REFERENCE.md) – Commands by feature
+- [3D Graphics Guide](3D_GRAPHICS_GUIDE.md)
+- [Level Loading](LEVEL_LOADING.md)
+- [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)
+- [Documentation Index](DOCUMENTATION_INDEX.md)

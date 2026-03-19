@@ -19,7 +19,7 @@ For the complete list of all bindings and source files, see [API Reference](../A
 | **GetTime**() | Seconds since window init (float) |
 | **WaitSeconds**(seconds) | Yield current fiber for N seconds (non-blocking; other fibers run) |
 | **WindowShouldClose**() | True when user requested close |
-| **mainloop** … **endmain** | Game loop block (preferred); equivalent to `WHILE NOT WindowShouldClose()...WEND` with frame wrap. Call **SYNC** at end of body. |
+| **mainloop** … **endmain** / **gameloop** … **endloop** | Game loop block (preferred); equivalent to `WHILE NOT WindowShouldClose()...WEND` with frame wrap. Call **SYNC** at end of body. |
 | **DisableCursor**() | Hide and confine mouse |
 | **EnableCursor**() | Show mouse cursor |
 
@@ -549,7 +549,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **DestroyBody3D**(worldId, bodyId) **DeleteBody3D**(bodyId) | Remove body (DeleteBody3D uses default world) |
 | **CheckCollision3D**(bodyIdA, bodyIdB) | → true if AABBs overlap |
 | **SetFriction3D** **SetRestitution3D** **SetDamping3D** **SetKinematic3D** **SetGravity3D** **SetLinearFactor3D** **SetAngularFactor3D** **SetCCD3D** | Body properties (implemented) |
-*Use flat names (CreateWorld3D, Step3D, CreateBox3D, RayCastFromDir3D, etc.). Legacy `BULLET.*` is rewritten at compile time. The shipped 3D backend currently reports `BulletBackendName() = "purego-fallback"` and `BulletBackendMode() = "fallback"`. Use `BulletFeatureAvailable(name)` for per-feature gating. Unsupported 3D constraint joints and other missing fallback features now return explicit errors instead of silently succeeding.* |
+*Use flat names (CreateWorld3D, Step3D, CreateBox3D, RayCastFromDir3D, etc.). Legacy `BULLET.*` is rewritten at compile time. The shipped 3D backend currently reports `BulletBackendName() = "purego-fallback"` and `BulletBackendMode() = "fallback"`. **Joints, mesh colliders, and terrain are not in the fallback** — use `BulletFeatureAvailable("joints")` or see [3D Physics Guide](3D_PHYSICS_GUIDE.md) and [ROADMAP_IMPLEMENTATION.md](ROADMAP_IMPLEMENTATION.md). Unsupported features return explicit errors.* |
 
 ---
 
@@ -699,9 +699,11 @@ State is stored for use with custom shaders; raylib has no built-in lighting.
 | **SetLightColor**(lightId, r, g, b) | Set light color (0–255) |
 | **SetLightIntensity**(lightId, amount) | Set intensity |
 | **SetLightDirection**(lightId, x, y, z) | Direction vector |
-| **EnableShadows**() / **DisableShadows**() | Toggle the global directional shadow system (enabled by default) |
-| **EnableShadows**(lightId) / **DisableShadows**(lightId) | Mark a DBP light as the preferred shadow caster |
+| **EnableShadows**() / **DisableShadows**() | Toggle the global shadow system (enabled by default) |
+| **EnableShadows**(lightId) / **DisableShadows**(lightId) | Mark a DBP light as shadow caster (directional, spot, or point) |
 | **SetShadowQuality**(name) | Apply `low`, `medium`/`mid`, or `high` shadow preset |
+| **SetShadowCascades**(count) | Override cascade count (1, 3, or 4) for directional shadows |
+| **ShadowCascadeCount**() | Return current cascade count |
 | **SetShadowMapSize**(width, height) | Override shadow map resolution |
 | **SetShadowBias**(bias) | Tune shadow compare bias |
 

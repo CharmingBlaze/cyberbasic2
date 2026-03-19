@@ -231,6 +231,9 @@ func (p *Parser) primary() (Node, error) {
 		return &Number{Value: p.advance().Value}, nil
 	case lexer.TokenString:
 		return &StringLiteral{Value: p.advance().Value}, nil
+	case lexer.TokenInterpolatedString:
+		t := p.advance()
+		return p.parseInterpolatedString(t.Value, t.Line, t.Col)
 	case lexer.TokenTrue:
 		p.advance()
 		return &Boolean{Value: true}, nil
@@ -278,16 +281,22 @@ func (p *Parser) primary() (Node, error) {
 		if err != nil {
 			return nil, err
 		}
-		// Optional JSON index sugar: id["key"] or id["key"]["key2"] ...
+		// Optional index/slice: id["key"] (JSON), id[1:5] or id[i] (string/array slice)
 		for p.match(lexer.TokenLeftBracket) {
-			if !p.match(lexer.TokenString) {
-				return nil, &Error{Message: "expected string key in [ ] for JSON index", Line: p.line(), Col: p.col()}
+			if p.match(lexer.TokenString) {
+				key := p.previous().Value
+				if !p.match(lexer.TokenRightBracket) {
+					return nil, &Error{Message: "expected ']' after JSON key", Line: p.line(), Col: p.col()}
+				}
+				left = &JSONIndexAccess{Object: left, Key: key}
+			} else {
+				// Slice: [expr], [expr:], [:expr], [expr:expr], [:]
+				slice, err := p.parseSliceBrackets(left)
+				if err != nil {
+					return nil, err
+				}
+				left = slice
 			}
-			key := p.previous().Value
-			if !p.match(lexer.TokenRightBracket) {
-				return nil, &Error{Message: "expected ']' after JSON key", Line: p.line(), Col: p.col()}
-			}
-			left = &JSONIndexAccess{Object: left, Key: key}
 		}
 		// MemberAccess followed by ( is a call (e.g. RL.InitWindow(...))
 		if ma, ok := left.(*MemberAccess); ok && p.match(lexer.TokenLeftParen) {
@@ -343,16 +352,143 @@ func (p *Parser) primary() (Node, error) {
 	return nil, &Error{Message: "unexpected token", Line: p.line(), Col: p.col()}
 }
 
-// parseMemberAccessChain parses optional . member . member ... after a primary expression.
+// parseMemberAccessChain parses optional . member and [ index/slice ] after a primary expression.
 func (p *Parser) parseMemberAccessChain(left Node) (Node, error) {
-	for p.match(lexer.TokenDot) {
-		if !p.match(lexer.TokenIdentifier) {
-			return nil, &Error{Message: "expected identifier after '.'", Line: p.line(), Col: p.col()}
+	for {
+		if p.match(lexer.TokenDot) {
+			if !p.match(lexer.TokenIdentifier) {
+				return nil, &Error{Message: "expected identifier after '.'", Line: p.line(), Col: p.col()}
+			}
+			member := p.previous().Value
+			left = &MemberAccess{Object: left, Member: member}
+		} else if p.match(lexer.TokenLeftBracket) {
+			if p.match(lexer.TokenString) {
+				key := p.previous().Value
+				if !p.match(lexer.TokenRightBracket) {
+					return nil, &Error{Message: "expected ']' after JSON key", Line: p.line(), Col: p.col()}
+				}
+				left = &JSONIndexAccess{Object: left, Key: key}
+			} else {
+				slice, err := p.parseSliceBrackets(left)
+				if err != nil {
+					return nil, err
+				}
+				left = slice
+			}
+		} else {
+			break
 		}
-		member := p.previous().Value
-		left = &MemberAccess{Object: left, Member: member}
 	}
 	return left, nil
+}
+
+// parseSliceBrackets parses [expr], [expr,expr,...], [expr:], [:expr], [expr:expr], [:] - caller has consumed [.
+func (p *Parser) parseSliceBrackets(obj Node) (Node, error) {
+	line, col := p.line(), p.col()
+	var start, end Node
+	var indices []Node
+	hasColon := false
+	if !p.check(lexer.TokenColon) {
+		expr, err := p.expression()
+		if err != nil {
+			return nil, err
+		}
+		start = expr
+	}
+	if p.match(lexer.TokenComma) {
+		// Multi-dim array: [i, j, k]
+		indices = []Node{start}
+		for {
+			expr, err := p.expression()
+			if err != nil {
+				return nil, err
+			}
+			indices = append(indices, expr)
+			if !p.match(lexer.TokenComma) {
+				break
+			}
+		}
+		if !p.match(lexer.TokenRightBracket) {
+			return nil, &Error{Message: "expected ']' to close index", Line: p.line(), Col: p.col()}
+		}
+		return &SliceExpr{Object: obj, Indices: indices, Line: line, Col: col}, nil
+	}
+	if p.match(lexer.TokenColon) {
+		hasColon = true
+		if !p.check(lexer.TokenRightBracket) {
+			var err error
+			end, err = p.expression()
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	if !p.match(lexer.TokenRightBracket) {
+		return nil, &Error{Message: "expected ']' to close slice", Line: p.line(), Col: p.col()}
+	}
+	return &SliceExpr{Object: obj, Start: start, End: end, HasColon: hasColon, Line: line, Col: col}, nil
+}
+
+// parseInterpolatedString parses "Hello {name}!" into InterpolatedString with parts.
+func (p *Parser) parseInterpolatedString(s string, line, col int) (Node, error) {
+	var parts []Node
+	i := 0
+	for i < len(s) {
+		j := 0
+		for i < len(s) && s[i] != '{' {
+			j++
+			i++
+		}
+		if j > 0 {
+			parts = append(parts, &StringLiteral{Value: s[i-j : i]})
+		}
+		if i >= len(s) {
+			break
+		}
+		i++ // skip {
+		start := i
+		depth := 1
+		for i < len(s) && depth > 0 {
+			if s[i] == '{' {
+				depth++
+			} else if s[i] == '}' {
+				depth--
+				if depth == 0 {
+					break
+				}
+			}
+			i++
+		}
+		if depth != 0 {
+			return nil, &Error{Message: "unclosed '{' in interpolated string", Line: line, Col: col}
+		}
+		exprStr := s[start:i]
+		i++ // skip }
+		if exprStr == "" {
+			parts = append(parts, &StringLiteral{Value: "{}"})
+		} else {
+			subLex := lexer.New(exprStr)
+			subTokens, err := subLex.Tokenize()
+			if err != nil {
+				return nil, &Error{Message: "invalid expression in interpolation: " + err.Error(), Line: line, Col: col}
+			}
+			subParser := New(subTokens)
+			expr, err := subParser.expression()
+			if err != nil {
+				return nil, &Error{Message: "invalid expression in interpolation: " + err.Error(), Line: line, Col: col}
+			}
+			parts = append(parts, expr)
+		}
+	}
+	if len(parts) == 0 {
+		return &StringLiteral{Value: ""}, nil
+	}
+	if len(parts) == 1 {
+		if sl, ok := parts[0].(*StringLiteral); ok {
+			return sl, nil
+		}
+	}
+	return &InterpolatedString{Parts: parts, Line: line, Col: col}, nil
 }
 
 // memberAccessToQualifiedName returns "obj.member" or "a.b.c" for Call name (lowercase).

@@ -66,6 +66,7 @@ After building, the compiler is the binary you produced:
 
 | Goal | Where to go |
 |------|-------------|
+| **Understand 2D vs 3D vs physics** | [Concepts](CONCEPTS.md) |
 | **Syntax at a glance** | [Quick Reference](QUICK_REFERENCE.md) |
 | **Full language rules** | [Language Spec](../LANGUAGE_SPEC.md) |
 | **All docs** | [Documentation Index](DOCUMENTATION_INDEX.md) |

@@ -57,7 +57,7 @@ PRINT x
 | IF          | IF ... THEN  | ENDIF or END IF  |
 | FOR         | FOR x = a TO b [STEP s] | NEXT   |
 | WHILE       | WHILE cond   | WEND             |
-| MAINLOOP    | mainloop     | endmain          |
+| MAINLOOP / GAMELOOP | mainloop / gameloop | endmain / endloop |
 | REPEAT      | REPEAT       | UNTIL cond       |
 | SELECT CASE | SELECT CASE expr | ENDSELECT    |
 | FUNCTION    | FUNCTION name(params) | ENDFUNCTION or END FUNCTION |

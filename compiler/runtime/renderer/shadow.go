@@ -19,11 +19,14 @@ type ShadowLight struct {
 	Position  rl.Vector3
 	Direction rl.Vector3
 	Range     float32
+	Angle     float32 // cone angle in degrees (for spot lights)
 	Shadows   bool
 }
 
 const (
+	shadowLightPoint       = 0
 	shadowLightDirectional = 1
+	shadowLightSpot        = 2
 	shadowDarkness         = float32(0.55)
 )
 
@@ -100,11 +103,12 @@ void main() {
 `
 
 var (
-	shadowMapWidth  int32   = 1024
-	shadowMapHeight int32   = 1024
-	shadowBias      float32 = 0.005
-	shadowQuality   string  = "medium"
-	shadowMu        sync.RWMutex
+	shadowMapWidth     int32   = 1024
+	shadowMapHeight    int32   = 1024
+	shadowBias         float32 = 0.005
+	shadowQuality      string  = "medium"
+	shadowCascadeCount int     = 1
+	shadowMu           sync.RWMutex
 
 	shadowLights      []ShadowLight
 	activeShadowLight ShadowLight
@@ -182,27 +186,53 @@ func ensureShadowShadersLocked() {
 
 func pickActiveShadowLightLocked() bool {
 	activeLightValid = false
-	var fallback *ShadowLight
+	var dirFallback, spotFallback, pointFallback *ShadowLight
 	for i := range shadowLights {
 		light := shadowLights[i]
-		if light.Type != shadowLightDirectional {
+		if !light.Shadows {
 			continue
 		}
-		if fallback == nil {
-			copyLight := light
-			fallback = &copyLight
-		}
-		if light.Shadows {
+		switch light.Type {
+		case shadowLightDirectional:
+			if dirFallback == nil {
+				copyLight := light
+				dirFallback = &copyLight
+			}
 			activeShadowLight = light
 			activeShadowLight.Direction = normalizeShadowDirection(activeShadowLight.Direction)
 			activeLightValid = true
 			return true
+		case shadowLightSpot:
+			if spotFallback == nil {
+				copyLight := light
+				spotFallback = &copyLight
+			}
+		case shadowLightPoint:
+			if pointFallback == nil {
+				copyLight := light
+				pointFallback = &copyLight
+			}
 		}
 	}
-	if fallback != nil {
-		activeShadowLight = *fallback
+	if dirFallback != nil {
+		activeShadowLight = *dirFallback
 		activeShadowLight.Direction = normalizeShadowDirection(activeShadowLight.Direction)
 		activeLightValid = true
+		return true
+	}
+	if spotFallback != nil {
+		activeShadowLight = *spotFallback
+		activeShadowLight.Direction = normalizeShadowDirection(activeShadowLight.Direction)
+		if activeShadowLight.Angle <= 0 {
+			activeShadowLight.Angle = 45
+		}
+		activeLightValid = true
+		return true
+	}
+	if pointFallback != nil {
+		activeShadowLight = *pointFallback
+		activeLightValid = true
+		return true
 	}
 	return activeLightValid
 }
@@ -247,6 +277,75 @@ func computeLightViewProjection(lightCam rl.Camera3D) rl.Matrix {
 	halfWidth := halfHeight * aspect
 	proj := rl.MatrixOrtho(-halfWidth, halfWidth, -halfHeight, halfHeight, 0.1, halfHeight*8)
 	return rl.MatrixMultiply(proj, view)
+}
+
+func buildSpotShadowCamera(light ShadowLight, sceneCam rl.Camera3D) rl.Camera3D {
+	dir := normalizeShadowDirection(light.Direction)
+	target := rl.Vector3Add(light.Position, rl.Vector3Scale(dir, light.Range))
+	if light.Range < 1 {
+		target = rl.Vector3Add(light.Position, rl.Vector3Scale(dir, 10))
+	}
+	up := rl.Vector3{X: 0, Y: 1, Z: 0}
+	if math.Abs(float64(rl.Vector3DotProduct(dir, up))) > 0.98 {
+		up = rl.Vector3{X: 0, Y: 0, Z: 1}
+	}
+	fov := light.Angle * 2
+	if fov < 10 {
+		fov = 45
+	}
+	if fov > 170 {
+		fov = 170
+	}
+	return rl.Camera3D{
+		Position:   light.Position,
+		Target:     target,
+		Up:         up,
+		Fovy:       fov,
+		Projection: rl.CameraPerspective,
+	}
+}
+
+func computeSpotLightViewProjection(lightCam rl.Camera3D) rl.Matrix {
+	view := rl.MatrixLookAt(lightCam.Position, lightCam.Target, lightCam.Up)
+	aspect := float32(1)
+	if shadowMapHeight > 0 {
+		aspect = float32(shadowMapWidth) / float32(shadowMapHeight)
+		if aspect <= 0 {
+			aspect = 1
+		}
+	}
+	near, far := float32(0.1), float32(500)
+	if lightCam.Fovy > 0 {
+		far = 500
+	}
+	proj := rl.MatrixPerspective(lightCam.Fovy, aspect, near, far)
+	return rl.MatrixMultiply(proj, view)
+}
+
+func buildPointShadowCamera(light ShadowLight, sceneCam rl.Camera3D) rl.Camera3D {
+	target := sceneCam.Target
+	if rl.Vector3Length(rl.Vector3Subtract(sceneCam.Target, sceneCam.Position)) <= 1e-6 {
+		target = rl.Vector3{X: 0, Y: 0, Z: 0}
+	}
+	dir := rl.Vector3Normalize(rl.Vector3Subtract(target, light.Position))
+	if rl.Vector3Length(dir) <= 1e-6 {
+		dir = rl.Vector3{X: 0, Y: -1, Z: 0}
+	}
+	target = rl.Vector3Add(light.Position, rl.Vector3Scale(dir, light.Range))
+	if light.Range < 1 {
+		target = rl.Vector3Add(light.Position, rl.Vector3Scale(dir, 20))
+	}
+	up := rl.Vector3{X: 0, Y: 1, Z: 0}
+	if math.Abs(float64(rl.Vector3DotProduct(dir, up))) > 0.98 {
+		up = rl.Vector3{X: 0, Y: 0, Z: 1}
+	}
+	return rl.Camera3D{
+		Position:   light.Position,
+		Target:     target,
+		Up:         up,
+		Fovy:       90,
+		Projection: rl.CameraPerspective,
+	}
 }
 
 func applyShadowMainUniformsLocked() {
@@ -304,20 +403,44 @@ func SetShadowQuality(name string) {
 		shadowQuality = "low"
 		shadowMapWidth, shadowMapHeight = 512, 512
 		shadowBias = 0.008
+		shadowCascadeCount = 1
 	case "mid", "medium", "":
 		shadowQuality = "medium"
 		shadowMapWidth, shadowMapHeight = 1024, 1024
 		shadowBias = 0.005
+		shadowCascadeCount = 3
 	case "high":
 		shadowQuality = "high"
 		shadowMapWidth, shadowMapHeight = 2048, 2048
 		shadowBias = 0.0035
+		shadowCascadeCount = 4
 	default:
 		shadowQuality = quality
 		shadowMapWidth, shadowMapHeight = 1024, 1024
 		shadowBias = 0.005
+		shadowCascadeCount = 3
 	}
 	shadowMu.Unlock()
+}
+
+// SetShadowCascadeCount overrides cascade count for directional shadows (1, 3, or 4).
+func SetShadowCascadeCount(count int) {
+	shadowMu.Lock()
+	if count < 1 {
+		count = 1
+	}
+	if count > 4 {
+		count = 4
+	}
+	shadowCascadeCount = count
+	shadowMu.Unlock()
+}
+
+// ShadowCascadeCount returns the current cascade count.
+func ShadowCascadeCount() int {
+	shadowMu.RLock()
+	defer shadowMu.RUnlock()
+	return shadowCascadeCount
 }
 
 // ShadowQuality returns the current quality preset label.
@@ -376,8 +499,20 @@ func RenderShadowPass() {
 		return
 	}
 	sceneCam := raylib.GetCamera3D()
-	lightCam = buildShadowCamera(activeShadowLight, sceneCam)
-	lightViewProj = computeLightViewProjection(lightCam)
+	switch activeShadowLight.Type {
+	case shadowLightDirectional:
+		lightCam = buildShadowCamera(activeShadowLight, sceneCam)
+		lightViewProj = computeLightViewProjection(lightCam)
+	case shadowLightSpot:
+		lightCam = buildSpotShadowCamera(activeShadowLight, sceneCam)
+		lightViewProj = computeSpotLightViewProjection(lightCam)
+	case shadowLightPoint:
+		lightCam = buildPointShadowCamera(activeShadowLight, sceneCam)
+		lightViewProj = computeSpotLightViewProjection(lightCam)
+	default:
+		lightCam = buildShadowCamera(activeShadowLight, sceneCam)
+		lightViewProj = computeLightViewProjection(lightCam)
+	}
 	shadowPassActive = true
 	shadowMu.Unlock()
 

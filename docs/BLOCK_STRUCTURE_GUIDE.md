@@ -17,7 +17,7 @@ CyberBASIC supports both single-word and two-word END forms where noted.
 - **ENDSUB** — ends a `SUB` block
 - **ENDIF** — ends an `IF` block
 - **WEND** — ends a `WHILE` block (no `END WHILE` variant)
-- **ENDMAIN** — ends a `mainloop` block
+- **ENDMAIN** / **ENDLOOP** — ends a `mainloop` or `gameloop` block
 - **ENDTYPE** — ends a `TYPE` block
 - **ENDMODULE** — ends a `MODULE` block
 - **ENDSELECT** — ends a `SELECT CASE` block
@@ -36,6 +36,23 @@ CyberBASIC supports both single-word and two-word END forms where noted.
 
 - **NEXT** — ends a `FOR` loop (not an END keyword)
 - **UNTIL** — ends a `REPEAT` loop
+
+### Game Loop (mainloop / gameloop)
+
+The game loop has two equivalent forms:
+
+- **mainloop** … **endmain** — traditional form
+- **gameloop** … **endloop** — alternative (clearer for game code)
+
+Both compile identically. Use `SYNC` at the end of the loop body to end each frame. Example:
+
+```basic
+gameloop
+  ClearBackground(30, 30, 50, 255)
+  DrawText("Hello", 10, 10, 20, 255, 255, 255, 255)
+  SYNC
+endloop
+```
 
 ## Control Flow: IF, ELSEIF, ELSE, END IF
 

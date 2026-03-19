@@ -54,7 +54,7 @@ CyberBASIC 2 integrates **full** implementations of industry-standard libraries.
 
 - **raylib** — Full 2D/3D graphics, textures, shaders, fonts, audio, input. Window management, cameras, render textures, blend modes.
 - **Box2D** — Complete 2D physics: worlds, bodies, shapes, joints, raycast, collision callbacks, layer filtering.
-- **Bullet Physics** — Full 3D physics: rigid bodies, collision shapes, raycast, terrain, buoyancy hooks.
+- **Bullet-style 3D physics** — Rigid bodies, raycast, and forces are fully supported in the shipped build. Joints and mesh/terrain require the optional native Bullet backend; see [3D Physics Guide](docs/3D_PHYSICS_GUIDE.md).
 
 ### What You Can Build
 
@@ -91,6 +91,18 @@ go build -o cyberbasic .
 ./cyberbasic examples/first_game.bas
 ```
 
+For more control (manual loop, custom update/draw), see [Rendering and the game loop](docs/RENDERING_AND_GAME_LOOP.md).
+
+### Examples
+
+| Example | Description | Command |
+|---------|-------------|---------|
+| [hello_world.bas](examples/hello_world.bas) | Minimal: prints to console | `./cyberbasic examples/hello_world.bas` |
+| [first_game.bas](examples/first_game.bas) | 3D cube + orbit camera | `./cyberbasic examples/first_game.bas` |
+| [platformer.bas](examples/platformer.bas) | 2D platformer: WASD, jump | `./cyberbasic examples/platformer.bas` |
+| [ui_demo.bas](examples/ui_demo.bas) | Immediate-mode UI: Label, Button | `./cyberbasic examples/ui_demo.bas` |
+| [input_debug.bas](examples/input_debug.bas) | Keyboard, mouse, gamepad | `./cyberbasic examples/input_debug.bas` |
+
 **Repository:** [github.com/CharmingBlaze/cyberbasic2](https://github.com/CharmingBlaze/cyberbasic2) — **Downloads:** [GitHub Releases](https://github.com/CharmingBlaze/cyberbasic2/releases) (Windows, macOS, Linux).
 
 ---
@@ -119,7 +131,7 @@ CyberBASIC is **bytecode-compiled** and **single-process**: source is parsed and
 | **2D engine** | Raylib + custom | Layers, parallax, tilemaps, sprites (animation, batching), particle emitters, texture atlas |
 | **3D** | Raylib | Models, meshes, materials, animation, raycasting, full camera control |
 | **2D physics** | Box2D | Worlds, bodies, shapes, joints, raycast, collision callbacks, gravity |
-| **3D physics** | Bullet | Worlds, rigid bodies, collision shapes, raycast, terrain, buoyancy |
+| **3D physics** | Bullet-style fallback | Worlds, rigid bodies, raycast, forces (full); joints/mesh/terrain optional — see [3D Physics Guide](docs/3D_PHYSICS_GUIDE.md) |
 | **Multiplayer** | TCP (net) | Host, Accept, Connect, Send, Receive; event callbacks |
 | **GUI** | raygui | Label, Button, Slider, Checkbox, TextBox, ProgressBar, WindowBox |
 | **ECS** | ecs | Entity-component system: world, entities, components, queries |

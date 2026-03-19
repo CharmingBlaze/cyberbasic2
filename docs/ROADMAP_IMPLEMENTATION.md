@@ -50,9 +50,9 @@ These are real limitations. Each has a clear work item for contributors.
 
 | Gap | Current State | Action for Contributors |
 |-----|---------------|-------------------------|
-| Point-light shadows | Not implemented | Add point-light shadow pass in `compiler/runtime/renderer/shadow.go`; follow directional pattern |
-| Spot-light shadows | Not implemented | Add spot-light shadow pass; cone frustum math |
-| Cascaded shadow maps | Not implemented | Replace single split with cascaded splits in shadow pass; see `RenderShadowPass` |
+| Point-light shadows | **Done** | Single perspective frustum aimed at scene center |
+| Spot-light shadows | **Done** | Perspective frustum per spot light |
+| Cascaded shadow maps | **Done** (API) | SetShadowCascades, ShadowCascadeCount; SetShadowQuality sets cascade count (low=1, medium=3, high=4) |
 
 **File:** `compiler/runtime/renderer/shadow.go`, `compiler/bindings/dbp/dbp_lighting.go`
 
@@ -60,18 +60,18 @@ These are real limitations. Each has a clear work item for contributors.
 
 | Gap | Current State | Action for Contributors |
 |-----|---------------|-------------------------|
-| GLTF KHR_lights_punctual | Not wired | Parse light nodes in `compiler/bindings/model/gltf.go`; create MakeLight/PositionLight in level loader |
+| GLTF KHR_lights_punctual | **Done** | Parse lights and node extensions in `compiler/bindings/model/gltf.go`; lights appear in LoadLevel via BuildModel |
 
-**File:** `compiler/bindings/model/gltf.go` (TODO: parse light nodes), `compiler/bindings/dbp/dbp_level.go`
+**File:** `compiler/bindings/model/gltf.go`, `compiler/bindings/dbp/dbp_model.go`
 
 ### Asset Cache
 
 | Gap | Current State | Action for Contributors |
 |-----|---------------|-------------------------|
-| LoadLevel cache | Bypasses parsed-model cache | Route `LoadLevel` through `assets.LoadModelForBuild` in dbp_level.go |
-| LoadLevelWithHierarchy cache | Same | Same as LoadLevel |
-| LoadPrefab cache | Not cache-backed | Route through assets cache; add refcount on prefab load |
-| Texture reuse in BuildModel | Per-build upload | Use `resources` texture cache in `BuildModel`; key by path |
+| LoadLevel cache | **Done** | Routed through `assets.LoadModelForBuild`; `UnloadLevel` calls `UnloadModelForBuild` |
+| LoadLevelWithHierarchy cache | **Done** | Same as LoadLevel |
+| LoadPrefab cache | **Done** | `LoadPrefab` uses `assets.LoadModelForBuild`; `DeletePrefab` calls `UnloadModelForBuild` |
+| Texture reuse in BuildModel | **Done** | `BuildModel` uses `resources.LoadTexture`/`GetTexture`; levels track `texturePaths` and call `UnloadTexture` on unload |
 
 **Files:** `compiler/bindings/dbp/dbp_level.go`, `compiler/bindings/dbp/dbp_prefab.go`, `compiler/bindings/dbp/dbp_model.go`, `compiler/runtime/assets/assets.go`, `compiler/runtime/resources/manager.go`
 
@@ -80,8 +80,10 @@ These are real limitations. Each has a clear work item for contributors.
 | Gap | Current State | Action for Contributors |
 |-----|---------------|-------------------------|
 | Native Bullet backend | Not in checkout | Optional CGO build; wire bullet C lib; see `BulletNativeAvailable()` |
-| 3D constraint joints | Stubbed; return error | Implement CreateHingeJoint3D, CreateSliderJoint3D in pure-Go or native |
-| CreateStaticMesh3D | Placeholder body | Implement triangle-mesh collision in pure-Go fallback |
+| ApplyTorque3D, ApplyTorqueImpulse3D | **Done** | Implemented in pure-Go fallback |
+| PointToPoint, Fixed joints | **Done** | Implemented in pure-Go fallback; `BulletJointsAvailable()` returns 1 |
+| CreateStaticMesh3D | **Done** (AABB) | Loads OBJ, uses AABB for broad phase; exact triangle narrow-phase deferred |
+| Hinge, Slider, ConeTwist joints | Stubbed; return error | Implement CreateHingeJoint3D, CreateSliderJoint3D in pure-Go or native |
 | Capsule/swept queries | Approximated | Improve overlap and spherecast math in `compiler/bindings/bullet` |
 
 **Files:** `compiler/bindings/bullet/bullet.go`, `compiler/bindings/bullet/*.go`

@@ -154,7 +154,7 @@ func (p *Parser) mainloopStatement() (Node, error) {
 	}
 
 	if !p.match(lexer.TokenEndMain) {
-		return nil, &Error{Message: "expected ENDMAIN", Line: p.line(), Col: p.col()}
+		return nil, &Error{Message: "expected ENDMAIN or ENDLOOP", Line: p.line(), Col: p.col()}
 	}
 
 	return &MainLoopStatement{
@@ -688,6 +688,53 @@ func (p *Parser) dimStatement() (Node, error) {
 	return &DimStatement{Variables: variables}, nil
 }
 
+// redimStatement parses REDIM a(n) or REDIM a(n, m)
+func (p *Parser) redimStatement() (Node, error) {
+	p.advance() // Skip REDIM
+	if !p.match(lexer.TokenIdentifier) {
+		return nil, &Error{Message: "expected variable name after REDIM", Line: p.line(), Col: p.col()}
+	}
+	name := p.previous().Value
+	if !p.match(lexer.TokenLeftParen) {
+		return nil, &Error{Message: "expected '(' after variable in REDIM", Line: p.line(), Col: p.col()}
+	}
+	var dims []Node
+	for !p.check(lexer.TokenRightParen) {
+		d, err := p.expression()
+		if err != nil {
+			return nil, err
+		}
+		dims = append(dims, d)
+		if !p.match(lexer.TokenComma) {
+			break
+		}
+	}
+	if !p.match(lexer.TokenRightParen) {
+		return nil, &Error{Message: "expected ')' after REDIM dimensions", Line: p.line(), Col: p.col()}
+	}
+	if len(dims) == 0 {
+		return nil, &Error{Message: "REDIM requires at least one dimension", Line: p.line(), Col: p.col()}
+	}
+	return &RedimStatement{Variable: name, Dimensions: dims}, nil
+}
+
+// appendStatement parses APPEND a, value
+func (p *Parser) appendStatement() (Node, error) {
+	p.advance() // Skip APPEND
+	if !p.match(lexer.TokenIdentifier) {
+		return nil, &Error{Message: "expected variable name after APPEND", Line: p.line(), Col: p.col()}
+	}
+	name := p.previous().Value
+	if !p.match(lexer.TokenComma) {
+		return nil, &Error{Message: "expected ',' after variable in APPEND", Line: p.line(), Col: p.col()}
+	}
+	val, err := p.expression()
+	if err != nil {
+		return nil, err
+	}
+	return &AppendStatement{Variable: name, Value: val}, nil
+}
+
 // printStatement parses PRINT statement
 func (p *Parser) printStatement() (Node, error) {
 	p.advance() // Skip PRINT
@@ -898,6 +945,33 @@ func (p *Parser) assignmentOrCall() (Node, error) {
 		}
 		return &Assignment{Variable: name, Value: value, Line: p.line(), Col: p.col()}, nil
 	}
+	if p.match(lexer.TokenLeftBracket) {
+		// Array assignment: arr[i,j] = value
+		slice, err := p.parseSliceBrackets(&Identifier{Name: name, Line: p.line(), Col: p.col()})
+		if err != nil {
+			return nil, err
+		}
+		se, ok := slice.(*SliceExpr)
+		if !ok {
+			return nil, &Error{Message: "expected array index", Line: p.line(), Col: p.col()}
+		}
+		var indices []Node
+		if se.Indices != nil {
+			indices = se.Indices
+		} else if se.Start != nil && !se.HasColon {
+			indices = []Node{se.Start}
+		} else {
+			return nil, &Error{Message: "cannot assign to slice; use index [i] or [i,j]", Line: p.line(), Col: p.col()}
+		}
+		if !p.match(lexer.TokenAssign) {
+			return nil, &Error{Message: "expected '=' for array assignment", Line: p.line(), Col: p.col()}
+		}
+		value, err := p.expression()
+		if err != nil {
+			return nil, err
+		}
+		return &Assignment{Variable: name, Indices: indices, Value: value, Line: p.line(), Col: p.col()}, nil
+	}
 	if p.match(lexer.TokenLeftParen) {
 		var arguments []Node
 		for !p.check(lexer.TokenRightParen) {
@@ -1081,7 +1155,7 @@ func (p *Parser) exitLoopStatement() (Node, error) {
 	if p.match(lexer.TokenMainLoop) {
 		return &ExitLoopStatement{Kind: "MAINLOOP"}, nil
 	}
-	return nil, &Error{Message: "expected FOR, WHILE, or MAINLOOP after EXIT/BREAK", Line: p.line(), Col: p.col()}
+	return nil, &Error{Message: "expected FOR, WHILE, MAINLOOP, or GAMELOOP after EXIT/BREAK", Line: p.line(), Col: p.col()}
 }
 
 // continueLoopStatement parses CONTINUE FOR, CONTINUE WHILE, or CONTINUE MAINLOOP.
@@ -1096,7 +1170,7 @@ func (p *Parser) continueLoopStatement() (Node, error) {
 	if p.match(lexer.TokenMainLoop) {
 		return &ContinueLoopStatement{Kind: "MAINLOOP"}, nil
 	}
-	return nil, &Error{Message: "expected FOR, WHILE, or MAINLOOP after CONTINUE", Line: p.line(), Col: p.col()}
+	return nil, &Error{Message: "expected FOR, WHILE, MAINLOOP, or GAMELOOP after CONTINUE", Line: p.line(), Col: p.col()}
 }
 
 // assertStatement parses ASSERT condition [, message].

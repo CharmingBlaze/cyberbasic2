@@ -4,9 +4,12 @@
 package bullet
 
 import (
+	"bufio"
 	"cyberbasic/compiler/vm"
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
@@ -51,6 +54,8 @@ func toInt(v interface{}) int {
 
 type vec3 struct{ x, y, z float64 }
 
+type triangle struct{ v0, v1, v2 vec3 }
+
 type collisionHit struct {
 	otherId string
 	normal  vec3
@@ -62,6 +67,7 @@ type body struct {
 	velocity        vec3
 	rotation        vec3 // Euler angles
 	angularVelocity vec3
+	pendingTorque   vec3 // accumulated per frame; applied in integrateBody
 	scale           vec3    // scale factors (default 1,1,1)
 	halfExt         vec3    // half extents for box/cylinder
 	radius          float64 // for sphere (0 = box/cylinder)
@@ -78,15 +84,43 @@ type body struct {
 	linearFactor   vec3
 	angularFactor  vec3
 	ccd            bool
+	// mesh collider (static only)
+	meshTriangles []triangle
+	meshAABBMin   vec3 // local space
+	meshAABBMax   vec3 // local space
 }
 
 func bodyUsesCapsuleBounds(b *body) bool {
 	return b != nil && b.radius > 0 && (b.halfExt.x > b.radius || b.halfExt.y > b.radius || b.halfExt.z > b.radius)
 }
 
+func bodyIsMesh(b *body) bool {
+	return b != nil && len(b.meshTriangles) > 0
+}
+
+// bodyBoxParams returns (center, halfExt) for box or mesh bodies. For sphere, halfExt is radius (caller must use sphere overlap).
+func bodyBoxParams(b *body) (cx, cy, cz, hx, hy, hz float64) {
+	if bodyIsMesh(b) {
+		cx = b.position.x + (b.meshAABBMin.x+b.meshAABBMax.x)/2
+		cy = b.position.y + (b.meshAABBMin.y+b.meshAABBMax.y)/2
+		cz = b.position.z + (b.meshAABBMin.z+b.meshAABBMax.z)/2
+		hx = (b.meshAABBMax.x - b.meshAABBMin.x) / 2
+		hy = (b.meshAABBMax.y - b.meshAABBMin.y) / 2
+		hz = (b.meshAABBMax.z - b.meshAABBMin.z) / 2
+		return
+	}
+	cx, cy, cz = b.position.x, b.position.y, b.position.z
+	hx, hy, hz = b.halfExt.x, b.halfExt.y, b.halfExt.z
+	return
+}
+
 func bodyAABB(b *body) (min, max vec3) {
 	if b == nil {
 		return vec3{}, vec3{}
+	}
+	if bodyIsMesh(b) {
+		return vec3{b.position.x + b.meshAABBMin.x, b.position.y + b.meshAABBMin.y, b.position.z + b.meshAABBMin.z},
+			vec3{b.position.x + b.meshAABBMax.x, b.position.y + b.meshAABBMax.y, b.position.z + b.meshAABBMax.z}
 	}
 	if bodyUsesCapsuleBounds(b) || b.radius == 0 {
 		return vec3{b.position.x - b.halfExt.x, b.position.y - b.halfExt.y, b.position.z - b.halfExt.z},
@@ -96,9 +130,100 @@ func bodyAABB(b *body) (min, max vec3) {
 		vec3{b.position.x + b.radius, b.position.y + b.radius, b.position.z + b.radius}
 }
 
+// loadOBJForCollision parses a minimal OBJ (v and f lines) and returns triangles plus AABB in local space.
+func loadOBJForCollision(path string) (tris []triangle, minV, maxV vec3, err error) {
+	path = filepath.Clean(path)
+	f, err := os.Open(path)
+	if err != nil {
+		return nil, vec3{}, vec3{}, err
+	}
+	defer f.Close()
+	var verts []vec3
+	sc := bufio.NewScanner(f)
+	for sc.Scan() {
+		line := strings.TrimSpace(sc.Text())
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		parts := strings.Fields(line)
+		if len(parts) < 4 {
+			continue
+		}
+		if parts[0] == "v" {
+			x, _ := strconv.ParseFloat(parts[1], 64)
+			y, _ := strconv.ParseFloat(parts[2], 64)
+			z, _ := strconv.ParseFloat(parts[3], 64)
+			verts = append(verts, vec3{x, y, z})
+			continue
+		}
+		if parts[0] == "f" {
+			indices := make([]int, 0, len(parts)-1)
+			for i := 1; i < len(parts); i++ {
+				s := parts[i]
+				if idx := strings.Index(s, "/"); idx >= 0 {
+					s = s[:idx]
+				}
+				v, e := strconv.ParseInt(s, 10, 64)
+				if e != nil {
+					continue
+				}
+				idx := int(v) - 1
+				if idx < 0 {
+					idx += len(verts) + 1
+				}
+				indices = append(indices, idx)
+			}
+			for i := 2; i < len(indices); i++ {
+				i0, i1, i2 := indices[0], indices[i-1], indices[i]
+				if i0 >= 0 && i0 < len(verts) && i1 >= 0 && i1 < len(verts) && i2 >= 0 && i2 < len(verts) {
+					tris = append(tris, triangle{verts[i0], verts[i1], verts[i2]})
+				}
+			}
+		}
+	}
+	if err = sc.Err(); err != nil {
+		return nil, vec3{}, vec3{}, err
+	}
+	if len(verts) == 0 {
+		return nil, vec3{}, vec3{}, fmt.Errorf("obj has no vertices")
+	}
+	minV = verts[0]
+	maxV = verts[0]
+	for _, v := range verts {
+		if v.x < minV.x {
+			minV.x = v.x
+		}
+		if v.y < minV.y {
+			minV.y = v.y
+		}
+		if v.z < minV.z {
+			minV.z = v.z
+		}
+		if v.x > maxV.x {
+			maxV.x = v.x
+		}
+		if v.y > maxV.y {
+			maxV.y = v.y
+		}
+		if v.z > maxV.z {
+			maxV.z = v.z
+		}
+	}
+	return tris, minV, maxV, nil
+}
+
+type joint struct {
+	kind    string // "point_to_point" | "fixed"
+	bodyA   string
+	bodyB   string
+	anchorA vec3 // in body A local space
+	anchorB vec3 // in body B local space
+}
+
 type world struct {
 	gravity vec3
 	bodies  map[string]*body
+	joints  map[string]*joint
 	mu      sync.RWMutex
 }
 
@@ -119,14 +244,42 @@ var (
 
 func bulletFeatureAvailable(name string) bool {
 	switch strings.ToLower(strings.TrimSpace(name)) {
-	case "sphere", "box", "capsule", "cylinder", "cone", "raycast", "body_properties", "ccd", "kinematic":
+	case "sphere", "box", "capsule", "cylinder", "cone", "raycast", "body_properties", "ccd", "kinematic", "torque", "torque_impulse":
 		return true
-	case "native", "native_backend", "joints", "hinge_joint", "slider_joint", "cone_twist_joint", "point_to_point_joint", "fixed_joint",
-		"joint_limits", "joint_motor", "heightmap", "compound", "compound_shapes", "torque", "torque_impulse", "mesh_collider", "exact_mesh_collision":
+	case "point_to_point_joint", "fixed_joint":
+		return true
+	case "mesh_collider":
+		return true
+	case "native", "native_backend", "joints", "hinge_joint", "slider_joint", "cone_twist_joint",
+		"joint_limits", "joint_motor", "heightmap", "compound", "compound_shapes", "exact_mesh_collision":
 		return false
 	default:
 		return false
 	}
+}
+
+// bodyInertia returns approximate moment of inertia for torque. Sphere: (2/5)*m*r^2; box: m*(hx^2+hy^2+hz^2)/12. Default 1 if unknown.
+func bodyInertia(b *body) float64 {
+	if b == nil || b.mass <= 0 {
+		return 1
+	}
+	if b.radius > 0 && (b.halfExt.x <= b.radius && b.halfExt.y <= b.radius && b.halfExt.z <= b.radius) {
+		return b.mass * b.radius * b.radius * 0.4 // sphere: (2/5)*m*r^2
+	}
+	hx, hy, hz := b.halfExt.x*2, b.halfExt.y*2, b.halfExt.z*2
+	return b.mass * (hx*hx + hy*hy + hz*hz) / 12
+}
+
+// eulerRotate applies Euler XYZ rotation to a local-space vector.
+func eulerRotate(v vec3, euler vec3) vec3 {
+	cx, sx := math.Cos(euler.x), math.Sin(euler.x)
+	cy, sy := math.Cos(euler.y), math.Sin(euler.y)
+	cz, sz := math.Cos(euler.z), math.Sin(euler.z)
+	// R = Rz * Ry * Rx
+	x := v.x*cy*cz + v.y*(cx*sz+sx*sy*cz) + v.z*(-sx*sz+cx*sy*cz)
+	y := v.x*(-cy*sz) + v.y*(cx*cz-sx*sy*sz) + v.z*(sx*cz+cx*sy*sz)
+	z := v.x*sy + v.y*(-sx*cy) + v.z*(cx*cy)
+	return vec3{x, y, z}
 }
 
 func unsupportedBulletFeatureError(feature string) error {
@@ -144,11 +297,15 @@ func getOrCreateWorld(id string, gx, gy, gz float64) *world {
 	defer worldMu.Unlock()
 	if w, ok := worlds[id]; ok {
 		w.gravity = vec3{gx, gy, gz}
+		if w.joints == nil {
+			w.joints = make(map[string]*joint)
+		}
 		return w
 	}
 	w := &world{
 		gravity: vec3{gx, gy, gz},
 		bodies:  make(map[string]*body),
+		joints:  make(map[string]*joint),
 	}
 	worlds[id] = w
 	return w
@@ -329,6 +486,7 @@ func registerFlat3D(v *vm.VM) {
 			}
 			integrateBody(b, w.gravity, dt)
 		}
+		solveJoints(w, dt)
 		for pass := 0; pass < 3; pass++ {
 			resolveCollisions(w)
 		}
@@ -358,6 +516,7 @@ func registerFlat3D(v *vm.VM) {
 				}
 				integrateBody(b, w.gravity, dt)
 			}
+			solveJoints(w, dt)
 			resolveCollisions(w)
 			w.mu.Unlock()
 		}
@@ -444,12 +603,12 @@ func registerFlat3D(v *vm.VM) {
 		}
 		wid := toString(args[0])
 		bid := toString(args[1])
+		meshName := toString(args[2])
 		w := getWorld(wid)
 		if w == nil {
 			w = getOrCreateWorld(wid, 0, -9.81, 0)
 		}
-		w.mu.Lock()
-		w.bodies[bid] = &body{
+		b := &body{
 			id:       bid,
 			position: vec3{0, 0, 0},
 			halfExt:  vec3{1, 1, 1},
@@ -457,6 +616,17 @@ func registerFlat3D(v *vm.VM) {
 			active:   true,
 			scale:    vec3{1, 1, 1},
 		}
+		if meshName != "" {
+			tris, minV, maxV, err := loadOBJForCollision(meshName)
+			if err == nil && len(tris) > 0 {
+				b.meshTriangles = tris
+				b.meshAABBMin = minV
+				b.meshAABBMax = maxV
+				b.halfExt = vec3{(maxV.x - minV.x) / 2, (maxV.y - minV.y) / 2, (maxV.z - minV.z) / 2}
+			}
+		}
+		w.mu.Lock()
+		w.bodies[bid] = b
 		w.mu.Unlock()
 		return nil, nil
 	})
@@ -693,10 +863,31 @@ func registerFlat3D(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterForeign("ApplyTorque3D", func(args []interface{}) (interface{}, error) {
-		return nil, unsupportedBulletFeatureError("ApplyTorque3D")
+		if len(args) < 5 {
+			return nil, fmt.Errorf("ApplyTorque3D requires (worldId, bodyId, tx, ty, tz)")
+		}
+		b := getBody(getWorld(toString(args[0])), toString(args[1]))
+		if b == nil {
+			return nil, nil
+		}
+		b.pendingTorque.x += toFloat64(args[2])
+		b.pendingTorque.y += toFloat64(args[3])
+		b.pendingTorque.z += toFloat64(args[4])
+		return nil, nil
 	})
 	v.RegisterForeign("ApplyTorqueImpulse3D", func(args []interface{}) (interface{}, error) {
-		return nil, unsupportedBulletFeatureError("ApplyTorqueImpulse3D")
+		if len(args) < 5 {
+			return nil, fmt.Errorf("ApplyTorqueImpulse3D requires (worldId, bodyId, ix, iy, iz)")
+		}
+		b := getBody(getWorld(toString(args[0])), toString(args[1]))
+		if b == nil {
+			return nil, nil
+		}
+		I := bodyInertia(b)
+		b.angularVelocity.x += toFloat64(args[2]) / I
+		b.angularVelocity.y += toFloat64(args[3]) / I
+		b.angularVelocity.z += toFloat64(args[4]) / I
+		return nil, nil
 	})
 
 	// Body properties (implemented; used in Step and resolveCollisions)
@@ -811,9 +1002,9 @@ func registerFlat3D(v *vm.VM) {
 		return nil, nil
 	})
 
-	// BulletJointsAvailable: 0 = pure-Go (no joints), 1 = CGO Bullet (joints supported)
+	// BulletJointsAvailable: 0 = pure-Go (no joints), 1 = joints supported (PointToPoint, Fixed)
 	v.RegisterForeign("BulletJointsAvailable", func(args []interface{}) (interface{}, error) {
-		return 0, nil
+		return 1, nil
 	})
 	// 3D joints: clearly gated in the shipped fallback backend.
 	v.RegisterForeign("CreateHingeJoint3D", func(args []interface{}) (interface{}, error) {
@@ -826,10 +1017,58 @@ func registerFlat3D(v *vm.VM) {
 		return nil, unsupportedBulletFeatureError("CreateConeTwistJoint3D")
 	})
 	v.RegisterForeign("CreatePointToPointJoint3D", func(args []interface{}) (interface{}, error) {
-		return nil, unsupportedBulletFeatureError("CreatePointToPointJoint3D")
+		if len(args) < 10 {
+			return nil, fmt.Errorf("CreatePointToPointJoint3D requires (worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz)")
+		}
+		w := getWorld(toString(args[0]))
+		if w == nil {
+			return nil, fmt.Errorf("world not found")
+		}
+		jid := toString(args[1])
+		ba, bb := toString(args[2]), toString(args[3])
+		if getBody(w, ba) == nil || getBody(w, bb) == nil {
+			return nil, fmt.Errorf("body not found")
+		}
+		w.mu.Lock()
+		if w.joints == nil {
+			w.joints = make(map[string]*joint)
+		}
+		w.joints[jid] = &joint{
+			kind:    "point_to_point",
+			bodyA:   ba,
+			bodyB:   bb,
+			anchorA: vec3{toFloat64(args[4]), toFloat64(args[5]), toFloat64(args[6])},
+			anchorB: vec3{toFloat64(args[7]), toFloat64(args[8]), toFloat64(args[9])},
+		}
+		w.mu.Unlock()
+		return nil, nil
 	})
 	v.RegisterForeign("CreateFixedJoint3D", func(args []interface{}) (interface{}, error) {
-		return nil, unsupportedBulletFeatureError("CreateFixedJoint3D")
+		if len(args) < 5 {
+			return nil, fmt.Errorf("CreateFixedJoint3D requires (worldId, jointId, bodyA, bodyB)")
+		}
+		w := getWorld(toString(args[0]))
+		if w == nil {
+			return nil, fmt.Errorf("world not found")
+		}
+		jid := toString(args[1])
+		ba, bb := toString(args[2]), toString(args[3])
+		if getBody(w, ba) == nil || getBody(w, bb) == nil {
+			return nil, fmt.Errorf("body not found")
+		}
+		w.mu.Lock()
+		if w.joints == nil {
+			w.joints = make(map[string]*joint)
+		}
+		w.joints[jid] = &joint{
+			kind:    "fixed",
+			bodyA:   ba,
+			bodyB:   bb,
+			anchorA: vec3{},
+			anchorB: vec3{},
+		}
+		w.mu.Unlock()
+		return nil, nil
 	})
 	v.RegisterForeign("SetJointLimits3D", func(args []interface{}) (interface{}, error) {
 		return nil, unsupportedBulletFeatureError("SetJointLimits3D")
@@ -1238,6 +1477,19 @@ func integrateBody(b *body, gravity vec3, dt float64) {
 		b.velocity.y *= damp
 		b.velocity.z *= damp
 	}
+	// Apply pending torque and integrate angular velocity into rotation
+	I := bodyInertia(b)
+	af := b.angularFactor
+	if af.x == 0 && af.y == 0 && af.z == 0 {
+		af = vec3{1, 1, 1}
+	}
+	b.angularVelocity.x += b.pendingTorque.x / I * dt
+	b.angularVelocity.y += b.pendingTorque.y / I * dt
+	b.angularVelocity.z += b.pendingTorque.z / I * dt
+	b.pendingTorque = vec3{}
+	b.rotation.x += b.angularVelocity.x * af.x * dt
+	b.rotation.y += b.angularVelocity.y * af.y * dt
+	b.rotation.z += b.angularVelocity.z * af.z * dt
 	if b.angularDamping > 0 {
 		damp := 1.0 - b.angularDamping*dt
 		if damp < 0 {
@@ -1247,6 +1499,87 @@ func integrateBody(b *body, gravity vec3, dt float64) {
 		b.angularVelocity.y *= damp
 		b.angularVelocity.z *= damp
 	}
+}
+
+// solveJoints runs position-based constraint correction for PointToPoint and Fixed joints. Call with w.mu held.
+func solveJoints(w *world, dt float64) {
+	if w == nil || w.joints == nil {
+		return
+	}
+	const iterations = 4
+	const correctionFactor = 0.4
+	for iter := 0; iter < iterations; iter++ {
+		for _, j := range w.joints {
+			a, b := w.bodies[j.bodyA], w.bodies[j.bodyB]
+			if a == nil || b == nil || !a.active || !b.active {
+				continue
+			}
+			worldA := vec3{
+				a.position.x + eulerRotate(j.anchorA, a.rotation).x,
+				a.position.y + eulerRotate(j.anchorA, a.rotation).y,
+				a.position.z + eulerRotate(j.anchorA, a.rotation).z,
+			}
+			worldB := vec3{
+				b.position.x + eulerRotate(j.anchorB, b.rotation).x,
+				b.position.y + eulerRotate(j.anchorB, b.rotation).y,
+				b.position.z + eulerRotate(j.anchorB, b.rotation).z,
+			}
+			errX := worldA.x - worldB.x
+			errY := worldA.y - worldB.y
+			errZ := worldA.z - worldB.z
+			dist := math.Sqrt(errX*errX + errY*errY + errZ*errZ)
+			if dist < 1e-6 {
+				continue
+			}
+			invDist := 1.0 / dist
+			nx, ny, nz := errX*invDist, errY*invDist, errZ*invDist
+			ma, mb := a.mass, b.mass
+			if ma <= 0 {
+				ma = 1
+			}
+			if mb <= 0 {
+				mb = 1
+			}
+			total := ma + mb
+			wa, wb := mb/total, ma/total
+			if a.kinematic {
+				wa, wb = 0, 1
+			}
+			if b.kinematic {
+				wa, wb = 1, 0
+			}
+			if a.kinematic && b.kinematic {
+				continue
+			}
+			corr := dist * correctionFactor
+			if !a.kinematic {
+				a.position.x -= nx * corr * wa
+				a.position.y -= ny * corr * wa
+				a.position.z -= nz * corr * wa
+			}
+			if !b.kinematic {
+				b.position.x += nx * corr * wb
+				b.position.y += ny * corr * wb
+				b.position.z += nz * corr * wb
+			}
+			if j.kind == "fixed" {
+				b.rotation = a.rotation
+				b.angularVelocity = a.angularVelocity
+			}
+		}
+	}
+}
+
+func bodiesAreJoined(w *world, aId, bId string) bool {
+	if w == nil || w.joints == nil {
+		return false
+	}
+	for _, j := range w.joints {
+		if (j.bodyA == aId && j.bodyB == bId) || (j.bodyA == bId && j.bodyB == aId) {
+			return true
+		}
+	}
+	return false
 }
 
 // resolveCollisions resolves overlaps between bodies and records collision events. Call with w.mu held.
@@ -1267,6 +1600,9 @@ func resolveCollisions(w *world) {
 		}
 		for j, b := range bodyList {
 			if i == j {
+				continue
+			}
+			if bodiesAreJoined(w, a.id, b.id) {
 				continue
 			}
 			nx, ny, nz, depth := overlapBodies(a, b)
@@ -1365,17 +1701,31 @@ func overlapBodies(a, b *body) (nx, ny, nz, depth float64) {
 		b.radius = bSphere
 		return nx, ny, nz, depth
 	}
-	if a.radius > 0 && b.radius > 0 {
+	// Resolve mesh to box params for overlap
+	ax, ay, az := a.position.x, a.position.y, a.position.z
+	ahx, ahy, ahz := a.halfExt.x, a.halfExt.y, a.halfExt.z
+	if bodyIsMesh(a) {
+		ax, ay, az, ahx, ahy, ahz = bodyBoxParams(a)
+	}
+	bx, by, bz := b.position.x, b.position.y, b.position.z
+	bhx, bhy, bhz := b.halfExt.x, b.halfExt.y, b.halfExt.z
+	if bodyIsMesh(b) {
+		bx, by, bz, bhx, bhy, bhz = bodyBoxParams(b)
+	}
+	// Sphere: radius>0 and not mesh (mesh uses box). Capsule already handled.
+	aIsSphere := !bodyIsMesh(a) && a.radius > 0
+	bIsSphere := !bodyIsMesh(b) && b.radius > 0
+	if aIsSphere && bIsSphere {
 		return overlapSphereSphere(a.position.x, a.position.y, a.position.z, a.radius, b.position.x, b.position.y, b.position.z, b.radius)
 	}
-	if a.radius > 0 && b.radius == 0 {
-		return overlapSphereBox(a.position.x, a.position.y, a.position.z, a.radius, b.position.x, b.position.y, b.position.z, b.halfExt.x, b.halfExt.y, b.halfExt.z)
+	if aIsSphere && !bIsSphere {
+		return overlapSphereBox(a.position.x, a.position.y, a.position.z, a.radius, bx, by, bz, bhx, bhy, bhz)
 	}
-	if a.radius == 0 && b.radius > 0 {
-		nx, ny, nz, depth := overlapSphereBox(b.position.x, b.position.y, b.position.z, b.radius, a.position.x, a.position.y, a.position.z, a.halfExt.x, a.halfExt.y, a.halfExt.z)
+	if !aIsSphere && bIsSphere {
+		nx, ny, nz, depth := overlapSphereBox(b.position.x, b.position.y, b.position.z, b.radius, ax, ay, az, ahx, ahy, ahz)
 		return -nx, -ny, -nz, depth
 	}
-	return overlapBoxBox(a.position.x, a.position.y, a.position.z, a.halfExt.x, a.halfExt.y, a.halfExt.z, b.position.x, b.position.y, b.position.z, b.halfExt.x, b.halfExt.y, b.halfExt.z)
+	return overlapBoxBox(ax, ay, az, ahx, ahy, ahz, bx, by, bz, bhx, bhy, bhz)
 }
 
 func overlapSphereSphere(ax, ay, az, ar, bx, by, bz, br float64) (nx, ny, nz, depth float64) {
@@ -1551,6 +1901,7 @@ func Step(worldId string, timeStep float64) {
 		}
 		integrateBody(b, w.gravity, timeStep)
 	}
+	solveJoints(w, timeStep)
 	resolveCollisions(w)
 	w.mu.Unlock()
 }

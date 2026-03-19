@@ -90,10 +90,12 @@ Complete reference for the full required command set. All commands are DBP-style
 | SET LIGHT INTENSITY | `SetLightIntensity id, value` | Brightness | Implemented |
 | SET LIGHT RANGE | `SetLightRange id, value` | Range for point/spot | Implemented |
 | SET LIGHT ANGLE | `SetLightAngle id, degrees` | Cone angle for spot | Implemented |
-| ENABLE SHADOWS | `EnableShadows id` | Enable shadow casting | Implemented |
+| ENABLE SHADOWS | `EnableShadows id` | Enable shadow casting (directional, spot, or point) | Implemented |
 | DISABLE SHADOWS | `DisableShadows id` | Disable shadow casting | Implemented |
+| SET SHADOW CASCADES | `SetShadowCascades count` | Override cascade count (1, 3, or 4) for directional shadows | Implemented |
+| SHADOW CASCADE COUNT | `ShadowCascadeCount()` | Return current cascade count | Implemented |
 
-**When to use:** Create lights in OnStart; directional (type 1) for sun/moon. EnableShadows() turns on default shadows; SetShadowQuality("low"|"medium"|"high") for performance.
+**When to use:** Create lights in OnStart; directional (type 1) for sun/moon, spot (type 2) or point (type 0) for local lights. EnableShadows(id) enables shadows for any light type. SetShadowQuality("low"|"medium"|"high") for performance; SetShadowCascades(1|3|4) for cascade override.
 
 ---
 

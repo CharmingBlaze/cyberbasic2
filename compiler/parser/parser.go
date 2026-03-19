@@ -97,6 +97,10 @@ func (p *Parser) statement() (Node, error) {
 		return p.waitFramesStatement()
 	case lexer.TokenDim:
 		return p.dimStatement()
+	case lexer.TokenRedim:
+		return p.redimStatement()
+	case lexer.TokenAppend:
+		return p.appendStatement()
 	case lexer.TokenConst:
 		return p.constStatement()
 	case lexer.TokenEnum:

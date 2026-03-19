@@ -70,10 +70,11 @@ func importGLTF(path string) (*Model, error) {
 	if doc.Scene != nil {
 		sceneIdx = *doc.Scene
 	}
+	lightsDefs := parseKHRLightsPunctual(doc)
 	if sceneIdx < len(doc.Scenes) {
 		scene := doc.Scenes[sceneIdx]
 		for _, nodeIdx := range scene.Nodes {
-			importNodes(doc, doc.Nodes, nodeIdx, m)
+			importNodes(doc, doc.Nodes, nodeIdx, m, lightsDefs, nil)
 		}
 	}
 	if len(m.Nodes) == 0 && len(m.Meshes) > 0 {
@@ -147,13 +148,6 @@ func importGLTF(path string) (*Model, error) {
 		anim := importAnimation(doc, ganim, jointSet)
 		if len(anim.Channels) > 0 {
 			m.Animations = append(m.Animations, anim)
-		}
-	}
-
-	// Import lights from KHR_lights_punctual extension
-	if ext, ok := doc.Extensions["KHR_lights_punctual"]; ok {
-		if lights, ok := ext.(map[string]any); ok {
-			_ = lights // TODO: parse light nodes
 		}
 	}
 
@@ -451,12 +445,172 @@ func colliderTypeFromName(name string) int {
 	return ColliderBox
 }
 
-func importNodes(doc *gltf.Document, nodes []*gltf.Node, nodeIdx int, m *Model) {
+// gltfLightDef holds parsed KHR_lights_punctual light data.
+type gltfLightDef struct {
+	Type       int     // LightPoint, LightDirectional, LightSpot
+	R, G, B    float32
+	Intensity  float32
+	Range      float32
+	InnerCone  float32
+	OuterCone  float32
+}
+
+func parseKHRLightsPunctual(doc *gltf.Document) []gltfLightDef {
+	ext, ok := doc.Extensions["KHR_lights_punctual"]
+	if !ok {
+		return nil
+	}
+	extMap, ok := ext.(map[string]any)
+	if !ok {
+		return nil
+	}
+	lightsArr, ok := extMap["lights"]
+	if !ok {
+		return nil
+	}
+	arr, ok := lightsArr.([]any)
+	if !ok || len(arr) == 0 {
+		return nil
+	}
+	out := make([]gltfLightDef, 0, len(arr))
+	for _, l := range arr {
+		lm, ok := l.(map[string]any)
+		if !ok {
+			continue
+		}
+		def := gltfLightDef{Type: LightPoint, R: 1, G: 1, B: 1, Intensity: 1, Range: 10, OuterCone: 45}
+		if t, ok := lm["type"].(string); ok {
+			switch strings.ToLower(t) {
+			case "directional":
+				def.Type = LightDirectional
+			case "spot":
+				def.Type = LightSpot
+			default:
+				def.Type = LightPoint
+			}
+		}
+		if c, ok := lm["color"].([]any); ok && len(c) >= 3 {
+			def.R = toFloat32(c[0])
+			def.G = toFloat32(c[1])
+			def.B = toFloat32(c[2])
+		}
+		if v, ok := lm["intensity"].(float64); ok {
+			def.Intensity = float32(v)
+		}
+		if v, ok := lm["range"].(float64); ok {
+			def.Range = float32(v)
+		}
+		if spot, ok := lm["spot"].(map[string]any); ok {
+			if v, ok := spot["outerConeAngle"].(float64); ok {
+				def.OuterCone = float32(v) * 180 / float32(math.Pi)
+			}
+			if v, ok := spot["innerConeAngle"].(float64); ok {
+				def.InnerCone = float32(v) * 180 / float32(math.Pi)
+			}
+		}
+		out = append(out, def)
+	}
+	return out
+}
+
+func toFloat32(v any) float32 {
+	switch x := v.(type) {
+	case float64:
+		return float32(x)
+	case float32:
+		return x
+	case int:
+		return float32(x)
+	default:
+		return 0
+	}
+}
+
+// worldTransform holds position and rotation for composing node transforms.
+type worldTransform struct {
+	x, y, z    float32
+	qw, qx, qy, qz float32
+}
+
+func (w *worldTransform) isIdentity() bool {
+	return w == nil || (w.x == 0 && w.y == 0 && w.z == 0 && w.qw == 1 && w.qx == 0 && w.qy == 0 && w.qz == 0)
+}
+
+func quatRotateVector(qw, qx, qy, qz, vx, vy, vz float32) (x, y, z float32) {
+	ix := -qx*vx - qy*vy - qz*vz
+	iy := qw*vx + qy*vz - qz*vy
+	iz := qw*vy - qx*vz + qz*vx
+	iw := qw*vz + qx*vy - qy*vx
+	return iw*(-qx) + ix*qw + iy*(-qz) - iz*(-qy),
+		iw*(-qy) - ix*(-qz) + iy*qw + iz*(-qx),
+		iw*(-qz) + ix*(-qy) - iy*(-qx) + iz*qw
+}
+
+func quatMultiply(aw, ax, ay, az, bw, bx, by, bz float32) (w, x, y, z float32) {
+	return aw*bw - ax*bx - ay*by - az*bz,
+		aw*bx + ax*bw + ay*bz - az*by,
+		aw*by - ax*bz + ay*bw + az*bx,
+		aw*bz + ax*by - ay*bx + az*bw
+}
+
+func importNodes(doc *gltf.Document, nodes []*gltf.Node, nodeIdx int, m *Model, lightsDefs []gltfLightDef, parentWorld *worldTransform) {
 	if nodeIdx < 0 || nodeIdx >= len(nodes) {
 		return
 	}
 	gn := nodes[nodeIdx]
 	tr := nodeToTransform(gn)
+	// Compute world transform for this node
+	var world worldTransform
+	if parentWorld == nil || parentWorld.isIdentity() {
+		world.x, world.y, world.z = tr.X, tr.Y, tr.Z
+		world.qw, world.qx, world.qy, world.qz = eulerToQuat(tr.Pitch, tr.Yaw, tr.Roll)
+	} else {
+		lx, ly, lz := tr.X*tr.ScaleX, tr.Y*tr.ScaleY, tr.Z*tr.ScaleZ
+		dx, dy, dz := quatRotateVector(parentWorld.qw, parentWorld.qx, parentWorld.qy, parentWorld.qz, lx, ly, lz)
+		world.x = parentWorld.x + dx
+		world.y = parentWorld.y + dy
+		world.z = parentWorld.z + dz
+		lqw, lqx, lqy, lqz := eulerToQuat(tr.Pitch, tr.Yaw, tr.Roll)
+		world.qw, world.qx, world.qy, world.qz = quatMultiply(parentWorld.qw, parentWorld.qx, parentWorld.qy, parentWorld.qz, lqw, lqx, lqy, lqz)
+	}
+	// Check for KHR_lights_punctual on this node
+	if len(lightsDefs) > 0 {
+		if ext, ok := gn.Extensions["KHR_lights_punctual"]; ok {
+			if em, ok := ext.(map[string]any); ok {
+				if li, ok := em["light"]; ok {
+					var idx int
+					switch v := li.(type) {
+					case float64:
+						idx = int(v)
+					case int:
+						idx = v
+					default:
+						idx = -1
+					}
+					if idx >= 0 && idx < len(lightsDefs) {
+						ld := lightsDefs[idx]
+						dirX, dirY, dirZ := quatRotateVector(world.qw, world.qx, world.qy, world.qz, 0, 0, -1)
+						if dirX*dirX+dirY*dirY+dirZ*dirZ < 1e-10 {
+							dirX, dirY, dirZ = 0, 0, -1
+						} else {
+							len := float32(math.Sqrt(float64(dirX*dirX + dirY*dirY + dirZ*dirZ)))
+							dirX, dirY, dirZ = dirX/len, dirY/len, dirZ/len
+						}
+						m.Lights = append(m.Lights, Light{
+							Type:      ld.Type,
+							X:         world.x, Y: world.y, Z: world.z,
+							DirX: dirX, DirY: dirY, DirZ: dirZ,
+							R: ld.R, G: ld.G, B: ld.B,
+							Intensity: ld.Intensity,
+							Range:     ld.Range,
+							InnerCone: ld.InnerCone,
+							OuterCone: ld.OuterCone,
+						})
+					}
+				}
+			}
+		}
+	}
 	meshIdx := -1
 	if gn.Mesh != nil {
 		// Map gltf mesh index to our mesh index (we flatten primitives)
@@ -545,7 +699,7 @@ func importNodes(doc *gltf.Document, nodes []*gltf.Node, nodeIdx int, m *Model) 
 	m.Nodes = append(m.Nodes, node)
 	for _, childIdx := range gn.Children {
 		childStart := len(m.Nodes)
-		importNodes(doc, nodes, childIdx, m)
+		importNodes(doc, nodes, childIdx, m, lightsDefs, &world)
 		if len(m.Nodes) > childStart {
 			m.Nodes[ourIdx].Children = append(m.Nodes[ourIdx].Children, childStart)
 		}
@@ -575,6 +729,17 @@ func nodeToTransform(gn *gltf.Node) Transform {
 	w, x, y, z := float32(r[3]), float32(r[0]), float32(r[1]), float32(r[2])
 	tr.Pitch, tr.Yaw, tr.Roll = quatToEuler(w, x, y, z)
 	return tr
+}
+
+func eulerToQuat(pitch, yaw, roll float32) (w, x, y, z float32) {
+	cp, sp := float32(math.Cos(float64(pitch)*math.Pi/360)), float32(math.Sin(float64(pitch)*math.Pi/360))
+	cy, sy := float32(math.Cos(float64(yaw)*math.Pi/360)), float32(math.Sin(float64(yaw)*math.Pi/360))
+	cr, sr := float32(math.Cos(float64(roll)*math.Pi/360)), float32(math.Sin(float64(roll)*math.Pi/360))
+	w = cp*cy*cr + sp*sy*sr
+	x = sp*cy*cr - cp*sy*sr
+	y = cp*sy*cr + sp*cy*sr
+	z = cp*cy*sr - sp*sy*cr
+	return w, x, y, z
 }
 
 func quatToEuler(w, x, y, z float32) (pitch, yaw, roll float32) {

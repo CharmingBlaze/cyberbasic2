@@ -2,6 +2,8 @@
 
 This document describes the world environment systems: water, terrain, clouds, sky, sun, and time. All systems support simple-to-advanced usage and **always load safely**—missing textures, heightmaps, or shaders never crash the engine.
 
+**Purpose:** Water, terrain, sky, and clouds for 3D worlds.
+
 ## Design Goals
 
 - **Always safe to load**: If a map has no sky, no water, no clouds, no atmosphere, the engine runs with sane defaults.
@@ -12,6 +14,14 @@ This document describes the world environment systems: water, terrain, clouds, s
 ---
 
 ## 1. Water Commands (Simple to Advanced)
+
+### How to make water
+
+1. **Create:** `MakeWater(id, width, depth)`
+2. **Texture:** `SetWaterTexture(id, path)`
+3. **Optional:** `SetWaterScroll`, `SetWaterWaveStrength`, `SetWaterReflection`
+4. **Position:** `PositionWater(id, x, y, z)`
+5. **Draw:** `DrawWater(id)` inside your 3D draw block (`BeginMode3D` / `EndMode3D`)
 
 ### Simple Water (Textured Plane)
 
@@ -76,6 +86,12 @@ SetWaterRefraction 1, 1
 ---
 
 ## 2. Terrain Commands (Simple to Advanced)
+
+### How to add terrain
+
+1. **Create:** `MakeTerrain(id, width, depth)` or `LoadHeightmap(id, path, w, d, scale)`
+2. **Texture:** `SetTerrainTexture` or `SetTerrainLayer` + `SetTerrainSplatmap`
+3. **Position and draw:** `PositionTerrain`, `DrawTerrain`
 
 ### Simple Terrain (Single Texture)
 
@@ -221,13 +237,21 @@ SetCloudTexture "clouds.png"
 SetCloudSpeed 0.001
 
 REM Draw loop
-While Not WindowShouldClose()
-  StartDraw
-  Clear 30, 30, 50
-  Start3D
+mainloop
+  ClearBackground 30, 30, 50, 255
+  BeginMode3D
   DrawTerrain 2
   DrawWater 1
-  End3D
-  EndDraw
-Wend
+  EndMode3D
+  SYNC
+endmain
 ```
+
+---
+
+## See also
+
+- [Level Loading](LEVEL_LOADING.md)
+- [3D Graphics Guide](3D_GRAPHICS_GUIDE.md)
+- [Asset Pipeline](ASSET_PIPELINE.md)
+- [Documentation Index](DOCUMENTATION_INDEX.md)

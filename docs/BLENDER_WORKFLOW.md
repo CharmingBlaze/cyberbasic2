@@ -79,6 +79,17 @@ SET OBJECT METALLIC 1, 0.2
 SET OBJECT EMISSIVE 1, 1.0, 0.0, 0.0
 ```
 
+## Lights in Levels
+
+Lights defined in Blender are exported with GLTF and appear automatically when you load a level.
+
+1. **Add a light in Blender:** Add > Light > Point, Spot, or Sun (directional).
+2. **Position and orient** the light in the 3D viewport.
+3. **GLTF export:** File > Export > glTF 2.0. Under **Include**, enable **Lights** so the KHR_lights_punctual extension is written.
+4. **Load in CyberBASIC2:** `LoadLevel id, "level.glb"` — lights appear as DBP lights. Use `BuildResult.LightIDs` or the level loader's light IDs to reference them. Modify at runtime with `PositionLight`, `RotateLight`, `SetLightColor`, `EnableShadows`, etc.
+
+---
+
 ## OBJ for Simple Models
 
 For static meshes, terrain, or simple props:

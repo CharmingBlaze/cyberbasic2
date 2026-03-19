@@ -2,6 +2,10 @@
 
 Complete guide to 2D graphics in CyberBASIC2 using the raylib API.
 
+**Purpose:** 2D rendering for platformers, top-down games, and UI overlays.
+
+**When to use 2D vs 3D:** Use 2D when your game is viewed from the side (platformer) or top-down (puzzle, strategy). Use 3D when you need depth, perspective, and a 3D camera. See [2D Physics Guide](2D_PHYSICS_GUIDE.md) for physics integration.
+
 ## Table of Contents
 
 1. [Getting started](#getting-started)
@@ -280,8 +284,7 @@ All 2D-relevant commands in one place. See [API_REFERENCE.md](../API_REFERENCE.m
 
 ## See also
 
-- [API Reference](../API_REFERENCE.md) — full list of drawing and window functions
-- [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md) — 2D physics, GAME.* helpers
-- [2D Physics Guide](2D_PHYSICS_GUIDE.md) — Box2D worlds, bodies, collision
-- [Command Reference](COMMAND_REFERENCE.md) — commands by feature
-- [examples/README.md](../examples/README.md) — more 2D examples
+- [2D Physics Guide](2D_PHYSICS_GUIDE.md)
+- [2D Game API](2D_GAME_API.md)
+- [Tutorial 2D Games](TUTORIAL_2D_GAMES.md)
+- [Documentation Index](DOCUMENTATION_INDEX.md)

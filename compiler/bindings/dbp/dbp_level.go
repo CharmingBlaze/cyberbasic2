@@ -7,18 +7,22 @@ import (
 	"sync"
 
 	"cyberbasic/compiler/bindings/model"
+	"cyberbasic/compiler/runtime/assets"
+	"cyberbasic/compiler/runtime/resources"
 	"cyberbasic/compiler/vm"
 )
 
 const levelObjectIDBase = 100000
 
 type levelRuntime struct {
-	model       *model.Model
-	objectIDs   []int
-	textureIDs  []int
-	materialIDs []int
-	lightIDs    []int
-	colliderIDs []string // physics body IDs for level collision
+	model        *model.Model
+	path         string   // source path for asset cache UnloadModelForBuild
+	objectIDs    []int
+	textureIDs   []int
+	texturePaths []string // paths in resources cache to UnloadTexture on unload
+	materialIDs  []int
+	lightIDs     []int
+	colliderIDs  []string // physics body IDs for level collision
 }
 
 var (
@@ -33,7 +37,7 @@ func registerLevel(v *vm.VM) {
 		}
 		id := toInt(args[0])
 		path := toString(args[1])
-		m, err := model.Load(path)
+		m, err := assets.LoadModelForBuild(path)
 		if err != nil {
 			return nil, fmt.Errorf("LoadLevel: %w", err)
 		}
@@ -41,6 +45,7 @@ func registerLevel(v *vm.VM) {
 		objectIDBase := id * levelObjectIDBase
 		res, err := BuildModel(m, objectIDBase, basePath)
 		if err != nil {
+			assets.UnloadModelForBuild(path)
 			return nil, fmt.Errorf("LoadLevel build: %w", err)
 		}
 		for _, oid := range res.ObjectIDs {
@@ -48,12 +53,14 @@ func registerLevel(v *vm.VM) {
 		}
 		levelsMu.Lock()
 		levels[id] = &levelRuntime{
-			model:       m,
-			objectIDs:   res.ObjectIDs,
-			textureIDs:  res.TextureIDs,
-			materialIDs: res.MaterialIDs,
-			lightIDs:    res.LightIDs,
-			colliderIDs: nil, // populated by LoadLevelCollision
+			model:        m,
+			path:         path,
+			objectIDs:    res.ObjectIDs,
+			textureIDs:   res.TextureIDs,
+			texturePaths: res.TexturePaths,
+			materialIDs:  res.MaterialIDs,
+			lightIDs:     res.LightIDs,
+			colliderIDs:  nil, // populated by LoadLevelCollision
 		}
 		levelsMu.Unlock()
 		return nil, nil
@@ -65,7 +72,7 @@ func registerLevel(v *vm.VM) {
 		}
 		id := toInt(args[0])
 		path := toString(args[1])
-		m, err := model.Load(path)
+		m, err := assets.LoadModelForBuild(path)
 		if err != nil {
 			return nil, fmt.Errorf("LoadLevelWithHierarchy: %w", err)
 		}
@@ -73,6 +80,7 @@ func registerLevel(v *vm.VM) {
 		objectIDBase := id * levelObjectIDBase
 		res, err := BuildModelWithHierarchy(m, objectIDBase, basePath)
 		if err != nil {
+			assets.UnloadModelForBuild(path)
 			return nil, fmt.Errorf("LoadLevelWithHierarchy build: %w", err)
 		}
 		for _, oid := range res.ObjectIDs {
@@ -80,12 +88,14 @@ func registerLevel(v *vm.VM) {
 		}
 		levelsMu.Lock()
 		levels[id] = &levelRuntime{
-			model:       m,
-			objectIDs:   res.ObjectIDs,
-			textureIDs:  res.TextureIDs,
-			materialIDs: res.MaterialIDs,
-			lightIDs:    res.LightIDs,
-			colliderIDs: nil,
+			model:        m,
+			path:         path,
+			objectIDs:    res.ObjectIDs,
+			textureIDs:   res.TextureIDs,
+			texturePaths: res.TexturePaths,
+			materialIDs:  res.MaterialIDs,
+			lightIDs:     res.LightIDs,
+			colliderIDs:  nil,
 		}
 		levelsMu.Unlock()
 		return nil, nil
@@ -127,11 +137,17 @@ func registerLevel(v *vm.VM) {
 		for _, texID := range lr.textureIDs {
 			_, _ = v.CallForeign("DeleteTexture", []interface{}{texID})
 		}
+		for _, path := range lr.texturePaths {
+			resources.UnloadTexture(path)
+		}
 		for _, lightID := range lr.lightIDs {
 			_, _ = v.CallForeign("DeleteLight", []interface{}{lightID})
 		}
 		for _, bid := range lr.colliderIDs {
 			_, _ = v.CallForeign("DestroyBody3D", []interface{}{defaultPhysicsWorld3D, bid})
+		}
+		if lr.path != "" {
+			assets.UnloadModelForBuild(lr.path)
 		}
 		return nil, nil
 	})
