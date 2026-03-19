@@ -320,6 +320,8 @@ func registerRenderTypes(v *vm.VM) {
 	reg("DrawWater", vm.Render3D)
 	reg("DrawTrees", vm.Render3D)
 	reg("DrawGrass", vm.Render3D)
+	reg("DrawDecals", vm.Render3D)
+	reg("DrawFires", vm.Render3D)
 	reg("DrawObject", vm.Render3D)
 	reg("DrawLevelObject", vm.Render3D)
 	// GUI (raygui)

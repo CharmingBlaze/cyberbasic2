@@ -644,9 +644,9 @@ See [docs/WORLD_WATER_TERRAIN.md](WORLD_WATER_TERRAIN.md) for full reference and
 
 | Command | Args | Description |
 |---------|------|-------------|
-| `MakeQuaternion` | (id, pitch, yaw, roll) | Create quaternion (stub) |
-| `RotateObjectQuat` | (id, quatID) | Apply quat rotation (stub) |
-| `GetObjectMatrix` | (id) | Get 4x4 matrix as array (stub) |
+| `MakeQuaternion` | (id, pitch, yaw, roll) | Create quaternion (Euler) |
+| `RotateObjectQuat` | (id, quatID) | Apply quat rotation to object |
+| `GetObjectMatrix` | (id) | Get 4x4 matrix as array |
 
 ---
 
@@ -655,9 +655,9 @@ See [docs/WORLD_WATER_TERRAIN.md](WORLD_WATER_TERRAIN.md) for full reference and
 | Command | Args | Description |
 |---------|------|-------------|
 | `StartTask` | (name) | Start coroutine |
-| `StopTask` | (name) | Stop coroutine (stub) |
-| `PauseTask` | (name) | Pause coroutine (stub) |
-| `ResumeTask` | (name) | Resume coroutine (stub) |
+| `StopTask` | (name) | Stop coroutine by name |
+| `PauseTask` | (name) | Pause coroutine by name |
+| `ResumeTask` | (name) | Resume paused coroutine by name |
 | `WaitSeconds` | (value) | Yield for seconds |
 | `WaitFrames` | (value) | Yield for frames |
 | `Yield` | () | Yield one frame |

@@ -35,6 +35,38 @@ func toFloat64(v interface{}) float64 {
 	}
 }
 
+type skyboxState struct {
+	Path    string
+	Rotation float64
+	R, G, B float64
+}
+
+type cloudLayerState struct {
+	TexturePath string
+	Height      float64
+}
+
+type decalState struct {
+	TexId     string
+	X, Y, Z   float64
+	Size      float64
+	Lifetime  float64
+	CreatedAt float64
+}
+
+type fireState struct {
+	X, Y, Z       float64
+	SpreadRate    float64
+	SmokeEmitter  string
+	LightId       string
+	Active        bool
+}
+
+type ragdollState struct {
+	BodyIds []string
+	Enabled bool
+}
+
 // --- Particle system ---
 type particle struct {
 	X, Y, Z    float32
@@ -115,8 +147,63 @@ var (
 
 	// Behavior trees
 	aiTrees   = make(map[string]*btNode)
-	aiTreeSeq int
-	aiTreeMu  sync.Mutex
+	aiTreeSeq   int
+	aiTreeMu  sync.RWMutex
+
+	// Ragdoll
+	ragdolls   = make(map[string]*ragdollState)
+	ragdollSeq  int
+	ragdollMu   sync.RWMutex
+
+	// Time of day
+	worldTime struct {
+		hour  float64
+		scale float64
+		mu    sync.RWMutex
+	}
+
+	// Weather state
+	weatherState struct {
+		Type             int
+		Intensity        int
+		WindDirX         float64
+		WindDirY         float64
+		WindSpeed        float64
+		FogDensity       float64
+		LightningFreq    float64
+		mu               sync.RWMutex
+	}
+
+	// Environment state
+	envState struct {
+		WindX, WindY, WindZ float64
+		Temp                 float64
+		Humidity             float64
+		mu                   sync.RWMutex
+	}
+
+	// Skybox alternate API
+	skyboxes   = make(map[string]*skyboxState)
+	skyboxSeq  int
+	skyboxMu   sync.RWMutex
+	activeSkybox string
+
+	// Cloud layer alternate API
+	cloudLayers  = make(map[string]*cloudLayerState)
+	cloudLayerSeq int
+	cloudLayerMu sync.RWMutex
+
+	// Decals
+	decals   = make(map[string]*decalState)
+	decalSeq int
+	decalMu  sync.RWMutex
+
+	// Fire/Smoke
+	fires       = make(map[string]*fireState)
+	fireSeq     int
+	fireMu      sync.RWMutex
+	smokeState  = struct{ DissolveRate, RiseSpeed float64 }{1, 2}
+	smokeStateMu sync.RWMutex
 
 	// Replication (state to sync)
 	replicateVars  = make(map[string]map[string]bool) // entity -> set of var names
@@ -159,6 +246,58 @@ type btNode struct {
 	Type     string
 	Children []string
 	FuncName string
+}
+
+func runBTNode(v *vm.VM, nodeId, entityId string) (bool, error) {
+	aiTreeMu.RLock()
+	n := aiTrees[nodeId]
+	aiTreeMu.RUnlock()
+	if n == nil {
+		return false, nil
+	}
+	switch n.Type {
+	case "selector":
+		for _, cid := range n.Children {
+			ok, err := runBTNode(v, cid, entityId)
+			if err != nil {
+				return false, err
+			}
+			if ok {
+				return true, nil
+			}
+		}
+		return false, nil
+	case "sequence":
+		for _, cid := range n.Children {
+			ok, err := runBTNode(v, cid, entityId)
+			if err != nil {
+				return false, err
+			}
+			if !ok {
+				return false, nil
+			}
+		}
+		return true, nil
+	case "action":
+		if n.FuncName != "" {
+			_, _ = v.CallForeign(n.FuncName, []interface{}{entityId})
+		}
+		return true, nil
+	case "condition":
+		if n.FuncName == "" {
+			return true, nil
+		}
+		res, err := v.CallForeign(n.FuncName, []interface{}{entityId})
+		if err != nil {
+			return false, err
+		}
+		if b, ok := res.(bool); ok {
+			return b, nil
+		}
+		return toFloat64(res) != 0, nil
+	default:
+		return false, nil
+	}
 }
 
 type sgNode struct {
@@ -1091,105 +1230,401 @@ func RegisterGame(v *vm.VM) {
 		return nil, nil
 	})
 
-	// --- Weather (stubs) ---
+	// --- Weather ---
 	v.RegisterForeign("WeatherSetType", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("WeatherSetType requires (type)")
 		}
+		weatherState.mu.Lock()
+		weatherState.Type = int(toFloat64(args[0]))
+		weatherState.mu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("WeatherSetIntensity", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, nil
 		}
+		weatherState.mu.Lock()
+		weatherState.Intensity = int(toFloat64(args[0]))
+		weatherState.mu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("WeatherSetWindDirection", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
 			return nil, nil
 		}
+		weatherState.mu.Lock()
+		weatherState.WindDirX = toFloat64(args[0])
+		weatherState.WindDirY = toFloat64(args[1])
+		weatherState.mu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("WeatherSetWindSpeed", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, nil
 		}
+		weatherState.mu.Lock()
+		weatherState.WindSpeed = toFloat64(args[0])
+		weatherState.mu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("WeatherSetFogDensity", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, nil
 		}
+		weatherState.mu.Lock()
+		weatherState.FogDensity = toFloat64(args[0])
+		weatherState.mu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("WeatherSetLightningFrequency", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, nil
 		}
+		weatherState.mu.Lock()
+		weatherState.LightningFreq = toFloat64(args[0])
+		weatherState.mu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("FireCreate", func(args []interface{}) (interface{}, error) {
-		return fmt.Sprintf("fire_%d", 0), nil
+		x, y, z := 0.0, 0.0, 0.0
+		if len(args) >= 3 {
+			x, y, z = toFloat64(args[0]), toFloat64(args[1]), toFloat64(args[2])
+		}
+		fireMu.Lock()
+		fireSeq++
+		id := fmt.Sprintf("fire_%d", fireSeq)
+		fires[id] = &fireState{X: x, Y: y, Z: z, SpreadRate: 1, Active: true}
+		fireMu.Unlock()
+		return id, nil
 	})
-	v.RegisterForeign("FireSetSpreadRate", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("FireSetSmokeEmitter", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("FireSetLight", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("SmokeSetDissolveRate", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("SmokeSetRiseSpeed", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("EnvironmentSetGlobalWind", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("EnvironmentSetTemperature", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("EnvironmentSetHumidity", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("FireSetSpreadRate", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, nil
+		}
+		id := toString(args[0])
+		fireMu.Lock()
+		if f := fires[id]; f != nil {
+			f.SpreadRate = toFloat64(args[1])
+		}
+		fireMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("FireSetSmokeEmitter", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, nil
+		}
+		id := toString(args[0])
+		fireMu.Lock()
+		if f := fires[id]; f != nil {
+			f.SmokeEmitter = toString(args[1])
+		}
+		fireMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("FireSetLight", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, nil
+		}
+		id := toString(args[0])
+		fireMu.Lock()
+		if f := fires[id]; f != nil {
+			f.LightId = toString(args[1])
+		}
+		fireMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("FireSetActive", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, nil
+		}
+		id := toString(args[0])
+		fireMu.Lock()
+		if f := fires[id]; f != nil {
+			f.Active = toFloat64(args[1]) != 0
+		}
+		fireMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SmokeSetDissolveRate", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		smokeStateMu.Lock()
+		smokeState.DissolveRate = toFloat64(args[0])
+		smokeStateMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SmokeSetRiseSpeed", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		smokeStateMu.Lock()
+		smokeState.RiseSpeed = toFloat64(args[0])
+		smokeStateMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("EnvironmentSetGlobalWind", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, nil
+		}
+		envState.mu.Lock()
+		envState.WindX = toFloat64(args[0])
+		envState.WindY = toFloat64(args[1])
+		envState.WindZ = toFloat64(args[2])
+		envState.mu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("EnvironmentSetTemperature", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		envState.mu.Lock()
+		envState.Temp = toFloat64(args[0])
+		envState.mu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("EnvironmentSetHumidity", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		envState.mu.Lock()
+		envState.Humidity = toFloat64(args[0])
+		envState.mu.Unlock()
+		return nil, nil
+	})
 	v.RegisterForeign("EnvironmentAffectParticles", func(args []interface{}) (interface{}, error) { return nil, nil })
 	v.RegisterForeign("EnvironmentAffectWater", func(args []interface{}) (interface{}, error) { return nil, nil })
 	v.RegisterForeign("EnvironmentAffectVegetation", func(args []interface{}) (interface{}, error) { return nil, nil })
 
-	// --- Time of day (stubs) ---
+	// --- Time of day ---
 	v.RegisterForeign("TimeSet", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("TimeSet requires (hour)")
 		}
+		h := toFloat64(args[0])
+		if h < 0 {
+			h = 0
+		}
+		if h > 24 {
+			h = 24
+		}
+		worldTime.mu.Lock()
+		worldTime.hour = h
+		worldTime.mu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("TimeGet", func(args []interface{}) (interface{}, error) {
-		return 12.0, nil
+		worldTime.mu.RLock()
+		h := worldTime.hour
+		worldTime.mu.RUnlock()
+		return h, nil
 	})
 	v.RegisterForeign("TimeSetSpeed", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, nil
 		}
+		worldTime.mu.Lock()
+		worldTime.scale = toFloat64(args[0])
+		worldTime.mu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("SkyboxCreate", func(args []interface{}) (interface{}, error) {
-		return fmt.Sprintf("skybox_%d", 0), nil
+		skyboxMu.Lock()
+		skyboxSeq++
+		id := fmt.Sprintf("skybox_%d", skyboxSeq)
+		skyboxes[id] = &skyboxState{}
+		if activeSkybox == "" {
+			activeSkybox = id
+		}
+		skyboxMu.Unlock()
+		return id, nil
 	})
-	v.RegisterForeign("SkyboxSetTexture", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("SkyboxSetRotation", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("SkyboxSetTint", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("DrawSkybox", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("SkyboxSetTexture", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, nil
+		}
+		id := toString(args[0])
+		path := toString(args[1])
+		skyboxMu.Lock()
+		if s, ok := skyboxes[id]; ok {
+			s.Path = path
+			if id == activeSkybox {
+				_, _ = v.CallForeign("SetSkybox", []interface{}{path})
+			}
+		}
+		skyboxMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SkyboxSetRotation", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, nil
+		}
+		id := toString(args[0])
+		skyboxMu.Lock()
+		if s, ok := skyboxes[id]; ok {
+			s.Rotation = toFloat64(args[1])
+		}
+		skyboxMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SkyboxSetTint", func(args []interface{}) (interface{}, error) {
+		if len(args) < 4 {
+			return nil, nil
+		}
+		id := toString(args[0])
+		skyboxMu.Lock()
+		if s, ok := skyboxes[id]; ok {
+			s.R, s.G, s.B = toFloat64(args[1]), toFloat64(args[2]), toFloat64(args[3])
+		}
+		skyboxMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("DrawSkybox", func(args []interface{}) (interface{}, error) {
+		// Skybox is drawn by existing skybox draw pipeline when SetSkybox was used
+		return nil, nil
+	})
 	v.RegisterForeign("CloudLayerCreate", func(args []interface{}) (interface{}, error) {
-		return fmt.Sprintf("cloud_%d", 0), nil
+		cloudLayerMu.Lock()
+		cloudLayerSeq++
+		id := fmt.Sprintf("cloud_%d", cloudLayerSeq)
+		cloudLayers[id] = &cloudLayerState{}
+		cloudLayerMu.Unlock()
+		return id, nil
 	})
-	v.RegisterForeign("CloudLayerSetTexture", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("CloudLayerSetHeight", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("DrawCloudLayer", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("CloudLayerSetTexture", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, nil
+		}
+		id := toString(args[0])
+		path := toString(args[1])
+		cloudLayerMu.Lock()
+		if c, ok := cloudLayers[id]; ok {
+			c.TexturePath = path
+			_, _ = v.CallForeign("SetCloudTexture", []interface{}{path})
+		}
+		cloudLayerMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("CloudLayerSetHeight", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, nil
+		}
+		id := toString(args[0])
+		cloudLayerMu.Lock()
+		if c, ok := cloudLayers[id]; ok {
+			c.Height = toFloat64(args[1])
+		}
+		cloudLayerMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("DrawCloudLayer", func(args []interface{}) (interface{}, error) {
+		// Clouds drawn by existing SetCloudTexture pipeline
+		return nil, nil
+	})
 
 	v.RegisterForeign("DecalCreate", func(args []interface{}) (interface{}, error) {
 		if len(args) < 5 {
 			return nil, fmt.Errorf("DecalCreate requires (textureId, x, y, z, size)")
 		}
-		return fmt.Sprintf("decal_%d", 0), nil
+		decalMu.Lock()
+		decalSeq++
+		id := fmt.Sprintf("decal_%d", decalSeq)
+		decals[id] = &decalState{
+			TexId:     toString(args[0]),
+			X:         toFloat64(args[1]), Y: toFloat64(args[2]), Z: toFloat64(args[3]),
+			Size:      toFloat64(args[4]),
+			Lifetime:  -1,
+			CreatedAt: 0,
+		}
+		decalMu.Unlock()
+		return id, nil
 	})
-	v.RegisterForeign("DecalSetLifetime", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("DecalRemove", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("DecalSetLifetime", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, nil
+		}
+		id := toString(args[0])
+		decalMu.Lock()
+		if d := decals[id]; d != nil {
+			d.Lifetime = toFloat64(args[1])
+		}
+		decalMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("DecalRemove", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		decalMu.Lock()
+		delete(decals, toString(args[0]))
+		decalMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("DrawDecals", func(args []interface{}) (interface{}, error) {
+		now := 0.0
+		if res, err := v.CallForeign("GetTime", nil); err == nil && res != nil {
+			now = toFloat64(res)
+		}
+		decalMu.Lock()
+		toRemove := []string{}
+		for id, d := range decals {
+			if d.Lifetime >= 0 && now-d.CreatedAt >= d.Lifetime {
+				toRemove = append(toRemove, id)
+				continue
+			}
+			if d.CreatedAt == 0 {
+				d.CreatedAt = now
+			}
+			_, _ = v.CallForeign("DrawBillboard", []interface{}{
+				d.TexId, d.X, d.Y, d.Z, d.Size,
+				float64(255), float64(255), float64(255), float64(255),
+			})
+		}
+		for _, id := range toRemove {
+			delete(decals, id)
+		}
+		decalMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("DrawFires", func(args []interface{}) (interface{}, error) {
+		fireMu.RLock()
+		for _, f := range fires {
+			if !f.Active {
+				continue
+			}
+			pos := rl.Vector3{X: float32(f.X), Y: float32(f.Y), Z: float32(f.Z)}
+			rl.DrawSphere(pos, 0.5, rl.Orange)
+			rl.DrawSphereWires(pos, 0.5, 8, 8, rl.Orange)
+		}
+		fireMu.RUnlock()
+		return nil, nil
+	})
 
-	// --- Pathfinding (simple grid A* stub; returns empty path) ---
+	// --- Pathfinding ---
 	v.RegisterForeign("PathfindGrid", func(args []interface{}) (interface{}, error) {
 		if len(args) < 5 {
 			return nil, fmt.Errorf("PathfindGrid requires (mapId, startX, startY, endX, endY)")
 		}
+		mapId := toString(args[0])
+		if strings.HasPrefix(mapId, "navgrid_") {
+			return v.CallForeign("NavGridFindPath", []interface{}{
+				mapId, toFloat64(args[1]), toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4]),
+			})
+		}
 		return []interface{}{}, nil
 	})
 	v.RegisterForeign("PathfindNavmesh", func(args []interface{}) (interface{}, error) {
+		if len(args) < 7 {
+			return []interface{}{}, nil
+		}
+		meshId := toString(args[0])
+		if strings.HasPrefix(meshId, "navmesh_") {
+			return v.CallForeign("NavMeshFindPathRaw", []interface{}{
+				meshId, toFloat64(args[1]), toFloat64(args[2]), toFloat64(args[3]),
+				toFloat64(args[4]), toFloat64(args[5]), toFloat64(args[6]),
+			})
+		}
 		return []interface{}{}, nil
 	})
 	v.RegisterForeign("FollowPath", func(args []interface{}) (interface{}, error) {
@@ -1570,18 +2005,73 @@ func RegisterGame(v *vm.VM) {
 	v.RegisterForeign("CreateHingeJoint", func(args []interface{}) (interface{}, error) { return "", nil })
 	v.RegisterForeign("CreateBallJoint", func(args []interface{}) (interface{}, error) { return "", nil })
 	v.RegisterForeign("CreateSliderJoint", func(args []interface{}) (interface{}, error) { return "", nil })
-	v.RegisterForeign("CreateRagdoll", func(args []interface{}) (interface{}, error) { return "", nil })
-	v.RegisterForeign("RagdollEnable", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("RagdollDisable", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("CreateRagdoll", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("CreateRagdoll requires (objectId or modelId)")
+		}
+		modelOrObjId := toString(args[0])
+		worldId := "default"
+		if len(args) >= 2 {
+			worldId = toString(args[1])
+		}
+		// Fallback: create single sphere body at origin (no skeleton extraction)
+		ragdollMu.Lock()
+		ragdollSeq++
+		rid := fmt.Sprintf("ragdoll_%d", ragdollSeq)
+		bodyId := fmt.Sprintf("ragdoll_body_%d", ragdollSeq)
+		ragdolls[rid] = &ragdollState{BodyIds: []string{bodyId}, Enabled: true}
+		ragdollMu.Unlock()
+		_, _ = v.CallForeign("CreateSphere3D", []interface{}{worldId, bodyId, 0, 0, 0, 0.5, 1})
+		_ = modelOrObjId
+		return rid, nil
+	})
+	v.RegisterForeign("RagdollEnable", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		rid := toString(args[0])
+		ragdollMu.Lock()
+		if r := ragdolls[rid]; r != nil {
+			r.Enabled = true
+		}
+		ragdollMu.Unlock()
+		// SetKinematic3D(bodyId, 0) for each body - would need body ids
+		return nil, nil
+	})
+	v.RegisterForeign("RagdollDisable", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		rid := toString(args[0])
+		ragdollMu.Lock()
+		if r := ragdolls[rid]; r != nil {
+			r.Enabled = false
+		}
+		ragdollMu.Unlock()
+		return nil, nil
+	})
 
 	// --- AI behavior trees ---
 	v.RegisterForeign("AIBehaviorTreeCreate", func(args []interface{}) (interface{}, error) {
 		aiTreeMu.Lock()
 		aiTreeSeq++
 		id := fmt.Sprintf("bt_%d", aiTreeSeq)
-		aiTrees[id] = &btNode{Type: "root", Children: nil}
+		aiTrees[id] = &btNode{Type: "root", Children: []string{}}
 		aiTreeMu.Unlock()
 		return id, nil
+	})
+	v.RegisterForeign("AIBehaviorTreeSetRoot", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("AIBehaviorTreeSetRoot requires (treeId, nodeId)")
+		}
+		treeId := toString(args[0])
+		nodeId := toString(args[1])
+		aiTreeMu.Lock()
+		if t := aiTrees[treeId]; t != nil && t.Type == "root" {
+			t.Children = []string{nodeId}
+		}
+		aiTreeMu.Unlock()
+		return nil, nil
 	})
 	v.RegisterForeign("AISelector", func(args []interface{}) (interface{}, error) {
 		aiTreeMu.Lock()
@@ -1631,20 +2121,41 @@ func RegisterGame(v *vm.VM) {
 		aiTreeMu.Unlock()
 		return id, nil
 	})
-	v.RegisterForeign("AIRun", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("AIRun", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("AIRun requires (treeId, entityId)")
+		}
+		treeId := toString(args[0])
+		entityId := toString(args[1])
+		aiTreeMu.RLock()
+		root := aiTrees[treeId]
+		aiTreeMu.RUnlock()
+		if root == nil || root.Type != "root" {
+			return nil, nil
+		}
+		entryId := ""
+		if len(root.Children) > 0 {
+			entryId = root.Children[0]
+		}
+		if entryId == "" {
+			return nil, nil
+		}
+		_, err := runBTNode(v, entryId, entityId)
+		return nil, err
+	})
 
 	// --- Multiplayer replication ---
 	v.RegisterForeign("NetStartServer", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("NetStartServer requires (port)")
 		}
-		return nil, nil
+		return v.CallForeign("Host", []interface{}{toFloat64(args[0])})
 	})
 	v.RegisterForeign("NetStartClient", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
 			return nil, fmt.Errorf("NetStartClient requires (ip, port)")
 		}
-		return nil, nil
+		return v.CallForeign("Connect", []interface{}{toString(args[0]), toFloat64(args[1])})
 	})
 	v.RegisterForeign("ReplicateVariable", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
@@ -1755,7 +2266,26 @@ func RegisterGame(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterForeign("ShaderGraphCompile", func(args []interface{}) (interface{}, error) {
-		return "", nil
+		if len(args) < 1 {
+			return "", fmt.Errorf("ShaderGraphCompile requires (graphId)")
+		}
+		gid := toString(args[0])
+		shaderGraphMu.Lock()
+		g := shaderGraphGraphs[gid]
+		shaderGraphMu.Unlock()
+		if g == nil {
+			return "", nil
+		}
+		// Minimal: emit trivial passthrough fragment shader for valid graphs
+		// Full node-to-GLSL would traverse graph; for now return passthrough
+		_ = g
+		return `#version 330
+in vec2 fragTexCoord;
+out vec4 finalColor;
+uniform sampler2D texture0;
+void main() {
+    finalColor = texture(texture0, fragTexCoord);
+}`, nil
 	})
 
 	// --- Animation state machine ---

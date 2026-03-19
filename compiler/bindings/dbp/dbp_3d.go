@@ -17,6 +17,10 @@ var (
 	// syncObjects tracks which object IDs are marked for replication.
 	syncObjects   = make(map[int]bool)
 	syncObjectsMu sync.Mutex
+
+	// quaternions stores quaternions by id for MakeQuaternion/RotateObjectQuat.
+	quaternions   = make(map[int]rl.Quaternion)
+	quaternionsMu sync.RWMutex
 )
 
 // register3D adds 3D-specific DBP commands: window aliases, camera queries,
@@ -515,25 +519,73 @@ func register3DMath(v *vm.VM) {
 		return []interface{}{cx, cy, cz}, nil
 	})
 
-	// Matrix/Quaternion stubs
+	// Matrix/Quaternion
 	v.RegisterForeign("MakeQuaternion", func(args []interface{}) (interface{}, error) {
 		if len(args) < 4 {
 			return nil, fmt.Errorf("MakeQuaternion(id, pitch, yaw, roll) requires 4 arguments")
 		}
+		id := toInt(args[0])
+		pitch := float32(toFloat64(args[1])) * float32(math.Pi) / 180
+		yaw := float32(toFloat64(args[2])) * float32(math.Pi) / 180
+		roll := float32(toFloat64(args[3])) * float32(math.Pi) / 180
+		q := rl.QuaternionFromEuler(pitch, yaw, roll)
+		quaternionsMu.Lock()
+		quaternions[id] = rl.QuaternionNormalize(q)
+		quaternionsMu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("RotateObjectQuat", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
 			return nil, fmt.Errorf("RotateObjectQuat(id, quatID) requires 2 arguments")
 		}
+		objID := toInt(args[0])
+		quatID := toInt(args[1])
+		quaternionsMu.RLock()
+		quat, ok := quaternions[quatID]
+		quaternionsMu.RUnlock()
+		if !ok {
+			return nil, nil
+		}
+		objectsMu.Lock()
+		obj, ok := objects[objID]
+		objectsMu.Unlock()
+		if !ok {
+			return nil, nil
+		}
+		currentQ := rl.QuaternionFromEuler(
+			obj.pitch*float32(math.Pi)/180,
+			obj.yaw*float32(math.Pi)/180,
+			obj.roll*float32(math.Pi)/180,
+		)
+		newQ := rl.QuaternionNormalize(rl.QuaternionMultiply(currentQ, quat))
+		euler := rl.QuaternionToEuler(newQ)
+		const radToDeg = 180 / math.Pi
+		objectsMu.Lock()
+		if o, ok := objects[objID]; ok {
+			o.pitch = euler.X * radToDeg
+			o.yaw = euler.Y * radToDeg
+			o.roll = euler.Z * radToDeg
+		}
+		objectsMu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("GetObjectMatrix", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("GetObjectMatrix(id) requires 1 argument")
 		}
-		// Return identity 4x4 matrix as flat array
-		return []interface{}{1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0, 0.0, 0.0, 0.0, 0.0, 1.0}, nil
+		id := toInt(args[0])
+		state := getObjectWorldState(id)
+		// Build 4x4 matrix from position, rotation, scale (column-major)
+		rotMat := rl.QuaternionToMatrix(state.rotation)
+		scaleMat := rl.MatrixScale(state.scale.X, state.scale.Y, state.scale.Z)
+		transMat := rl.MatrixTranslate(state.position.X, state.position.Y, state.position.Z)
+		combined := rl.MatrixMultiply(rl.MatrixMultiply(scaleMat, rotMat), transMat)
+		return []interface{}{
+			combined.M0, combined.M4, combined.M8, combined.M12,
+			combined.M1, combined.M5, combined.M9, combined.M13,
+			combined.M2, combined.M6, combined.M10, combined.M14,
+			combined.M3, combined.M7, combined.M11, combined.M15,
+		}, nil
 	})
 }
 

@@ -176,7 +176,7 @@ func RegisterScene(v *vm.VM) {
 		}
 		return nil, os.WriteFile(path, raw, 0644)
 	})
-	// SceneLoad2D(path): load 2D scene state from JSON (restores layers, sprites, camera; stub restores minimal state).
+	// SceneLoad2D(path): load 2D scene state from JSON (restores layers, sprites, camera).
 	v.RegisterForeign("SceneLoad2D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("SceneLoad2D requires (path)")
@@ -187,10 +187,51 @@ func RegisterScene(v *vm.VM) {
 			return nil, err
 		}
 		var data struct {
-			Version int `json:"version"`
+			Version   int                    `json:"version"`
+			Layers    []map[string]interface{} `json:"layers"`
+			Sprites   []map[string]interface{} `json:"sprites"`
+			Camera2D  map[string]interface{}  `json:"camera2D"`
+			Backgrounds []map[string]interface{} `json:"backgrounds"`
+			Tilemaps  []map[string]interface{} `json:"tilemaps"`
 		}
 		if err := json.Unmarshal(raw, &data); err != nil {
 			return nil, err
+		}
+		for _, layer := range data.Layers {
+			name, _ := layer["name"].(string)
+			order := 0
+			if o, ok := layer["order"].(float64); ok {
+				order = int(o)
+			}
+			if name != "" {
+				_, _ = v.CallForeign("LayerCreate", []interface{}{name, order})
+			}
+		}
+		for _, sp := range data.Sprites {
+			texId, _ := sp["textureId"].(string)
+			x, _ := sp["x"].(float64)
+			y, _ := sp["y"].(float64)
+			if texId != "" {
+				res, _ := v.CallForeign("CreateSprite", []interface{}{texId})
+				if id, ok := res.(string); ok && id != "" {
+					_, _ = v.CallForeign("SpriteSetPosition", []interface{}{id, x, y})
+					if layerId, ok := sp["layerId"].(string); ok && layerId != "" {
+						_, _ = v.CallForeign("SpriteSetLayer", []interface{}{id, layerId})
+					}
+				}
+			}
+		}
+		if cam := data.Camera2D; cam != nil {
+			if camId, ok := cam["id"].(string); ok && camId != "" {
+				if x, ok := cam["x"].(float64); ok {
+					if y, ok := cam["y"].(float64); ok {
+						_, _ = v.CallForeign("Camera2DSetPosition", []interface{}{camId, x, y})
+					}
+				}
+				if zoom, ok := cam["zoom"].(float64); ok {
+					_, _ = v.CallForeign("Camera2DSetZoom", []interface{}{camId, zoom})
+				}
+			}
 		}
 		return nil, nil
 	})

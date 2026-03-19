@@ -6,6 +6,8 @@ This document records the current implementation status behind the roadmap audit
 
 ### Runtime and networking
 
+- **Transport: KCP** — Host/Connect use kcp-go (reliable UDP) for lower latency and packet-loss resilience.
+- **Nakama client** — Optional cloud backend: NakamaConnect, NakamaAuthenticateDevice, NakamaCreateMatch, NakamaJoinMatch, NakamaAddMatchmaker, etc. See [NAKAMA_GUIDE.md](NAKAMA_GUIDE.md).
 - Fixed-step runtime support is now wired through the main loop.
 - `FixedUpdate(rate)` updates the shared fixed timestep.
 - `OnFixedUpdate(label$)` runs a BASIC callback on each fixed step.
@@ -83,7 +85,7 @@ These are real limitations. Each has a clear work item for contributors.
 | ApplyTorque3D, ApplyTorqueImpulse3D | **Done** | Implemented in pure-Go fallback |
 | PointToPoint, Fixed joints | **Done** | Implemented in pure-Go fallback; `BulletJointsAvailable()` returns 1 |
 | CreateStaticMesh3D | **Done** (AABB) | Loads OBJ, uses AABB for broad phase; exact triangle narrow-phase deferred |
-| Hinge, Slider, ConeTwist joints | Stubbed; return error | Implement CreateHingeJoint3D, CreateSliderJoint3D in pure-Go or native |
+| Hinge, Slider, ConeTwist joints | **Done** | Implemented in pure-Go fallback; SetJointLimits3D, SetJointMotor3D also implemented |
 | Capsule/swept queries | Approximated | Improve overlap and spherecast math in `compiler/bindings/bullet` |
 
 **Files:** `compiler/bindings/bullet/bullet.go`, `compiler/bindings/bullet/*.go`
@@ -92,11 +94,11 @@ These are real limitations. Each has a clear work item for contributors.
 
 | Gap | Current State | Action for Contributors |
 |-----|---------------|-------------------------|
-| Lockstep | Not implemented | Design: fixed tick rate; clients send input per tick; server broadcasts state |
-| Rollback | Not implemented | Requires snapshot save/restore; resimulate from last confirmed state |
-| Prediction | Not implemented | Client-side prediction from input; reconcile with server state |
-| Matchmaking | Not implemented | External service or custom lobby |
-| Interest management | Not implemented | Filter SyncEntity/Replicate by distance or relevance |
+| Lockstep | **Done** | LockstepEnable, LockstepSendInput, LockstepGetInputs, OnLockstepTickReady |
+| Rollback | **Done** | RegisterSnapshotHandler, RegisterRestoreHandler, SnapshotCreate, SnapshotRestore, RollbackBroadcast |
+| Prediction | **Done** | PredictionEnable, PredictionStoreInput, PredictionReconcile, OnPredictionCorrected |
+| Matchmaking | **Done** | MatchmakingHost, MatchmakingDiscover, MatchmakingJoin (LAN broadcast) |
+| Interest management | **Done** | SetInterestFilter, SetEntityInterestZone; SyncEntity/SyncEntityToRoom check filters |
 
 **File:** `compiler/bindings/net/net.go`, `docs/MULTIPLAYER_DESIGN.md`
 

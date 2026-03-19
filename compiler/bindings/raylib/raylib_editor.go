@@ -19,6 +19,16 @@ var (
 	levelObjects   = make(map[string]*levelObject)
 	levelObjectsMu sync.RWMutex
 	levelObjectSeq int
+
+	// Editor state
+	editorEnabled     bool
+	editorMode        int // 0=select, 1=move, 2=rotate
+	editorBrushSize   float64
+	editorBrushStrength float64
+	editorBrushFalloff float64
+	editorBrushShape  int
+	editorSelection   string
+	editorMu          sync.RWMutex
 )
 
 type levelObject struct {
@@ -48,13 +58,84 @@ func registerEditor(v *vm.VM) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("EditorEnable requires (flag)")
 		}
+		editorMu.Lock()
+		editorEnabled = toFloat64Editor(args[0]) != 0
+		editorMu.Unlock()
 		return nil, nil
 	})
-	v.RegisterForeign("EditorSetMode", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("EditorSetBrushSize", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("EditorSetBrushStrength", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("EditorSetBrushFalloff", func(args []interface{}) (interface{}, error) { return nil, nil })
-	v.RegisterForeign("EditorSetBrushShape", func(args []interface{}) (interface{}, error) { return nil, nil })
+	v.RegisterForeign("EditorSetMode", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		editorMu.Lock()
+		editorMode = int(toFloat64Editor(args[0]))
+		editorMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("EditorSetBrushSize", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		editorMu.Lock()
+		editorBrushSize = toFloat64Editor(args[0])
+		editorMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("EditorSetBrushStrength", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		editorMu.Lock()
+		editorBrushStrength = toFloat64Editor(args[0])
+		editorMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("EditorSetBrushFalloff", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		editorMu.Lock()
+		editorBrushFalloff = toFloat64Editor(args[0])
+		editorMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("EditorSetBrushShape", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		editorMu.Lock()
+		editorBrushShape = int(toFloat64Editor(args[0]))
+		editorMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("EditorSetSelection", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, nil
+		}
+		editorMu.Lock()
+		editorSelection = toString(args[0])
+		editorMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("EditorDraw", func(args []interface{}) (interface{}, error) {
+		editorMu.RLock()
+		enabled := editorEnabled
+		mode := editorMode
+		editorMu.RUnlock()
+		if !enabled {
+			return nil, nil
+		}
+		// Minimal overlay: draw 2D text with mode/brush info
+		modeStr := "Select"
+		switch mode {
+		case 1:
+			modeStr = "Move"
+		case 2:
+			modeStr = "Rotate"
+		}
+		rl.DrawText(modeStr, 10, 10, 20, rl.White)
+		return nil, nil
+	})
 	// ---- Mouse ray (3D picking) ----
 	v.RegisterForeign("GetMouseRay", func(args []interface{}) (interface{}, error) {
 		mousePos := rl.GetMousePosition()

@@ -5,6 +5,7 @@ import (
 	"cyberbasic/compiler/semantic"
 	"cyberbasic/compiler/vm"
 	"fmt"
+	"strconv"
 	"strings"
 )
 
@@ -88,6 +89,15 @@ func (e *Emitter) compileStatement(stmt parser.Node) error {
 		e.chunk.Write(byte(vm.OpDiv))
 		e.chunk.Write(byte(vm.OpWaitSeconds))
 		return nil
+	case *parser.DataStatement:
+		return e.compileDataStatement(node)
+	case *parser.ReadStatement:
+		return e.compileReadStatement(node)
+	case *parser.RestoreStatement:
+		e.chunk.Write(byte(vm.OpRestore))
+		return nil
+	case *parser.GosubStatement:
+		return e.compileGosubStatement(node)
 	default:
 		return errWithLine(stmt, fmt.Errorf("unsupported statement type: %T", stmt))
 	}
@@ -789,6 +799,68 @@ func (e *Emitter) compileSubDecl(sub *parser.SubDecl) error {
 	return nil
 }
 
+func (e *Emitter) compileDataStatement(d *parser.DataStatement) error {
+	for _, v := range d.Values {
+		var val vm.Value
+		switch n := v.(type) {
+		case *parser.Number:
+			f, _ := strconv.ParseFloat(n.Value, 64)
+			val = f
+		case *parser.StringLiteral:
+			val = n.Value
+		case *parser.Boolean:
+			val = n.Value
+		case *parser.NilLiteral:
+			val = nil
+		case *parser.Identifier:
+			val = float64(0) // identifier in DATA: use 0 (could resolve consts if added)
+		default:
+			val = float64(0)
+		}
+		e.chunk.DataValues = append(e.chunk.DataValues, val)
+	}
+	return nil
+}
+
+func (e *Emitter) compileReadStatement(r *parser.ReadStatement) error {
+	for _, v := range r.Variables {
+		name := ""
+		switch n := v.(type) {
+		case *parser.Identifier:
+			name = n.Name
+		case *parser.Call:
+			if len(n.Arguments) > 0 {
+				name = n.Name // READ a(i) - use base name for now (scalar)
+			}
+		}
+		if name == "" {
+			return errWithLine(v, fmt.Errorf("READ requires variable name"))
+		}
+		idx := e.chunk.AddVariable(name)
+		if idx > 255 {
+			return fmt.Errorf("too many variables for READ")
+		}
+		e.chunk.Write(byte(vm.OpRead))
+		e.chunk.Write(byte(idx))
+	}
+	return nil
+}
+
+func (e *Emitter) compileGosubStatement(g *parser.GosubStatement) error {
+	name := strings.ToLower(g.SubName)
+	if !e.sem.UserFuncs[name] {
+		return errWithLine(g, fmt.Errorf("unknown sub for GOSUB: %s", g.SubName))
+	}
+	idx := e.chunk.WriteConstant(name)
+	if err := checkConstIndex(idx, " for GOSUB"); err != nil {
+		return err
+	}
+	e.chunk.Write(byte(vm.OpGosub))
+	e.chunk.Write(byte(idx))
+	e.chunk.Write(byte(0)) // arg count
+	return nil
+}
+
 // compileStartCoroutineStatement compiles StartCoroutine SubName(): emit OpStartCoroutine with 2-byte target offset (patched after decls)
 func (e *Emitter) compileStartCoroutineStatement(stmt *parser.StartCoroutineStatement) error {
 	name := strings.ToLower(stmt.SubName)
@@ -805,7 +877,12 @@ func (e *Emitter) compileStartCoroutineStatement(stmt *parser.StartCoroutineStat
 	}
 	e.chunk.Write(byte(vm.OpStartCoroutine))
 	e.chunk.WriteJumpOffset(0)
-	e.startCoroutinePatchList = append(e.startCoroutinePatchList, startCoroutinePatch{patchPos: len(e.chunk.Code) - 2, subName: name})
+	nameIdx := e.chunk.WriteConstant(name)
+	if err := checkConstIndex(nameIdx, " for StartCoroutine name"); err != nil {
+		return err
+	}
+	e.chunk.Write(byte(nameIdx))
+	e.startCoroutinePatchList = append(e.startCoroutinePatchList, startCoroutinePatch{patchPos: len(e.chunk.Code) - 3, subName: name})
 	return nil
 }
 

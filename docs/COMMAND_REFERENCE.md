@@ -230,7 +230,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | Command | Description |
 |--------|-------------|
 | **SceneSave2D**(path) | Save 2D scene to JSON (layers, backgrounds, sprites, tilemaps, particles, camera) |
-| **SceneLoad2D**(path) | Load 2D scene from JSON (stub: validates format) |
+| **SceneLoad2D**(path) | Load 2D scene from JSON (layers, sprites, camera) |
 
 ---
 
@@ -253,7 +253,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **TerrainSetBounce**(terrainId, value) | Set bounce for terrain collider |
 | **WaterSetDensity**(waterId, value) | Set water density (affects buoyancy) |
 | **WaterSetDrag**(waterId, linear, angular) | Set drag when submerged |
-| **WaterApplyBuoyancy**(bodyId, waterId) | Apply buoyancy to body (stub; call each frame) |
+| **WaterApplyBuoyancy**(bodyId, waterId [, worldId]) | Apply buoyancy to body (call each frame) |
 
 ---
 
@@ -264,13 +264,13 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **TreeEnableCollision**(treeId, flag) | Enable collision (capsule) on tree |
 | **TreeSetCollisionRadius**(treeId, radius) | Set capsule radius |
 | **TreeSetWind**(typeId, strength, speed) | Wind for tree type (shader) |
-| **TreeApplyWind**(treeId, vx, vy, vz) | Apply wind vector (stub) |
-| **TreeRaycast**(systemId, ox, oy, oz, dx, dy, dz) | Ray vs trees (stub) |
+| **TreeApplyWind**(treeId, vx, vy, vz) | Apply wind vector per tree |
+| **TreeRaycast**(systemId, ox, oy, oz, dx, dy, dz) | Ray vs tree capsules → 1 if hit |
 | **GrassSetBendAmount**(grassId, value) | Wind bend amount |
 | **GrassSetInteraction**(grassId, flag) | Player displacement |
-| **WeatherSetType**(type) **WeatherSetIntensity**(…) **WeatherSetWindDirection**(…) **WeatherSetWindSpeed**(…) **WeatherSetFogDensity**(…) **WeatherSetLightningFrequency**(…) | Weather stubs |
-| **FireCreate** **FireSetSpreadRate** **FireSetSmokeEmitter** **FireSetLight** **SmokeSetDissolveRate** **SmokeSetRiseSpeed** | Fire/smoke stubs |
-| **EnvironmentSetGlobalWind** **EnvironmentSetTemperature** **EnvironmentSetHumidity** **EnvironmentAffectParticles/Water/Vegetation** | Environment stubs |
+| **WeatherSetType**(type) **WeatherSetIntensity**(…) **WeatherSetWindDirection**(…) **WeatherSetWindSpeed**(…) **WeatherSetFogDensity**(…) **WeatherSetLightningFrequency**(…) | Weather (state stored) |
+| **FireCreate** **FireSetSpreadRate** **FireSetSmokeEmitter** **FireSetLight** **FireSetActive** **SmokeSetDissolveRate** **SmokeSetRiseSpeed** **DrawFires** | Fire/smoke (state + draw) |
+| **EnvironmentSetGlobalWind** **EnvironmentSetTemperature** **EnvironmentSetHumidity** **EnvironmentAffectParticles/Water/Vegetation** | Environment (state stored) |
 
 ---
 
@@ -278,9 +278,10 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 
 | Command | Description |
 |--------|-------------|
-| **NavGridCreate**(width, height) **NavGridSetWalkable**(gridId, x, y, flag) **NavGridSetCost**(…) **NavGridFindPath**(gridId, startX, startY, endX, endY) | Grid pathfinding (stubs) |
-| **NavMeshCreateFromTerrain**(terrainId) **NavMeshAddObstacle** **NavMeshRemoveObstacle** **NavMeshFindPath**(…) | NavMesh (stubs) |
-| **NavAgentCreate** **NavAgentSetSpeed** **NavAgentSetRadius** **NavAgentSetDestination** **NavAgentGetNextWaypoint** | Agents (stubs) |
+| **NavGridCreate**(width, height) **NavGridSetWalkable**(gridId, x, y, flag) **NavGridSetCost**(gridId, x, y, cost) **NavGridFindPath**(gridId, startX, startY, endX, endY) | Grid pathfinding (A*); returns waypoints [x1,y1, x2,y2, …] |
+| **NavMeshLoadFromFile**(path) **NavMeshFindPathRaw**(meshId, ox, oy, oz, dx, dy, dz) | Waypoint graph: load file (`x y z` per waypoint, `i j` edges); A* path |
+| **NavMeshCreateFromTerrain**(terrainId [, gridRes, maxStep]) **NavMeshAddObstacle** **NavMeshRemoveObstacle** | NavMesh from terrain heightmap |
+| **NavAgentCreate** **NavAgentSetSpeed** **NavAgentSetRadius** **NavAgentSetDestination** **NavAgentGetNextWaypoint** **NavAgentUpdate** **NavAgentSetPosition** **NavAgentGetPositionX/Y/Z** | Nav agents with pathfinding |
 
 ---
 
@@ -288,9 +289,9 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 
 | Command | Description |
 |--------|-------------|
-| **TimeSet**(hour) **TimeGet**() **TimeSetSpeed**(multiplier) | Time of day (stubs) |
-| **SkyboxCreate** **SkyboxSetTexture** **SkyboxSetRotation** **SkyboxSetTint** **DrawSkybox** | Skybox (stubs) |
-| **CloudLayerCreate** **CloudLayerSetTexture** **CloudLayerSetHeight** **DrawCloudLayer** | Clouds (stubs) |
+| **TimeSet**(hour) **TimeGet**() **TimeSetSpeed**(multiplier) | Time of day (state stored; hour 0–24) |
+| **SkyboxCreate** **SkyboxSetTexture** **SkyboxSetRotation** **SkyboxSetTint** **DrawSkybox** | Skybox (SkyboxSetTexture delegates to SetSkybox) |
+| **CloudLayerCreate** **CloudLayerSetTexture** **CloudLayerSetHeight** **DrawCloudLayer** | Clouds (CloudLayerSetTexture delegates to SetCloudTexture) |
 
 ---
 
@@ -298,9 +299,9 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 
 | Command | Description |
 |--------|-------------|
-| **RoomCreate** **RoomSetBounds** **RoomAddPortal** **PortalCreate** **PortalSetOpen** | Rooms/portals (stubs) |
-| **DoorCreate** **DoorSetOpen** **DoorToggle** **DoorSetLocked** **LeverCreate** **ButtonCreate** **SwitchCreate** | Doors/levers (stubs) |
-| **TriggerCreate** **InteractableCreate** **PickupCreate** **LightZoneCreate** **WorldSaveInteractables** **WorldLoadInteractables** | Triggers/interact (stubs) |
+| **RoomCreate** **RoomSetBounds** **RoomAddPortal** **PortalCreate** **PortalSetOpen** | Rooms/portals (state + save/load) |
+| **DoorCreate** **DoorSetOpen** **DoorToggle** **DoorSetLocked** **LeverCreate** **ButtonCreate** **SwitchCreate** | Doors/levers (state) |
+| **TriggerCreate** **TriggerSetBounds** **InteractableCreate** **PickupCreate** **LightZoneCreate** **WorldSaveInteractables** **WorldLoadInteractables** | Triggers/interact (state + JSON) |
 
 ---
 
@@ -308,8 +309,8 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 
 | Command | Description |
 |--------|-------------|
-| **WorldStreamEnable**(flag) **WorldStreamSetRadius**(…) **WorldStreamSetCenter**(x,y,z) **WorldLoadChunk**(chunkX, chunkZ) **WorldUnloadChunk**(…) **WorldIsChunkLoaded**(…) **WorldGetLoadedChunks** | Chunk streaming (stubs) |
-| **EditorEnable**(flag) **EditorSetMode** **EditorSetBrushSize** **EditorSetBrushStrength** **EditorSetBrushFalloff** **EditorSetBrushShape** | Editor tools (stubs) |
+| **WorldStreamEnable**(flag) **WorldStreamSetRadius**(r) **WorldStreamSetCenter**(x,y,z) **WorldLoadChunk**(chunkX, chunkZ [, path]) **WorldUnloadChunk** **WorldIsChunkLoaded** **WorldGetLoadedChunks** | Chunk streaming (state + LoadLevel) |
+| **EditorEnable**(flag) **EditorSetMode** **EditorSetBrushSize** **EditorSetBrushStrength** **EditorSetBrushFalloff** **EditorSetBrushShape** **EditorSetSelection** **EditorDraw** | Editor tools (state + overlay) |
 
 ---
 
@@ -317,7 +318,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 
 | Command | Description |
 |--------|-------------|
-| **DecalCreate**(textureId, x, y, z, size) **DecalSetLifetime** **DecalRemove** | Decals (stubs) |
+| **DecalCreate**(textureId, x, y, z, size) **DecalSetLifetime** **DecalRemove** **DrawDecals** | Decals (billboards + lifetime) |
 
 ---
 
@@ -519,6 +520,7 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 | **Physics2DStep**(dt) | Step world `"default"` |
 | **CreateBox2D**(world$, body$, x, y, w, h, mass, isDynamic) | Create box body → bodyId |
 | **CreateCircle2D**(world$, body$, x, y, radius, mass, isDynamic) | Create circle body |
+| **CreateChain2D**(worldId, bodyId, closed, x1, y1, x2, y2, …) | Create chain (closed=1: loop; else open). Vertices as x,y pairs. |
 | **MakeCircle2D**(id, x, y, radius, density) | Simple wrapper: circle in default world |
 | **DestroyBody2D**(world$, body$) **DeleteBody2D**(bodyId) | Remove body (DeleteBody2D uses default world) |
 | **GetPositionX2D**(world$, body$) **GetPositionY2D**(…) | Body position |
@@ -737,7 +739,7 @@ State is stored for use with custom shaders; raylib has no built-in lighting.
 
 | Command | Description |
 |--------|-------------|
-| **LoadSkybox**(folderPath) | Load cubemap (stub) |
+| **LoadSkybox**(folderPath) | Load 6-face cubemap from folder (right, left, top, bottom, front, back) |
 | **SetSkyColor**(r, g, b) | Clear/sky color (0–255) |
 | **EnableSkybox**() / **DisableSkybox**() | Toggle skybox draw |
 
@@ -790,8 +792,8 @@ State only; actual effects require render-to-texture and shaders.
 
 | Command | Description |
 |--------|-------------|
-| **PathfindGrid**(mapId, startX, startY, endX, endY) | → path (stub: empty) |
-| **PathfindNavmesh**(mesh, start, end) | → path (stub) |
+| **PathfindGrid**(mapId, startX, startY, endX, endY) | → path (delegates to NavGridFindPath when mapId is navgrid_*) |
+| **PathfindNavmesh**(meshId, ox, oy, oz, dx, dy, dz) | → path (delegates to NavMeshFindPathRaw when meshId is navmesh_*) |
 | **FollowPath**(entityId, path) | No-op |
 
 ---
@@ -903,21 +905,23 @@ Load JSON: `{ "nodeId": { "text": "...", "next": "otherId", "choices": [{"text":
 
 ## Physics joints & ragdolls
 
-**2D joints:** Use Box2D commands (CreateRevoluteJoint2D, CreatePrismaticJoint2D, SetJointLimits2D, SetJointMotor2D, etc.); see [2D physics (Box2D)](#2d-physics-box2d). **3D joints:** Unsupported in the current `purego-fallback` backend; use flat 3D commands (CreateWorld3D, Step3D, etc.), but constraint joints (CreateHingeJoint3D, etc.) now return explicit unsupported-feature errors in the shipped backend.
+**2D joints:** Use Box2D commands (CreateRevoluteJoint2D, CreatePrismaticJoint2D, SetJointLimits2D, SetJointMotor2D, etc.); see [2D physics (Box2D)](#2d-physics-box2d). **3D joints:** All implemented in the pure-Go fallback: CreatePointToPointJoint3D, CreateFixedJoint3D, CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, SetJointLimits3D, SetJointMotor3D. See [3D Physics Guide](3D_PHYSICS_GUIDE.md#3d-joints).
 
 | Command | Description |
 |--------|-------------|
-| **CreateHingeJoint**(bodyA, bodyB, anchor, axis) | Stub → "" (use Box2D for 2D; 3D joints stubbed) |
-| **CreateBallJoint**(bodyA, bodyB, anchor) | Stub |
-| **CreateSliderJoint**(bodyA, bodyB, axis) | Stub |
-| **CreateRagdoll**(model) | Stub |
+| **CreateHingeJoint3D**(worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisX, axisY, axisZ) | Hinge joint (rotation around axis) |
+| **CreateSliderJoint3D**(worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisX, axisY, axisZ) | Slider joint (translation along axis) |
+| **CreateConeTwistJoint3D**(worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisX, axisY, axisZ) | Cone twist joint |
+| **SetJointLimits3D**(worldId, jointId, low, high) | Set joint limits |
+| **SetJointMotor3D**(worldId, jointId, targetVel, maxForce) | Set joint motor |
+| **CreateRagdoll**(modelId [, worldId]) | Fallback: single sphere body; RagdollEnable/RagdollDisable |
 | **RagdollEnable** / **RagdollDisable** | No-op |
 
 ---
 
 ## AI behavior trees
 
-Build trees from selector/sequence/action/condition nodes; **AIRun** is a stub.
+Build trees from selector/sequence/action/condition nodes; **AIBehaviorTreeSetRoot**(treeId, nodeId); **AIRun**(treeId, entityId) runs tree.
 
 | Command | Description |
 |--------|-------------|
@@ -925,17 +929,17 @@ Build trees from selector/sequence/action/condition nodes; **AIRun** is a stub.
 | **AISelector**(child1, child2, …) | Priority node → node id |
 | **AISequence**(child1, child2, …) | Sequence node → node id |
 | **AIAction**(functionName) / **AICondition**(functionName) | Leaf nodes |
-| **AIRun**(treeId, entityId) | No-op |
+| **AIRun**(treeId, entityId) | Run behavior tree (selector/sequence/action/condition) |
 
 ---
 
 ## Multiplayer replication
 
-State flags for what to sync; **NetStartServer** / **NetStartClient** are stubs. Use **Host** / **Connect** and **Send** / **Receive** for real networking. See [MULTIPLAYER.md](MULTIPLAYER.md) for full guide.
+State flags for what to sync; **NetStartServer**(port) / **NetStartClient**(ip, port) are aliases for **Host** / **Connect**. Use **Host** / **Connect** and **Send** / **Receive** for real networking (KCP transport). Optional **Nakama** for cloud: **NakamaConnect**, **NakamaAuthenticateDevice**, **NakamaCreateMatch**, **NakamaJoinMatch**, **NakamaProcessEvents**. See [MULTIPLAYER.md](MULTIPLAYER.md) and [NAKAMA_GUIDE.md](NAKAMA_GUIDE.md).
 
 | Command | Description |
 |--------|-------------|
-| **NetStartServer**(port) / **NetStartClient**(ip, port) | Stubs |
+| **NetStartServer**(port) / **NetStartClient**(ip, port) | Aliases for Host(port) / Connect(ip, port) |
 | **ReplicateVariable**(entityId, varName) | Mark variable for sync |
 | **ReplicatePosition**(entityId) / **ReplicateRotation**(entityId) | Mark transform sync |
 | **RPC**(functionName, args) | No-op |
@@ -944,7 +948,7 @@ State flags for what to sync; **NetStartServer** / **NetStartClient** are stubs.
 
 ## Shader graph
 
-Node-based shader building; **ShaderGraphCompile** returns empty string (stub).
+Node-based shader building; **ShaderGraphCompile**(graphId) returns minimal passthrough GLSL fragment shader.
 
 | Command | Description |
 |--------|-------------|
@@ -954,7 +958,7 @@ Node-based shader building; **ShaderGraphCompile** returns empty string (stub).
 | **ShaderNodeTime**() | Time node |
 | **ShaderGraphCreate**() | → graph id |
 | **ShaderGraphConnect**(graphId, outputNodeId, inputNodeId) | Connect nodes |
-| **ShaderGraphCompile**(graphId) | Stub → "" |
+| **ShaderGraphCompile**(graphId) | Returns passthrough fragment shader GLSL |
 
 ---
 

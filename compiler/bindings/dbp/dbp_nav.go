@@ -21,10 +21,16 @@ func registerNav(v *vm.VM) {
 			return nil, fmt.Errorf("NavMeshLoad(id, path) requires 2 arguments")
 		}
 		id := toInt(args[0])
-		_ = toString(args[1]) // path - stub: no file loading yet
+		path := toString(args[1])
+		res, err := v.CallForeign("NavMeshLoadFromFile", []interface{}{path})
+		if err != nil {
+			return nil, err
+		}
+		meshId, _ := res.(string)
+		if meshId == "" {
+			return nil, nil
+		}
 		navMeshMapMu.Lock()
-		navMeshSeq++
-		meshId := fmt.Sprintf("navmesh_%d", navMeshSeq)
 		navMeshMap[id] = meshId
 		navMeshMapMu.Unlock()
 		return nil, nil

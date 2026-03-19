@@ -12,9 +12,9 @@ This table maps DarkBASIC Pro commands to CyberBASIC2 equivalents. Use it when p
 | REPEAT / UNTIL | **LOOP / UNTIL** or **REPEAT / UNTIL** (if supported) |
 | DO / LOOP | **LOOP** (check language docs) |
 | FUNCTION / ENDFUNCTION | **Function / End Function** |
-| GOSUB / RETURN | Use **Sub** and **Call** |
+| GOSUB / RETURN | **Implemented** — `GOSUB label` / `RETURN` (subroutine call/return) |
 | DIM | **VAR** or variable declaration |
-| DATA / READ / RESTORE | Use arrays or **ReadFile** + parse |
+| DATA / READ / RESTORE | **Implemented** — `DATA value1, value2, …`; `READ var1, var2, …`; `RESTORE [label]` to reset pointer |
 | REM / REMSTART / REMEND | **//** or **/* */** |
 
 ## Math / string (stdlib)

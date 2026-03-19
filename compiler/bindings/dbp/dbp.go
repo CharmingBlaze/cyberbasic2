@@ -456,6 +456,7 @@ func DrawAllDBPObjects() {
 		}
 		UpdateObjectAnimation(id, obj)
 		UpdateMeshAnimation(id)
+		ApplyBoneOverrides(id, &obj.model)
 		applyObjectPBR(obj)
 		drawModel := &obj.model
 		if meshModel := GetMeshAnimationModel(id); meshModel != nil {

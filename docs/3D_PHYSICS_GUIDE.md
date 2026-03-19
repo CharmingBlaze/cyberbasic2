@@ -10,8 +10,8 @@ Today, the shipped 3D backend is a pure-Go fallback rather than native Bullet. Y
 
 **What's supported today (shipped build, no CGO)**
 
-- **Supported:** CreateWorld3D, SetWorldGravity3D, Step3D, CreateBox3D, CreateSphere3D, CreateCapsule3D, CreateCylinder3D, CreateCone3D; GetPositionX/Y/Z3D, SetPosition3D, SetVelocity3D, ApplyForce3D, ApplyImpulse3D, **ApplyTorque3D**, **ApplyTorqueImpulse3D**; body properties (SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, SetCCD3D, etc.); **CreatePointToPointJoint3D**, **CreateFixedJoint3D**; **CreateStaticMesh3D** (loads OBJ, uses AABB collision); RayCastFromDir3D / RayCast3D and RayHit*; DestroyBody3D, DestroyWorld3D. Good for characters, projectiles, simple collisions, and basic constraints.
-- **Not in fallback:** CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, SetJointLimits3D, SetJointMotor3D, CreateHeightmap3D, CreateCompound3D, AddShapeToCompound3D, and exact triangle-mesh narrow-phase collision. Call **BulletFeatureAvailable()** or **BulletNativeAvailable()** before using these; see [ROADMAP_IMPLEMENTATION.md](ROADMAP_IMPLEMENTATION.md) for the full gap list.
+- **Supported:** CreateWorld3D, SetWorldGravity3D, Step3D, CreateBox3D, CreateSphere3D, CreateCapsule3D, CreateCylinder3D, CreateCone3D; GetPositionX/Y/Z3D, SetPosition3D, SetVelocity3D, ApplyForce3D, ApplyImpulse3D, **ApplyTorque3D**, **ApplyTorqueImpulse3D**; body properties (SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, SetCCD3D, etc.); **CreatePointToPointJoint3D**, **CreateFixedJoint3D**, **CreateHingeJoint3D**, **CreateSliderJoint3D**, **CreateConeTwistJoint3D**, **SetJointLimits3D**, **SetJointMotor3D**; **CreateStaticMesh3D** (loads OBJ, uses AABB collision); RayCastFromDir3D / RayCast3D and RayHit*; DestroyBody3D, DestroyWorld3D. Good for characters, projectiles, simple collisions, and all constraint joints.
+- **Not in fallback:** CreateHeightmap3D, CreateCompound3D, AddShapeToCompound3D, and exact triangle-mesh narrow-phase collision. Call **BulletFeatureAvailable()** or **BulletNativeAvailable()** before using these; see [ROADMAP_IMPLEMENTATION.md](ROADMAP_IMPLEMENTATION.md) for the full gap list.
 
 ## Table of Contents
 
@@ -64,7 +64,7 @@ DestroyWorld3D("w")
 CloseWindow()
 ```
 
-The API uses **flat names** only (no namespace). Legacy **BULLET.*** in source is rewritten at compile time. **3D constraint joints** (CreateHingeJoint3D, CreateSliderJoint3D, etc.) are not implemented in the shipped pure-Go fallback. See [API Reference](../API_REFERENCE.md) section 15.
+The API uses **flat names** only (no namespace). Legacy **BULLET.*** in source is rewritten at compile time. **3D constraint joints** (CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, SetJointLimits3D, SetJointMotor3D) are implemented in the shipped pure-Go fallback. See [API Reference](../API_REFERENCE.md) section 15.
 
 ---
 
@@ -102,7 +102,7 @@ Treat the current 3D backend as:
 
 **Body properties (implemented):** **SetFriction3D**, **SetRestitution3D**, **SetDamping3D**, **SetKinematic3D**, **SetGravity3D**, **SetLinearFactor3D**, **SetAngularFactor3D**, **SetCCD3D**.
 
-**3D joints:** **BulletJointsAvailable**() returns 0 in the current shipped backend. CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, CreatePointToPointJoint3D, CreateFixedJoint3D, SetJointLimits3D, and SetJointMotor3D are unsupported in the pure-Go fallback and now return explicit errors.
+**3D joints:** **BulletJointsAvailable**() returns 1 in the shipped backend. All joints are implemented: **CreatePointToPointJoint3D**, **CreateFixedJoint3D**, **CreateHingeJoint3D**, **CreateSliderJoint3D**, **CreateConeTwistJoint3D**, **SetJointLimits3D**, **SetJointMotor3D**. See [3D joints](#3d-joints) below.
 
 ---
 
@@ -117,9 +117,38 @@ Use these each frame after **Step3D** to draw your 3D model or to drive **GAME.C
 
 ## Velocity and forces
 
+
 - **Velocity:** **SetVelocity3D**(worldId, bodyId, vx, vy, vz). **GetVelocityX3D** / **GetVelocityY3D** / **GetVelocityZ3D**.
 - **Angular velocity:** **SetAngularVelocity3D**, **GetAngularVelocityX3D/Y3D/Z3D** (see API Reference).
-- **Forces:** **ApplyForce3D**(worldId, bodyId, fx, fy, fz). **ApplyImpulse3D**(worldId, bodyId, ix, iy, iz). `ApplyTorque3D` and `ApplyTorqueImpulse3D` are legacy names but are unsupported in the current fallback and now return explicit errors.
+- **Forces:** **ApplyForce3D**(worldId, bodyId, fx, fy, fz). **ApplyImpulse3D**(worldId, bodyId, ix, iy, iz). **ApplyTorque3D** and **ApplyTorqueImpulse3D** for angular forces.
+
+---
+
+## 3D joints
+
+The pure-Go fallback implements all constraint joint types. Use **BulletJointsAvailable**() to confirm (returns 1).
+
+| Joint | Command | Description |
+|-------|---------|-------------|
+| **Point-to-point** | CreatePointToPointJoint3D(worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz) | Ball joint: anchors align |
+| **Fixed** | CreateFixedJoint3D(worldId, jointId, bodyA, bodyB) | Bodies welded together |
+| **Hinge** | CreateHingeJoint3D(worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisAx, axisAy, axisAz) | Rotation around one axis only |
+| **Slider** | CreateSliderJoint3D(worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisAx, axisAy, axisAz) | Translation along one axis only |
+| **Cone twist** | CreateConeTwistJoint3D(worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisAx, axisAy, axisAz) | Ball + cone angle limit |
+
+**Limits and motors:**
+- **SetJointLimits3D**(worldId, jointId, low, high) — hinge: angle limits (radians); slider: position limits (meters); conetwist: cone angle (radians)
+- **SetJointMotor3D**(worldId, jointId, targetVel, maxForce) — hinge: angular velocity (rad/s); slider: linear velocity (m/s)
+
+Example: hinge joint for a door:
+
+```basic
+CreateWorld3D("w", 0, -18, 0)
+CreateBox3D("w", "frame", 0, 1, 0, 0.5, 1, 0.1, 0)
+CreateBox3D("w", "door", 0.6, 1, 0, 0.5, 1, 0.05, 1)
+CreateHingeJoint3D("w", "hinge1", "frame", "door", 0.5, 0, 0, -0.5, 0, 0, 0, 1, 0)
+SetJointLimits3D("w", "hinge1", -1.5, 0)
+```
 
 ---
 
@@ -189,6 +218,13 @@ See [Game Development Guide](GAME_DEVELOPMENT_GUIDE.md#3d-physics-bullet).
 | **GetYaw3D / GetPitch3D / GetRoll3D** | (worldId, bodyId) | float | Rotation |
 | **SetRotation3D** | (worldId, bodyId, yaw, pitch, roll) | — | Set rotation |
 | **SetVelocity3D** | (worldId, bodyId, vx, vy, vz) | — | Set velocity |
+| **CreatePointToPointJoint3D** | (worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz) | — | Ball joint |
+| **CreateFixedJoint3D** | (worldId, jointId, bodyA, bodyB) | — | Weld bodies |
+| **CreateHingeJoint3D** | (worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisX, axisY, axisZ) | — | Hinge joint |
+| **CreateSliderJoint3D** | (worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisX, axisY, axisZ) | — | Slider joint |
+| **CreateConeTwistJoint3D** | (worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisX, axisY, axisZ) | — | Cone twist joint |
+| **SetJointLimits3D** | (worldId, jointId, low, high) | — | Set joint limits |
+| **SetJointMotor3D** | (worldId, jointId, targetVel, maxForce) | — | Set joint motor |
 | **StepAllPhysics3D** | (dt) | — | Step all worlds (hybrid loop) |
 
 For the full list including **CreateCapsule3D**, **CreateStaticMesh3D**, **GetCollisionCount3D**, **GetCollisionOther3D**, and legacy **DestroyWorld3D** / **DestroyBody**, see [API Reference](../API_REFERENCE.md) section 15.
@@ -224,6 +260,12 @@ CloseWindow()
 ```
 
 More examples: [templates/3d_game.bas](../templates/3d_game.bas), [examples/README.md](../examples/README.md).
+
+---
+
+## Native Bullet backend (optional)
+
+The shipped build uses a pure-Go fallback. An optional native Bullet backend can be built with `go build -tags bullet` when Bullet C libraries are installed. When available, **BulletNativeAvailable**() returns 1 and the runtime uses the native Bullet engine for higher-fidelity physics (exact mesh collision, compound shapes, heightmaps). If the native backend fails to initialize, the runtime falls back to the pure-Go implementation. See [ROADMAP_IMPLEMENTATION.md](ROADMAP_IMPLEMENTATION.md) for build instructions.
 
 ---
 

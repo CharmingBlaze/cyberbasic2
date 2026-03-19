@@ -469,6 +469,10 @@ const (
 	TokenYield
 	TokenWaitSeconds
 	TokenWaitFrames // DBP: wait N frames (compiles to WaitSeconds(n/60))
+	TokenData       // DATA statement
+	TokenRead       // READ statement
+	TokenRestore    // RESTORE statement
+	TokenGosub      // GOSUB statement
 
 	// Operators
 	TokenEqual
@@ -611,6 +615,10 @@ var KeywordMap = map[string]TokenType{
 	"YIELD":                    TokenYield,
 	"WAITSECONDS":              TokenWaitSeconds,
 	"WAITFRAMES":               TokenWaitFrames,
+	"DATA":                      TokenData,
+	"READ":                      TokenRead,
+	"RESTORE":                   TokenRestore,
+	"GOSUB":                     TokenGosub,
 }
 
 // OperatorMap maps operator strings to token types

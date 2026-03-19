@@ -2,28 +2,21 @@
 
 Only DBP commands that have **no** current equivalent in CyberBASIC2 are listed here. These are the ones we implement; all others are skipped (see [DBP_COMPAT.md](DBP_COMPAT.md) for DBP → CyberBASIC2 mapping).
 
-## String / math (stdlib)
+## Already implemented (stdlib)
 
-| DBP command | CyberBASIC2 equivalent (before) | Action |
-|-------------|--------------------------------|--------|
-| LEFT$(s, n) | — | **Add** Left(s, n) in std |
-| RIGHT$(s, n) | — | **Add** Right(s, n) in std |
-| MID$(s, p, n) | TextSubtext(s, p-1, n) exists but 0-based | **Add** Mid(s, start1Based, count) in std (1-based for DBP familiarity) |
-| LEN(s) | TextLength(s) | **Add** alias Len(s) in std |
-| CHR$(code) | — | **Add** Chr(code) in std |
-| ASC(s) | — | **Add** Asc(s) in std |
-| STR$(x) | TextFormat("%v", x) possible | **Add** Str(x) in std |
-| VAL(s) | TextToInteger/TextToFloat | **Add** alias Val(s) in std (float) |
-| RND / RND(n) | GetRandomValue(0,999)/GetRandomValue(1,n) in raylib | **Add** Rnd() and Rnd(n) in std (no raylib dep) |
-| INT(x) | — | **Add** Int(x) in std (truncate) |
-
-## File / system (stdlib)
-
-| DBP command | CyberBASIC2 equivalent (before) | Action |
-|-------------|--------------------------------|--------|
-| COPY FILE | — | **Add** CopyFile(src, dst) in std |
-| DIR / directory list | — | **Add** Dir(path) or ListDir(path) in std (return list of names) |
-| EXECUTE FILE | — | **Add** ExecuteFile(path) in std |
+- **LEFT$(s, n)** → Left(s, n) in std
+- **RIGHT$(s, n)** → Right(s, n) in std
+- **MID$(s, p, n)** → Mid(s, start1Based, count) in std (1-based)
+- **LEN(s)** → Len(s) in std
+- **CHR$(code)** → Chr(code) in std
+- **ASC(s)** → Asc(s) in std
+- **STR$(x)** → Str(x) in std
+- **VAL(s)** → Val(s) in std (float)
+- **RND / RND(n)** → Rnd() and Rnd(n) in std
+- **INT(x)** → Int(x) in std (truncate)
+- **COPY FILE** → CopyFile(src, dst) in std
+- **DIR** → ListDir(path) / Dir(path) in std
+- **EXECUTE FILE** → ExecuteFile(path) in std
 
 ## Already covered (skip)
 
@@ -37,4 +30,4 @@ Only DBP commands that have **no** current equivalent in CyberBASIC2 are listed 
 - **Collision** → CheckCollision*, GetRayCollision*, Box2D/Bullet.
 - **GUI** → Gui* (raygui), BeginUI/EndUI.
 
-Implementation: add the **Add** items above in [compiler/bindings/std/std.go](../compiler/bindings/std/std.go) and document in [DBP_COMPAT.md](DBP_COMPAT.md).
+See [compiler/bindings/std/std.go](../compiler/bindings/std/std.go) and [DBP_COMPAT.md](DBP_COMPAT.md).

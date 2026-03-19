@@ -224,6 +224,8 @@ func TestCoroutineSwitch(t *testing.T) {
 	chunk.Write(byte(OpStartCoroutine))
 	chunk.Write(byte(0)) // worker IP low (patched below)
 	chunk.Write(byte(0)) // worker IP high
+	nameIdx := chunk.WriteConstant("worker")
+	chunk.Write(byte(nameIdx))
 	chunk.Write(byte(OpYield))
 	chunk.Write(byte(OpLoadConst))
 	ci = chunk.WriteConstant(2)

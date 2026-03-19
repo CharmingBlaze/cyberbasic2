@@ -17,6 +17,7 @@ import (
 	"cyberbasic/compiler/runtime/renderer"
 	"cyberbasic/compiler/bindings/game"
 	"cyberbasic/compiler/bindings/indoor"
+	"cyberbasic/compiler/bindings/nakama"
 	"cyberbasic/compiler/bindings/navigation"
 	"cyberbasic/compiler/bindings/net"
 	"cyberbasic/compiler/bindings/raylib"
@@ -275,6 +276,7 @@ func main() {
 	box2d.RegisterBox2D(rt.GetVM())
 	ecs.RegisterECS(rt.GetVM())
 	net.RegisterNet(rt.GetVM())
+	nakama.RegisterNakama(rt.GetVM())
 	scene.RegisterScene(rt.GetVM())
 	game.RegisterGame(rt.GetVM())
 	dbp.Register2D(rt.GetVM()) // 2D API overlay (SetTile/GetTile with int id)
@@ -394,6 +396,7 @@ func runREPL() {
 		box2d.RegisterBox2D(rt.GetVM())
 		ecs.RegisterECS(rt.GetVM())
 		net.RegisterNet(rt.GetVM())
+		nakama.RegisterNakama(rt.GetVM())
 		scene.RegisterScene(rt.GetVM())
 		game.RegisterGame(rt.GetVM())
 		dbp.Register2D(rt.GetVM())

@@ -1,23 +1,42 @@
 # Multiplayer Tutorial
 
-This tutorial shows the current multiplayer workflow that matches the shipping TCP bindings.
+This tutorial shows the current multiplayer workflow. **Transport:** KCP (reliable UDP) for Host/Connect. Optional **Nakama** for cloud accounts and matchmaking.
 
 ## What Exists Today
 
-- TCP client/server connections with `Host`, `Accept`, `AcceptTimeout`, `Connect`, and `Disconnect`
+- KCP client/server connections with `Host`, `Accept`, `AcceptTimeout`, `Connect`, and `Disconnect`
 - Text, JSON, table, RPC, ping, and entity-sync helpers
 - Event-driven delivery through `ProcessNetworkEvents()`
 - Polling delivery through `Receive*()` calls
 - Fixed-step runtime callbacks through `FixedUpdate(rate)` and `OnFixedUpdate(label$)`
 
-## What Does Not Exist Yet
+## Advanced Features (Implemented)
 
-- Built-in lockstep networking
-- Rollback state snapshots
-- Deterministic replay tooling
-- Matchmaking or NAT traversal
+- **Lockstep** — `LockstepEnable`, `LockstepSendInput`, `LockstepGetInputs`, `OnLockstepTickReady`
+- **Rollback** — `RegisterSnapshotHandler`, `RegisterRestoreHandler`, `SnapshotCreate`, `SnapshotRestore`, `RollbackBroadcast`
+- **Prediction** — `PredictionEnable`, `PredictionStoreInput`, `PredictionReconcile`
+- **Matchmaking** — `MatchmakingHost`, `MatchmakingDiscover`, `MatchmakingJoin` (LAN broadcast)
+- **Interest management** — `SetInterestFilter`, `SetEntityInterestZone`
+- **Nakama (optional)** — `NakamaConnect`, `NakamaAuthenticateDevice`, `NakamaCreateMatch`, `NakamaJoinMatch`, etc. See [NAKAMA_GUIDE.md](NAKAMA_GUIDE.md).
 
-See [MULTIPLAYER_DESIGN.md](MULTIPLAYER_DESIGN.md) for the current design/status document. For full command list and patterns, see [Multiplayer Guide](MULTIPLAYER.md).
+See [MULTIPLAYER_ADVANCED.md](MULTIPLAYER_ADVANCED.md) for lockstep/rollback/prediction patterns. For full command list, see [Multiplayer Guide](MULTIPLAYER.md).
+
+## Nakama Quick Start
+
+For cloud matchmaking and accounts:
+
+```basic
+NakamaConnect("127.0.0.1", 7350, "defaultkey", 0)
+NakamaAuthenticateDevice("my-device-id", 1, "")
+NakamaCreateSocket()
+NakamaSocketConnect()
+VAR matchId = NakamaCreateMatch("")
+// Or: NakamaAddMatchmaker(2, 4, "") then OnNakamaMatchmakerMatched(matchId, token) → NakamaJoinMatch(matchId, token)
+mainloop
+  NakamaProcessEvents()
+  // ...
+endmain
+```
 
 ## Pick One Delivery Style
 
@@ -156,6 +175,30 @@ SUB OnEntitySync(entityId, x, y, z)
 END SUB
 ```
 
+## Matchmaking (LAN Discovery)
+
+**Host a room:**
+
+```basic
+VAR sid = MatchmakingHost(9999, "My Game", 4)
+IF IsNull(sid) THEN END
+VAR cid = Accept(sid)
+' ... game loop ...
+```
+
+**Discover and join:**
+
+```basic
+VAR rooms = MatchmakingDiscover(3000)
+VAR n = GetJSONKey(rooms, "count")
+FOR i = 0 TO n - 1
+  VAR r = GetJSONKey(rooms, Str(i))
+  PRINT GetJSONKey(r, "roomName") + " - " + Str(GetJSONKey(r, "playerCount")) + " players"
+NEXT
+VAR r0 = GetJSONKey(rooms, "0")
+VAR cid = MatchmakingJoin(GetJSONKey(r0, "host"), GetJSONKey(r0, "port"))
+```
+
 ## Practical Notes
 
 - `Receive(connectionId)` is non-blocking and takes no timeout argument.
@@ -177,5 +220,6 @@ Full reference: [Multiplayer Guide](MULTIPLAYER.md).
 ## Next Reading
 
 - [MULTIPLAYER.md](MULTIPLAYER.md) for the API guide
-- [MULTIPLAYER_DESIGN.md](MULTIPLAYER_DESIGN.md) for current lockstep/rollback plans
+- [MULTIPLAYER_DESIGN.md](MULTIPLAYER_DESIGN.md) for architecture
+- [MULTIPLAYER_ADVANCED.md](MULTIPLAYER_ADVANCED.md) for lockstep, rollback, prediction
 - [3D_GAME_API.md](3D_GAME_API.md) and [2D_GAME_API.md](2D_GAME_API.md) for gameplay-facing command references

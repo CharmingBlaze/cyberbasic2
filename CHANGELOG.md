@@ -6,6 +6,57 @@ All notable changes to CyberBasic are documented here. The project follows a sin
 
 ## [Unreleased] – release preparation
 
+### DBP stub implementation Phase 4 (indoor, world streaming, fire, editor)
+
+- **Indoor:** RoomCreate, RoomSetBounds, RoomAddPortal, PortalCreate, PortalSetOpen, DoorCreate, DoorSetOpen/Toggle/SetLocked, TriggerCreate, TriggerSetBounds, InteractableCreate, PickupCreate, LightZoneCreate, LeverCreate, ButtonCreate, SwitchCreate; WorldSaveInteractables / WorldLoadInteractables
+- **World streaming:** WorldStreamEnable, WorldStreamSetRadius, WorldStreamSetCenter, WorldLoadChunk, WorldUnloadChunk, WorldIsChunkLoaded, WorldGetLoadedChunks
+- **Fire/Smoke:** FireCreate, FireSetSpreadRate, FireSetSmokeEmitter, FireSetLight, FireSetActive, SmokeSetDissolveRate, SmokeSetRiseSpeed, DrawFires
+- **Editor:** EditorEnable, EditorSetMode, EditorSetBrushSize/Strength/Falloff/Shape, EditorSetSelection, EditorDraw (minimal overlay)
+
+### DBP stub implementation Phase 5 (complex systems)
+
+- **CreateRagdoll**(modelId [, worldId]) — fallback: single sphere body at origin; RagdollEnable/RagdollDisable
+- **AIBehaviorTreeSetRoot**(treeId, nodeId) — set root node for tree
+- **AIRun**(treeId, entityId) — run behavior tree (selector/sequence/action/condition)
+- **ShaderGraphCompile**(graphId) — returns minimal passthrough GLSL fragment shader
+- **LoadSkybox**(folderPath) — load 6 faces (right, left, top, bottom, front, back) from folder, call SetSkyboxCubemap
+
+### DBP stub implementation Phase 2 (navigation, physics)
+
+- **NavMeshCreateFromTerrain**(terrainId [, gridRes, maxStep]) — build waypoint graph from terrain heightmap
+- **NavMeshAddObstacle**(meshId, minX, minY, minZ, maxX, maxY, maxZ) / **NavMeshRemoveObstacle**(meshId, index)
+- **NavAgentCreate**([meshId, gridId]) / **NavAgentSetSpeed** / **NavAgentSetRadius** / **NavAgentSetDestination** / **NavAgentGetNextWaypoint** / **NavAgentUpdate**(agentId, dt) / **NavAgentSetPosition** / **NavAgentGetPositionX/Y/Z**
+- **WaterApplyBuoyancy**(bodyId, waterId [, worldId]) — apply buoyancy force when body below water surface
+
+### DBP stub implementation Phase 3 (vegetation, decals, scene)
+
+- **TreeApplyWind**(treeId, vx, vy, vz) — store wind vector per tree
+- **TreeRaycast**(systemId, ox, oy, oz, dx, dy, dz) — ray vs tree capsules; returns 1 if hit
+- **DecalCreate** / **DecalSetLifetime** / **DecalRemove** / **DrawDecals** — decal billboards with lifetime
+- **SceneLoad2D**(path) — restore layers, sprites, camera from JSON
+
+### DBP stub implementation Phase 1 (state storage)
+
+- **TimeSet** / **TimeGet** / **TimeSetSpeed** — time of day (hour 0–24, scale)
+- **WeatherSetType** / **WeatherSetIntensity** / **WeatherSetWindDirection** / **WeatherSetWindSpeed** / **WeatherSetFogDensity** / **WeatherSetLightningFrequency** — weather state
+- **EnvironmentSetGlobalWind** / **EnvironmentSetTemperature** / **EnvironmentSetHumidity** — environment state
+- **SkyboxCreate** / **SkyboxSetTexture** / **SkyboxSetRotation** / **SkyboxSetTint** — alternate skybox API (delegates to SetSkybox)
+- **CloudLayerCreate** / **CloudLayerSetTexture** / **CloudLayerSetHeight** — alternate cloud API (delegates to SetCloudTexture)
+- **PathfindNavmesh** — delegates to NavMeshFindPathRaw when meshId is navmesh_*
+
+### DBP commands and features (implemented)
+
+- **NetStartServer** / **NetStartClient** — aliases for Host(port) / Connect(host, port)
+- **StopTask** / **PauseTask** / **ResumeTask** — stop/pause/resume coroutines by name (VM fiber tracking)
+- **MakeQuaternion** / **RotateObjectQuat** / **GetObjectMatrix** — quaternion and matrix object transforms
+- **SetBoneRotation** / **SetBonePosition** — manual bone control for animated models
+- **CreateChain2D** — Box2D chain bodies (closed or open; vertices as x,y pairs)
+- **NavGrid** — A* pathfinding: NavGridCreate, NavGridSetWalkable, NavGridSetCost, NavGridFindPath
+- **NavMesh** — waypoint graph: NavMeshLoadFromFile (file format: `x y z` per waypoint, `i j` edges), NavMeshFindPathRaw
+- **DATA** / **READ** / **RESTORE** — inline data and sequential read
+- **GOSUB** / **RETURN** — subroutine call/return
+- **CreateRagdoll** — stub (placeholder id; full ragdoll TODO)
+
 ### Physics API: flat names only (namespace removal)
 
 - **Physics API simplified:** 2D and 3D physics now use **flat names** only: **CreateWorld2D**, **Step2D**, **CreateBody2D**, **GetPositionX2D** / **GetPositionY2D**, etc., and **CreateWorld3D**, **Step3D**, **CreateBox3D**, **GetPositionX3D**, etc. The **BOX2D.*** and **BULLET.*** namespaces are no longer registered in the VM.

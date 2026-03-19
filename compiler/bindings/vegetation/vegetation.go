@@ -128,14 +128,22 @@ func RegisterVegetation(v *vm.VM) {
 		if len(args) < 4 {
 			return nil, fmt.Errorf("TreeApplyWind requires (treeId, vx, vy, vz)")
 		}
-		// Stub: apply wind vector to tree (shader bending)
+		treeId := toString(args[0])
+		vx, vy, vz := toFloat32(args[1]), toFloat32(args[2]), toFloat32(args[3])
+		TreeSetWind(treeId, vx, vy, vz)
 		return nil, nil
 	})
 	v.RegisterForeign("TreeRaycast", func(args []interface{}) (interface{}, error) {
-		if len(args) < 6 {
+		if len(args) < 7 {
 			return nil, fmt.Errorf("TreeRaycast requires (systemId, ox, oy, oz, dx, dy, dz)")
 		}
-		// Stub: ray vs tree capsules
+		sysId := toString(args[0])
+		ox, oy, oz := toFloat32(args[1]), toFloat32(args[2]), toFloat32(args[3])
+		dx, dy, dz := toFloat32(args[4]), toFloat32(args[5]), toFloat32(args[6])
+		hit, _, _, _, _ := TreeRaycastImpl(sysId, ox, oy, oz, dx, dy, dz)
+		if hit {
+			return 1, nil
+		}
 		return 0, nil
 	})
 

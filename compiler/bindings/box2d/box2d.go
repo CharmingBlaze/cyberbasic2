@@ -687,7 +687,50 @@ func registerFlat2D(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterForeign("CreateChain2D", func(args []interface{}) (interface{}, error) {
-		return nil, nil
+		// CreateChain2D(world$, body$, closed, x1, y1, x2, y2, ...) - closed: 0=open, 1=loop
+		if len(args) < 9 {
+			return nil, fmt.Errorf("CreateChain2D requires (world$, body$, closed, x1, y1, x2, y2, ...) with at least 2 vertices")
+		}
+		worldId := toString(args[0])
+		bodyId := toString(args[1])
+		closed := toFloat64(args[2]) != 0
+		var verts []box2d.B2Vec2
+		for i := 3; i+1 < len(args); i += 2 {
+			verts = append(verts, box2d.MakeB2Vec2(toFloat64(args[i]), toFloat64(args[i+1])))
+		}
+		if closed && len(verts) < 3 {
+			return nil, fmt.Errorf("CreateChain2D: closed chain requires at least 3 vertices")
+		}
+		if !closed && len(verts) < 2 {
+			return nil, fmt.Errorf("CreateChain2D: open chain requires at least 2 vertices")
+		}
+		worldMu.RLock()
+		w := worlds[worldId]
+		worldMu.RUnlock()
+		if w == nil {
+			return nil, fmt.Errorf("world not found: %s", worldId)
+		}
+		def := box2d.NewB2BodyDef()
+		def.Position = box2d.MakeB2Vec2(0, 0)
+		def.Type = box2d.B2BodyType.B2_staticBody
+		body := w.CreateBody(def)
+		if body == nil {
+			return nil, fmt.Errorf("CreateBody failed")
+		}
+		chain := box2d.MakeB2ChainShape()
+		if closed {
+			chain.CreateLoop(verts, len(verts))
+		} else {
+			chain.CreateChain(verts, len(verts))
+		}
+		body.CreateFixture(&chain, 0)
+		bodiesMu.Lock()
+		bodies[bodyKey(worldId, bodyId)] = body
+		bodiesMu.Unlock()
+		bodyOrderMu.Lock()
+		bodyOrder[worldId] = append(bodyOrder[worldId], bodyId)
+		bodyOrderMu.Unlock()
+		return bodyId, nil
 	})
 	v.RegisterForeign("SetSensor2D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {

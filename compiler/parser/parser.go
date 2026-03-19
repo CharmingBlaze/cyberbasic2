@@ -140,6 +140,14 @@ func (p *Parser) statement() (Node, error) {
 		return p.assignmentOrCall()
 	case lexer.TokenReturn:
 		return p.returnStatement()
+	case lexer.TokenData:
+		return p.dataStatement()
+	case lexer.TokenRead:
+		return p.readStatement()
+	case lexer.TokenRestore:
+		return p.restoreStatement()
+	case lexer.TokenGosub:
+		return p.gosubStatement()
 	case lexer.TokenLoadImage, lexer.TokenCreateSprite, lexer.TokenSetSpritePosition,
 		lexer.TokenDrawSprite, lexer.TokenLoadModel, lexer.TokenCreateCamera,
 		lexer.TokenSetCameraPosition, lexer.TokenDrawModel, lexer.TokenPlayMusic,

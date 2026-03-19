@@ -827,6 +827,79 @@ func (p *Parser) returnStatement() (Node, error) {
 	return &ReturnStatement{Value: value}, nil
 }
 
+func (p *Parser) dataStatement() (Node, error) {
+	p.advance() // Skip DATA
+	var values []Node
+	for {
+		if p.check(lexer.TokenNewLine) || p.isAtEnd() {
+			break
+		}
+		// DATA values: number, string, or identifier (for const)
+		if p.check(lexer.TokenNumber) {
+			t := p.advance()
+			values = append(values, &Number{Value: t.Value})
+		} else if p.check(lexer.TokenString) {
+			t := p.advance()
+			values = append(values, &StringLiteral{Value: t.Value})
+		} else {
+			expr, err := p.expression()
+			if err != nil {
+				return nil, err
+			}
+			values = append(values, expr)
+		}
+		if !p.match(lexer.TokenComma) {
+			break
+		}
+	}
+	return &DataStatement{Values: values}, nil
+}
+
+func (p *Parser) readStatement() (Node, error) {
+	p.advance() // Skip READ
+	var vars []Node
+	for {
+		if p.check(lexer.TokenNewLine) || p.isAtEnd() {
+			break
+		}
+		expr, err := p.primary()
+		if err != nil {
+			return nil, err
+		}
+		// Allow identifier or array access (a or a(i) or a(i,j))
+		expr, err = p.parseMemberAccessChain(expr)
+		if err != nil {
+			return nil, err
+		}
+		vars = append(vars, expr)
+		if !p.match(lexer.TokenComma) {
+			break
+		}
+	}
+	return &ReadStatement{Variables: vars}, nil
+}
+
+func (p *Parser) restoreStatement() (Node, error) {
+	p.advance() // Skip RESTORE
+	label := ""
+	if !p.check(lexer.TokenNewLine) && !p.isAtEnd() && p.check(lexer.TokenIdentifier) {
+		label = p.advance().Value
+	}
+	return &RestoreStatement{Label: label}, nil
+}
+
+func (p *Parser) gosubStatement() (Node, error) {
+	p.advance() // Skip GOSUB
+	if p.check(lexer.TokenNewLine) || p.isAtEnd() {
+		return nil, &Error{Message: "GOSUB requires sub name", Line: p.line(), Col: p.col()}
+	}
+	if !p.check(lexer.TokenIdentifier) {
+		return nil, &Error{Message: "GOSUB requires sub name", Line: p.line(), Col: p.col()}
+	}
+	name := p.advance().Value
+	return &GosubStatement{SubName: name}, nil
+}
+
 // gameCommand parses game-specific commands
 func (p *Parser) gameCommand() (Node, error) {
 	command := p.advance().Value

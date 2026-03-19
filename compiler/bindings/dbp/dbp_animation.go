@@ -4,12 +4,19 @@ package dbp
 import (
 	"fmt"
 	"path/filepath"
+	"strconv"
+	"strings"
 	"sync"
 
 	blendanim "cyberbasic/compiler/runtime/animation"
 	"cyberbasic/compiler/vm"
 	rl "github.com/gen2brain/raylib-go/raylib"
 )
+
+type boneOverride struct {
+	rotation *rl.Quaternion
+	position *rl.Vector3
+}
 
 type dbpAnimState struct {
 	animId    int
@@ -36,6 +43,8 @@ var (
 	meshAnimFrames  = make(map[int][]rl.Model)
 	meshAnimState   = make(map[int]*dbpMeshAnimState)
 	meshAnimMu      sync.Mutex
+	boneOverrides   = make(map[int]map[string]boneOverride) // objID -> boneName -> override
+	boneOverridesMu sync.RWMutex
 )
 
 // register3DAnimation adds LoadAnimation, PlayAnimation, SetAnimationFrame, GetAnimationFrame, GetAnimationLength, GetAnimationName.
@@ -320,19 +329,41 @@ func register3DAnimation(v *vm.VM) {
 		}
 		return clips[clipIndex].Name, nil
 	})
-	// SetBoneRotation(id, boneName, pitch, yaw, roll): Manual bone control. Stored for future IK/skeletal use.
 	v.RegisterForeign("SetBoneRotation", func(args []interface{}) (interface{}, error) {
 		if len(args) < 5 {
 			return nil, fmt.Errorf("SetBoneRotation(id, boneName, pitch, yaw, roll) requires 5 arguments")
 		}
-		// Placeholder: store for manual animation; full implementation in runtime/animation
+		objID := toInt(args[0])
+		boneName := strings.ToLower(strings.TrimSpace(toString(args[1])))
+		pitch := toFloat32(args[2]) * float32(3.14159265) / 180
+		yaw := toFloat32(args[3]) * float32(3.14159265) / 180
+		roll := toFloat32(args[4]) * float32(3.14159265) / 180
+		q := rl.QuaternionNormalize(rl.QuaternionFromEuler(pitch, yaw, roll))
+		boneOverridesMu.Lock()
+		if boneOverrides[objID] == nil {
+			boneOverrides[objID] = make(map[string]boneOverride)
+		}
+		bo := boneOverrides[objID][boneName]
+		bo.rotation = &q
+		boneOverrides[objID][boneName] = bo
+		boneOverridesMu.Unlock()
 		return nil, nil
 	})
-	// SetBonePosition(id, boneName, x, y, z): Manual bone control.
 	v.RegisterForeign("SetBonePosition", func(args []interface{}) (interface{}, error) {
 		if len(args) < 5 {
 			return nil, fmt.Errorf("SetBonePosition(id, boneName, x, y, z) requires 5 arguments")
 		}
+		objID := toInt(args[0])
+		boneName := strings.ToLower(strings.TrimSpace(toString(args[1])))
+		pos := rl.Vector3{X: toFloat32(args[2]), Y: toFloat32(args[3]), Z: toFloat32(args[4])}
+		boneOverridesMu.Lock()
+		if boneOverrides[objID] == nil {
+			boneOverrides[objID] = make(map[string]boneOverride)
+		}
+		bo := boneOverrides[objID][boneName]
+		bo.position = &pos
+		boneOverrides[objID][boneName] = bo
+		boneOverridesMu.Unlock()
 		return nil, nil
 	})
 	// LoadMeshAnimation(id, folder$, frameCount): Load frame-by-frame mesh animation from folder.
@@ -536,6 +567,62 @@ func advanceAnimationFrame(frame float32, frameCount int32, dt, speed float32, l
 		return 0
 	}
 	return frame
+}
+
+// boneInfoName converts raylib BoneInfo.Name (int8 array) to Go string.
+func boneInfoName(b rl.BoneInfo) string {
+	var buf []byte
+	for i := 0; i < 32; i++ {
+		if b.Name[i] == 0 {
+			break
+		}
+		buf = append(buf, byte(b.Name[i]))
+	}
+	return strings.ToLower(string(buf))
+}
+
+// resolveBoneIndex returns bone index for boneName: try numeric parse, else match by name.
+func resolveBoneIndex(model *rl.Model, boneName string) int {
+	if model == nil || model.BoneCount <= 0 {
+		return -1
+	}
+	if idx, err := strconv.Atoi(boneName); err == nil && idx >= 0 && idx < int(model.BoneCount) {
+		return idx
+	}
+	bones := model.GetBones()
+	for i := 0; i < int(model.BoneCount) && i < len(bones); i++ {
+		if boneInfoName(bones[i]) == boneName {
+			return i
+		}
+	}
+	return -1
+}
+
+// ApplyBoneOverrides applies stored SetBoneRotation/SetBonePosition overrides to model's bind pose.
+// Call after UpdateObjectAnimation, before DrawModelEx.
+func ApplyBoneOverrides(objID int, model *rl.Model) {
+	if model == nil || model.BindPose == nil || model.BoneCount <= 0 {
+		return
+	}
+	boneOverridesMu.RLock()
+	overrides, ok := boneOverrides[objID]
+	boneOverridesMu.RUnlock()
+	if !ok || len(overrides) == 0 {
+		return
+	}
+	poses := model.GetBindPose()
+	for boneName, bo := range overrides {
+		idx := resolveBoneIndex(model, boneName)
+		if idx < 0 || idx >= len(poses) {
+			continue
+		}
+		if bo.rotation != nil {
+			poses[idx].Rotation = rl.Vector4{X: bo.rotation.X, Y: bo.rotation.Y, Z: bo.rotation.Z, W: bo.rotation.W}
+		}
+		if bo.position != nil {
+			poses[idx].Translation = *bo.position
+		}
+	}
 }
 
 func applyBlendedAnimationPose(model *rl.Model, fromAnim rl.ModelAnimation, fromFrame int32, toAnim rl.ModelAnimation, toFrame int32, weight float32) {

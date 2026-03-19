@@ -369,7 +369,7 @@ DrawParticles2D 1
 | Command | Args | Description |
 |---------|------|-------------|
 | `StartTask` | (funcName) | Start coroutine |
-| `StopTask` | (funcName) | Stop coroutine (stub) |
+| `StopTask` | (funcName) | Stop coroutine by name |
 | `WaitSeconds` | (seconds) | Yield for N seconds |
 | `WaitFrames` | (frames) | Yield for N frames |
 | `Yield` | () | Yield one frame |

@@ -176,9 +176,37 @@ Yield
 WaitSeconds(1.0)
 ```
 
-**StartCoroutine SubName()** starts a fiber; **Yield** switches fiber; **WaitSeconds(seconds)** blocks current fiber for N seconds.
+**StartCoroutine SubName()** starts a fiber; **Yield** switches fiber; **WaitSeconds(seconds)** blocks current fiber for N seconds. **StopTask(subName)**, **PauseTask(subName)**, **ResumeTask(subName)** stop, pause, or resume a coroutine by name.
 
-### 1.8 Comments
+### 1.8 GOSUB / RETURN
+
+```basic
+GOSUB MySub
+...
+MySub:
+    PRINT "in subroutine"
+    RETURN
+```
+
+**GOSUB label** jumps to the label and pushes the return address; **RETURN** pops and returns.
+
+### 1.9 DATA / READ / RESTORE
+
+```basic
+DATA 10, 20, 30
+DATA "hello", 42
+RESTORE
+READ a, b, c
+READ s$, n
+RESTORE MyData
+READ x
+MyData:
+DATA 100
+```
+
+**DATA** defines inline constants; **READ** reads into variables (sequential); **RESTORE** resets the pointer to the first DATA or to a specific label.
+
+### 1.10 Comments
 
 ```basic
 // full-line comment
@@ -187,7 +215,7 @@ PRINT "hi"   // inline comment
 
 Comments are **only** `//` (line) and `/* */` (block).
 
-### 1.9 Includes and import (modularity)
+### 1.11 Includes and import (modularity)
 
 At the top of a line (optionally after whitespace), use **#include "path"** or **IMPORT "path"** to insert the contents of another `.bas` file. The path is relative to the file containing the line. One directive per line. Use for shared code, libraries, or packaging. Both directives behave the same (file is inlined; cycles are avoided).
 

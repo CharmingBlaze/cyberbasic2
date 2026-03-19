@@ -408,7 +408,39 @@ func RegisterWater(v *vm.VM) {
 		if len(args) < 2 {
 			return nil, fmt.Errorf("WaterApplyBuoyancy requires (bodyId, waterId)")
 		}
-		// Stub: sample water height at body position and apply upward force via physics; full impl would use Bullet body.
+		bodyId := toString(args[0])
+		waterId := toString(args[1])
+		worldId := "default"
+		if len(args) >= 3 {
+			worldId = toString(args[2])
+		}
+		px, _ := v.CallForeign("GetPositionX3D", []interface{}{worldId, bodyId})
+		py, _ := v.CallForeign("GetPositionY3D", []interface{}{worldId, bodyId})
+		pz, _ := v.CallForeign("GetPositionZ3D", []interface{}{worldId, bodyId})
+		bx := toFloat32(px)
+		by := toFloat32(py)
+		bz := toFloat32(pz)
+		whRes, _ := v.CallForeign("WaterGetHeight", []interface{}{waterId, bx, bz})
+		waterY := toFloat32(whRes)
+		if by >= waterY {
+			return nil, nil
+		}
+		waterMu.Lock()
+		w, ok := waters[waterId]
+		waterMu.Unlock()
+		if !ok {
+			return nil, nil
+		}
+		density := w.Density
+		if density <= 0 {
+			density = 1
+		}
+		submerged := waterY - by
+		if submerged > 2 {
+			submerged = 2
+		}
+		buoyancy := float64(density) * 9.81 * float64(submerged) * 0.5
+		_, _ = v.CallForeign("ApplyForce3D", []interface{}{worldId, bodyId, 0.0, buoyancy, 0.0})
 		return nil, nil
 	})
 

@@ -4,6 +4,8 @@ package raylib
 import (
 	"fmt"
 	"math"
+	"os"
+	"path/filepath"
 
 	"cyberbasic/compiler/vm"
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -215,9 +217,22 @@ func registerAdvanced(v *vm.VM) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("LoadSkybox requires (folderPath)")
 		}
-		_ = toString(args[0])
-		// raylib LoadTextureCubemap; store id in skyboxTexId
-		skyboxTexId = ""
+		folder := toString(args[0])
+		faces := []string{"right", "left", "top", "bottom", "front", "back"}
+		paths := make([]interface{}, 6)
+		for i, name := range faces {
+			for _, ext := range []string{".png", ".jpg", ".jpeg"} {
+				p := filepath.Join(folder, name+ext)
+				if _, err := os.Stat(p); err == nil {
+					paths[i] = p
+					break
+				}
+			}
+			if paths[i] == nil {
+				paths[i] = ""
+			}
+		}
+		_, _ = v.CallForeign("SetSkyboxCubemap", paths)
 		return nil, nil
 	})
 	v.RegisterForeign("SetSkyColor", func(args []interface{}) (interface{}, error) {

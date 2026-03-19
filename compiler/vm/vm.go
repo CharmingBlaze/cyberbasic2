@@ -34,7 +34,10 @@ type VM struct {
 	fibers              []fiberState
 	fiberQueue          []int
 	currentFiber        int
-	sleeping            []sleepEntry // fibers waiting for resume time (non-blocking WaitSeconds)
+	fiberNames          map[int]string // fiberIndex -> sub name for StopTask/PauseTask/ResumeTask
+	sleeping            []sleepEntry   // fibers waiting for resume time (non-blocking WaitSeconds)
+	dataIndex           int            // current position for READ (into chunk.DataValues)
+	gosubStack          []int          // return addresses for GOSUB
 
 	// Hybrid update/draw: when inside draw(), render commands are queued instead of executed.
 	insideDraw         bool
@@ -68,6 +71,7 @@ type RenderQueueItem struct {
 type sleepEntry struct {
 	fiberIndex int
 	resumeAt   time.Time
+	isPaused   bool // if true, never auto-wake; ResumeTask moves back to queue
 }
 
 type eventHandler struct {
@@ -131,7 +135,10 @@ func (vm *VM) LoadChunk(chunk *Chunk) {
 	vm.fibers = []fiberState{{ip: 0, stack: []Value{}, callStack: []int{}}}
 	vm.fiberQueue = []int{0}
 	vm.currentFiber = 0
+	vm.fiberNames = map[int]string{0: ""} // main fiber has no name
 	vm.sleeping = vm.sleeping[:0]
+	vm.dataIndex = 0
+	vm.gosubStack = vm.gosubStack[:0]
 	vm.timerZero = time.Now()
 	vm.fileHandles = make(map[int]*os.File)
 	vm.fileReaders = make(map[int]*bufio.Reader)

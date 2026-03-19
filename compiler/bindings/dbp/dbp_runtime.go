@@ -23,17 +23,22 @@ func toFloat64Runtime(v interface{}) float64 {
 
 // registerRuntime registers DBP-style runtime/task commands.
 func registerRuntime(v *vm.VM) {
-	// StopTask, PauseTask, ResumeTask require fiber name tracking in VM - stubs for now
 	v.RegisterForeign("StopTask", func(args []interface{}) (interface{}, error) {
-		_ = args // task name - would need VM support to stop fiber by name
+		if len(args) >= 1 {
+			v.StopTaskByName(toString(args[0]))
+		}
 		return nil, nil
 	})
 	v.RegisterForeign("PauseTask", func(args []interface{}) (interface{}, error) {
-		_ = args
+		if len(args) >= 1 {
+			v.PauseTaskByName(toString(args[0]))
+		}
 		return nil, nil
 	})
 	v.RegisterForeign("ResumeTask", func(args []interface{}) (interface{}, error) {
-		_ = args
+		if len(args) >= 1 {
+			v.ResumeTaskByName(toString(args[0]))
+		}
 		return nil, nil
 	})
 	v.RegisterForeign("FixedUpdate", func(args []interface{}) (interface{}, error) {

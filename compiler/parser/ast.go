@@ -54,6 +54,10 @@ const (
 	NodeDictLiteral
 	NodeSliceExpr
 	NodeInterpolatedString
+	NodeDataStatement
+	NodeReadStatement
+	NodeRestoreStatement
+	NodeGosubStatement
 )
 
 // Node represents a node in the Abstract Syntax Tree
@@ -262,6 +266,38 @@ type WaitFramesStatement struct {
 
 func (w *WaitFramesStatement) Type() NodeType { return NodeWaitFramesStatement }
 func (w *WaitFramesStatement) String() string  { return "WaitFrames(...)" }
+
+// DataStatement represents DATA val1, val2, ...
+type DataStatement struct {
+	Values []Node
+}
+
+func (d *DataStatement) Type() NodeType { return NodeDataStatement }
+func (d *DataStatement) String() string  { return "DATA ..." }
+
+// ReadStatement represents READ var1, var2, ...
+type ReadStatement struct {
+	Variables []Node // identifiers or array access
+}
+
+func (r *ReadStatement) Type() NodeType { return NodeReadStatement }
+func (r *ReadStatement) String() string  { return "READ ..." }
+
+// RestoreStatement represents RESTORE or RESTORE label
+type RestoreStatement struct {
+	Label string // empty = reset to start
+}
+
+func (r *RestoreStatement) Type() NodeType { return NodeRestoreStatement }
+func (r *RestoreStatement) String() string  { return "RESTORE" }
+
+// GosubStatement represents GOSUB SubName
+type GosubStatement struct {
+	SubName string
+}
+
+func (g *GosubStatement) Type() NodeType { return NodeGosubStatement }
+func (g *GosubStatement) String() string { return "GOSUB " + g.SubName }
 
 // Assignment represents variable assignment (scalar or array element)
 type Assignment struct {

@@ -17,12 +17,13 @@ type TreeType struct {
 
 // TreeInstance holds position, scale, rotation for one placed tree.
 type TreeInstance struct {
-	TypeID          string
-	X, Y, Z         float32
-	Scale           float32
-	Rotation        float32
+	TypeID           string
+	X, Y, Z          float32
+	Scale            float32
+	Rotation         float32
 	CollisionEnabled bool
 	CollisionRadius  float32
+	WindX, WindY, WindZ float32
 }
 
 var (
@@ -234,4 +235,66 @@ func TreeTypeSetWind(typeID string, strength, speed float32) {
 		tt.WindSpeed = speed
 	}
 	treeTypesMu.Unlock()
+}
+
+// TreeSetWind sets wind vector for a tree instance (stored for shader bending).
+func TreeSetWind(treeID string, vx, vy, vz float32) {
+	treeInstancesMu.Lock()
+	if t := treeInstances[treeID]; t != nil {
+		t.WindX, t.WindY, t.WindZ = vx, vy, vz
+	}
+	treeInstancesMu.Unlock()
+}
+
+// TreeRaycastImpl performs ray vs tree capsules in a system. Returns hit, dist, hx, hy, hz.
+func TreeRaycastImpl(systemID string, ox, oy, oz, dx, dy, dz float32) (hit bool, dist float32, hx, hy, hz float32) {
+	list := GetTreeSystemInstanceIds(systemID)
+	if list == nil {
+		return false, 0, 0, 0, 0
+	}
+	lenDir := float32(math.Sqrt(float64(dx*dx + dy*dy + dz*dz)))
+	if lenDir < 1e-6 {
+		return false, 0, 0, 0, 0
+	}
+	dx /= lenDir
+	dy /= lenDir
+	dz /= lenDir
+	bestDist := float32(math.MaxFloat32)
+	for _, tid := range list {
+		t := getTreeInstance(tid)
+		if t == nil || !t.CollisionEnabled {
+			continue
+		}
+		r := t.CollisionRadius
+		if r <= 0 {
+			r = t.Scale * 0.5
+		}
+		// Ray-sphere: origin ox,oy,oz; dir dx,dy,dz; center t.X,t.Y,t.Z; radius r
+		co := ox - t.X
+		cp := oy - t.Y
+		cq := oz - t.Z
+		a := dx*dx + dy*dy + dz*dz
+		b := 2 * (co*dx + cp*dy + cq*dz)
+		c := co*co + cp*cp + cq*cq - r*r
+		disc := b*b - 4*a*c
+		if disc < 0 {
+			continue
+		}
+		sqrtDisc := float32(math.Sqrt(float64(disc)))
+		t0 := (-b - sqrtDisc) / (2 * a)
+		if t0 < 0 {
+			t0 = (-b + sqrtDisc) / (2 * a)
+		}
+		if t0 >= 0 && t0 < bestDist {
+			bestDist = t0
+			hit = true
+		}
+	}
+	if hit {
+		dist = bestDist
+		hx = ox + dist*dx
+		hy = oy + dist*dy
+		hz = oz + dist*dz
+	}
+	return hit, dist, hx, hy, hz
 }

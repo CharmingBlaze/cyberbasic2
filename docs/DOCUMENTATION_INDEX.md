@@ -55,6 +55,7 @@ Complete guide to all CyberBASIC2 documentation.
 - **[3D Games Tutorial](TUTORIAL_3D_GAMES.md)** – Complete 3D game development guide
 - **[GUI Development Tutorial](TUTORIAL_GUI_DEVELOPMENT.md)** – User interfaces and menus
 - **[Multiplayer Tutorial](TUTORIAL_MULTIPLAYER.md)** – Network programming and multiplayer games
+- **[Nakama Guide](NAKAMA_GUIDE.md)** – Nakama cloud backend (accounts, matchmaking, realtime)
 - **[Game Development Guide](GAME_DEVELOPMENT_GUIDE.md)** – Making games with CyberBASIC2
   - Game loop, input handling
   - GAME.* helpers (camera, movement, collision)
@@ -101,7 +102,8 @@ Complete guide to all CyberBASIC2 documentation.
   - Connect, Send, Receive, Disconnect (client)
   - Host, Accept, CloseServer (server)
   - Event callbacks (OnClientConnect, OnMessage), SendTable/ReceiveTable, RPC, entity sync
-- **[Multiplayer Design](MULTIPLAYER_DESIGN.md)** – Current architecture, fixed-step simulation guidance, and future lockstep/rollback gaps
+- **[Multiplayer Design](MULTIPLAYER_DESIGN.md)** – Architecture, lockstep, rollback, prediction, matchmaking, interest management
+- **[Multiplayer Advanced](MULTIPLAYER_ADVANCED.md)** – Lockstep, rollback, prediction patterns and examples
 
 - **[GUI Guide](GUI_GUIDE.md)** – Full GUI guide: immediate-mode UI
   - BeginUI, EndUI, Label, Button, Slider, Checkbox, TextBox, Dropdown, ProgressBar

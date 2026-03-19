@@ -479,7 +479,36 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		vm.stack = append(vm.stack[:0], args...)
 		vm.ip = targetIP
 
+	case OpGosub:
+		if vm.ip+2 > len(vm.chunk.Code) {
+			return fmt.Errorf("unexpected end of code for OpGosub")
+		}
+		nameConstIndex := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		_ = int(vm.chunk.Code[vm.ip]) // arg count (0 for GOSUB)
+		vm.ip++
+		if nameConstIndex < 0 || nameConstIndex >= len(vm.chunk.Constants) {
+			return fmt.Errorf("invalid constant index for GOSUB: %d", nameConstIndex)
+		}
+		nameVal := vm.chunk.Constants[nameConstIndex]
+		name, ok := nameVal.(string)
+		if !ok {
+			return fmt.Errorf("GOSUB name must be string constant, got %T", nameVal)
+		}
+		name = strings.ToLower(name)
+		targetIP, ok := vm.chunk.GetFunction(name)
+		if !ok {
+			return fmt.Errorf("unknown sub for GOSUB: %s", name)
+		}
+		vm.gosubStack = append(vm.gosubStack, vm.ip)
+		vm.ip = targetIP
+
 	case OpReturn:
+		if len(vm.gosubStack) > 0 {
+			vm.ip = vm.gosubStack[len(vm.gosubStack)-1]
+			vm.gosubStack = vm.gosubStack[:len(vm.gosubStack)-1]
+			break
+		}
 		if len(vm.callStack) == 0 {
 			// Fiber or main ended: remove from queue if fiber, else halt
 			if len(vm.fiberQueue) > 1 {
@@ -609,15 +638,27 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		}
 
 	case OpStartCoroutine:
-		if vm.ip+2 > len(vm.chunk.Code) {
+		if vm.ip+3 > len(vm.chunk.Code) {
 			return fmt.Errorf("unexpected end of code for OpStartCoroutine")
 		}
 		low := uint16(vm.chunk.Code[vm.ip])
 		high := uint16(vm.chunk.Code[vm.ip+1])
-		vm.ip += 2
+		nameConstIdx := int(vm.chunk.Code[vm.ip+2])
+		vm.ip += 3
 		targetIP := int(low | (high << 8))
+		name := ""
+		if nameConstIdx < len(vm.chunk.Constants) {
+			if s, ok := vm.chunk.Constants[nameConstIdx].(string); ok {
+				name = s
+			}
+		}
+		fiberIdx := len(vm.fibers)
 		vm.fibers = append(vm.fibers, fiberState{ip: targetIP, stack: []Value{}, callStack: []int{}, drawFrameStack: nil})
-		vm.fiberQueue = append(vm.fiberQueue, len(vm.fibers)-1)
+		vm.fiberQueue = append(vm.fiberQueue, fiberIdx)
+		if vm.fiberNames == nil {
+			vm.fiberNames = make(map[int]string)
+		}
+		vm.fiberNames[fiberIdx] = name
 
 	case OpYield:
 		// Save current state, rotate queue, load next fiber
@@ -670,7 +711,7 @@ func (vm *VM) executeInstruction(instruction byte) error {
 			drawFrameStack: append([]bool(nil), vm.drawFrameStack...),
 		}
 		resumeAt := time.Now().Add(time.Duration(sec * float64(time.Second)))
-		vm.sleeping = append(vm.sleeping, sleepEntry{fiberIndex: vm.currentFiber, resumeAt: resumeAt})
+		vm.sleeping = append(vm.sleeping, sleepEntry{fiberIndex: vm.currentFiber, resumeAt: resumeAt, isPaused: false})
 		newQueue := make([]int, 0, len(vm.fiberQueue)-1)
 		for _, i := range vm.fiberQueue {
 			if i != vm.currentFiber {
@@ -694,6 +735,27 @@ func (vm *VM) executeInstruction(instruction byte) error {
 				break
 			}
 		}
+
+	case OpRead:
+		if vm.ip+1 > len(vm.chunk.Code) {
+			return fmt.Errorf("unexpected end of code for OpRead")
+		}
+		varIndex := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		var val Value
+		if vm.chunk.DataValues != nil && vm.dataIndex < len(vm.chunk.DataValues) {
+			val = vm.chunk.DataValues[vm.dataIndex]
+			vm.dataIndex++
+		} else {
+			val = float64(0) // out of data: use 0
+		}
+		for len(vm.stack) <= varIndex {
+			vm.stack = append(vm.stack, nil)
+		}
+		vm.stack[varIndex] = val
+
+	case OpRestore:
+		vm.dataIndex = 0
 
 	case OpCallForeign:
 		if vm.ip+2 > len(vm.chunk.Code) {

@@ -3,7 +3,6 @@ package net
 
 import (
 	"bufio"
-	"crypto/tls"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -17,7 +16,10 @@ import (
 	"time"
 
 	"cyberbasic/compiler/vm"
+	"github.com/xtaci/kcp-go/v5"
 )
+
+const matchmakingDiscoveryPort = 47777
 
 func toString(v interface{}) string {
 	if v == nil {
@@ -100,6 +102,43 @@ var (
 	receivedNumbers   = make(map[string][]float64)
 	lastNumbersConnID string
 	receivedNumbersMu sync.Mutex
+	// Lockstep: server collects inputs per tick; when all received, OnLockstepTickReady fires
+	lockstepEnabled     bool
+	lockstepTickRate    int
+	lockstepInputBuffer = make(map[string]map[string]string) // tickId -> connectionId -> inputData
+	lockstepReadyTicks  []string                            // tickIds ready for pickup
+	lockstepMu          sync.Mutex
+	// Matchmaking: UDP broadcast for LAN room discovery
+	matchmakingBroadcastConn net.Conn
+	matchmakingRoomName      string
+	matchmakingMaxPlayers    int
+	matchmakingGamePort      int
+	matchmakingStop          chan struct{}
+	matchmakingMu            sync.Mutex
+	// Interest management: filter SyncEntity by distance or zone
+	interestFilters     = make(map[string]*interestFilter) // connectionId -> filter
+	entityInterestZones = make(map[string]string)           // entityId -> zoneId
+	interestMu          sync.Mutex
+)
+
+type interestFilter struct {
+	mode     string  // "all", "distance", "zone"
+	maxDist  float64 // for distance
+	originX  float64
+	originY  float64
+	originZ  float64
+	zoneId   string // for zone
+}
+
+// Rollback and prediction: snapshot storage and handlers
+var (
+	rollbackSnapshots     = make(map[string]string) // tickId -> json state
+	rollbackSnapshotSub   string                    // sub to call for save
+	rollbackRestoreSub    string                    // sub to call for restore
+	rollbackMu            sync.Mutex
+	predictionEnabled     bool
+	predictionInputBuffer = make(map[string]string) // tickId -> input
+	predictionMu          sync.Mutex
 )
 
 func pushEvent(typ, id, payload string) {
@@ -114,6 +153,43 @@ func drainEvents() []netEvent {
 	eventQueue = nil
 	eventMu.Unlock()
 	return out
+}
+
+// handleLockstepInput processes "L\t<tickId>\t<data>" from a client. Server only.
+func handleLockstepInput(cid, line string) {
+	if !lockstepEnabled {
+		return
+	}
+	parts := strings.SplitN(line, "\t", 3)
+	if len(parts) < 2 {
+		return
+	}
+	tickId := parts[1]
+	data := ""
+	if len(parts) >= 3 {
+		data = parts[2]
+	}
+	lockstepMu.Lock()
+	if lockstepInputBuffer[tickId] == nil {
+		lockstepInputBuffer[tickId] = make(map[string]string)
+	}
+	lockstepInputBuffer[tickId][cid] = data
+	netMu.Lock()
+	expectedCount := len(conns)
+	netMu.Unlock()
+	gotCount := len(lockstepInputBuffer[tickId])
+	lockstepMu.Unlock()
+	if expectedCount > 0 && gotCount >= expectedCount {
+		lockstepMu.Lock()
+		lockstepReadyTicks = append(lockstepReadyTicks, tickId)
+		lockstepMu.Unlock()
+		pushEvent("lockstep_tick_ready", tickId, "")
+		netMu.Lock()
+		for _, conn := range conns {
+			_, _ = fmt.Fprintln(conn, "T\t"+tickId)
+		}
+		netMu.Unlock()
+	}
 }
 
 func cleanupConnection(cid string, conn net.Conn, sendDisconnectEvent bool) {
@@ -140,6 +216,9 @@ func cleanupConnection(cid string, conn net.Conn, sendDisconnectEvent bool) {
 	connMessagesMu.Lock()
 	delete(connMessages, cid)
 	connMessagesMu.Unlock()
+	interestMu.Lock()
+	delete(interestFilters, cid)
+	interestMu.Unlock()
 	receivedNumbersMu.Lock()
 	delete(receivedNumbers, cid)
 	if lastNumbersConnID == cid {
@@ -155,6 +234,40 @@ func cleanupConnection(cid string, conn net.Conn, sendDisconnectEvent bool) {
 	}
 	if conn != nil {
 		_ = conn.Close()
+	}
+}
+
+// kcpDialWithTimeout wraps kcp.Dial with a timeout (kcp has no built-in DialTimeout).
+func kcpDialWithTimeout(addr string, timeout time.Duration) (net.Conn, error) {
+	type result struct {
+		conn net.Conn
+		err  error
+	}
+	ch := make(chan result, 1)
+	go func() {
+		conn, err := kcp.Dial(addr)
+		ch <- result{conn, err}
+	}()
+	select {
+	case r := <-ch:
+		return r.conn, r.err
+	case <-time.After(timeout):
+		// Timeout: goroutine still running. When it completes, close conn if successful to avoid leak.
+		go func() {
+			r := <-ch
+			if r.conn != nil {
+				_ = r.conn.Close()
+			}
+		}()
+		return nil, fmt.Errorf("dial timeout")
+	}
+}
+
+// applyKCPTuning sets low-latency options on KCP sessions (stream mode, no delay).
+func applyKCPTuning(conn net.Conn) {
+	if sess, ok := conn.(*kcp.UDPSession); ok {
+		sess.SetNoDelay(1, 10, 2, 1) // low latency
+		sess.SetStreamMode(true)     // stream mode for line-based protocol
 	}
 }
 
@@ -190,6 +303,7 @@ func acceptServerConnection(state *serverState, timeout time.Duration) (net.Conn
 		}
 		return nil, err
 	}
+	applyKCPTuning(conn)
 	return conn, nil
 }
 
@@ -240,6 +354,24 @@ func startReader(cid string, conn net.Conn) {
 			pingMu.Unlock()
 			continue
 		}
+		if strings.HasPrefix(line, "L\t") {
+			handleLockstepInput(cid, line)
+			continue
+		}
+		if strings.HasPrefix(line, "T\t") {
+			tickId := strings.TrimPrefix(line, "T\t")
+			if lockstepEnabled && tickId != "" {
+				pushEvent("lockstep_tick_ready", tickId, "")
+			}
+			continue
+		}
+		if strings.HasPrefix(line, "B\t") {
+			parts := strings.SplitN(line, "\t", 3)
+			if len(parts) >= 3 {
+				pushEvent("rollback_required", parts[1], parts[2])
+			}
+			continue
+		}
 		connMessagesMu.Lock()
 		connMessages[cid] = append(connMessages[cid], line)
 		connMessagesMu.Unlock()
@@ -258,10 +390,11 @@ func RegisterNet(v *vm.VM) {
 		host := toString(args[0])
 		port := toInt(args[1])
 		addr := fmt.Sprintf("%s:%d", host, port)
-		conn, err := net.DialTimeout("tcp", addr, 5*time.Second)
+		conn, err := kcpDialWithTimeout(addr, 5*time.Second)
 		if err != nil {
 			return nil, nil // return null on failure so BASIC can IsNull check
 		}
+		applyKCPTuning(conn)
 		netMu.Lock()
 		connCounter++
 		id := fmt.Sprintf("conn_%d", connCounter)
@@ -270,25 +403,12 @@ func RegisterNet(v *vm.VM) {
 		go startReader(id, conn)
 		return id, nil
 	})
+	// ConnectTLS deprecated: use Connect (KCP) instead. Kept as alias for compatibility.
 	v.RegisterForeign("ConnectTLS", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {
 			return nil, fmt.Errorf("ConnectTLS(host, port) requires 2 arguments")
 		}
-		host := toString(args[0])
-		port := toInt(args[1])
-		addr := fmt.Sprintf("%s:%d", host, port)
-		config := &tls.Config{MinVersion: tls.VersionTLS12, ServerName: host}
-		conn, err := tls.DialWithDialer(&net.Dialer{Timeout: 5 * time.Second}, "tcp", addr, config)
-		if err != nil {
-			return nil, nil
-		}
-		netMu.Lock()
-		connCounter++
-		id := fmt.Sprintf("conn_%d", connCounter)
-		conns[id] = conn
-		netMu.Unlock()
-		go startReader(id, conn)
-		return id, nil
+		return v.CallForeign("Connect", args[:2])
 	})
 	v.RegisterForeign("ConnectToParent", func(args []interface{}) (interface{}, error) {
 		addr := os.Getenv("CYBERBASIC_PARENT")
@@ -304,10 +424,11 @@ func RegisterNet(v *vm.VM) {
 		if err != nil || port <= 0 {
 			return nil, nil
 		}
-		conn, err := net.DialTimeout("tcp", fmt.Sprintf("%s:%d", host, port), 5*time.Second)
+		conn, err := kcpDialWithTimeout(fmt.Sprintf("%s:%d", host, port), 5*time.Second)
 		if err != nil {
 			return nil, nil
 		}
+		applyKCPTuning(conn)
 		netMu.Lock()
 		connCounter++
 		id := fmt.Sprintf("conn_%d", connCounter)
@@ -631,7 +752,7 @@ func RegisterNet(v *vm.VM) {
 			return nil, fmt.Errorf("Host(port) requires 1 argument")
 		}
 		port := toInt(args[0])
-		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		listener, err := kcp.Listen(fmt.Sprintf(":%d", port))
 		if err != nil {
 			return nil, nil
 		}
@@ -639,26 +760,12 @@ func RegisterNet(v *vm.VM) {
 		id := addServer(listener, deadlineSrc)
 		return id, nil
 	})
+	// HostTLS deprecated: use Host (KCP) instead. Kept as alias for compatibility.
 	v.RegisterForeign("HostTLS", func(args []interface{}) (interface{}, error) {
-		if len(args) < 3 {
-			return nil, fmt.Errorf("HostTLS(port, certFile, keyFile) requires 3 arguments")
+		if len(args) < 1 {
+			return nil, fmt.Errorf("HostTLS(port, ...) requires at least 1 argument")
 		}
-		port := toInt(args[0])
-		certFile := toString(args[1])
-		keyFile := toString(args[2])
-		cert, err := tls.LoadX509KeyPair(certFile, keyFile)
-		if err != nil {
-			return nil, nil
-		}
-		config := &tls.Config{Certificates: []tls.Certificate{cert}}
-		baseListener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
-		if err != nil {
-			return nil, nil
-		}
-		tcpListener, _ := baseListener.(*net.TCPListener)
-		listener := tls.NewListener(baseListener, config)
-		id := addServer(listener, tcpListener)
-		return id, nil
+		return v.CallForeign("Host", args[:1])
 	})
 	v.RegisterForeign("Accept", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
@@ -983,7 +1090,7 @@ func RegisterNet(v *vm.VM) {
 			return nil, fmt.Errorf("NetHost(port) requires 1 argument")
 		}
 		port := toInt(args[0])
-		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		listener, err := kcp.Listen(fmt.Sprintf(":%d", port))
 		if err != nil {
 			return nil, nil
 		}
@@ -997,10 +1104,11 @@ func RegisterNet(v *vm.VM) {
 		}
 		host := toString(args[0])
 		port := toInt(args[1])
-		conn, err := net.Dial("tcp", fmt.Sprintf("%s:%d", host, port))
+		conn, err := kcpDialWithTimeout(fmt.Sprintf("%s:%d", host, port), 5*time.Second)
 		if err != nil {
 			return nil, nil
 		}
+		applyKCPTuning(conn)
 		netMu.Lock()
 		connCounter++
 		cid := fmt.Sprintf("conn_%d", connCounter)
@@ -1156,6 +1264,18 @@ func RegisterNet(v *vm.VM) {
 		}
 		for _, ev := range events {
 			switch ev.typ {
+			case "lockstep_tick_ready":
+				if _, ok := netVM.Chunk().GetFunction("onlocksteptickready"); ok {
+					if err := netVM.InvokeSub("onlocksteptickready", []interface{}{ev.id}); err != nil {
+						return nil, err
+					}
+				}
+			case "rollback_required":
+				if _, ok := netVM.Chunk().GetFunction("onrollbackrequired"); ok {
+					if err := netVM.InvokeSub("onrollbackrequired", []interface{}{ev.id, ev.payload}); err != nil {
+						return nil, err
+					}
+				}
 			case "connect":
 				if _, ok := netVM.Chunk().GetFunction("onclientconnect"); ok {
 					if err := netVM.InvokeSub("onclientconnect", []interface{}{ev.id}); err != nil {
@@ -1272,12 +1392,221 @@ func RegisterNet(v *vm.VM) {
 			return nil, fmt.Errorf("StartServer(port) requires 1 argument")
 		}
 		port := toInt(args[0])
-		listener, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
+		listener, err := kcp.Listen(fmt.Sprintf(":%d", port))
 		if err != nil {
 			return nil, nil
 		}
 		deadlineSrc, _ := listener.(deadlineListener)
 		id := addServer(listener, deadlineSrc)
+		return id, nil
+	})
+	v.RegisterForeign("LockstepEnable", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("LockstepEnable(tickRate) requires 1 argument")
+		}
+		lockstepMu.Lock()
+		lockstepEnabled = true
+		lockstepTickRate = toInt(args[0])
+		if lockstepTickRate <= 0 {
+			lockstepTickRate = 60
+		}
+		lockstepMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("LockstepDisable", func(args []interface{}) (interface{}, error) {
+		lockstepMu.Lock()
+		lockstepEnabled = false
+		lockstepInputBuffer = make(map[string]map[string]string)
+		lockstepReadyTicks = nil
+		lockstepMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("LockstepSendInput", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("LockstepSendInput(tickId, inputData) requires 2 arguments")
+		}
+		tickId := toString(args[0])
+		data := toString(args[1])
+		if strings.Contains(tickId, "\t") || strings.Contains(data, "\n") {
+			return nil, fmt.Errorf("LockstepSendInput: tickId and data must not contain tab or newline")
+		}
+		payload := "L\t" + tickId + "\t" + data
+		if len(payload) > maxMessageSize {
+			return false, nil
+		}
+		netMu.Lock()
+		connList := make([]net.Conn, 0, len(conns))
+		for _, c := range conns {
+			connList = append(connList, c)
+		}
+		netMu.Unlock()
+		for _, conn := range connList {
+			_, _ = fmt.Fprintln(conn, payload)
+		}
+		return true, nil
+	})
+	v.RegisterForeign("LockstepGetInputs", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("LockstepGetInputs(tickId) requires 1 argument")
+		}
+		tickId := toString(args[0])
+		lockstepMu.Lock()
+		inputs := lockstepInputBuffer[tickId]
+		result := make(map[string]interface{})
+		if inputs != nil {
+			for cid, data := range inputs {
+				result[cid] = data
+			}
+			delete(lockstepInputBuffer, tickId)
+		}
+		lockstepMu.Unlock()
+		return result, nil
+	})
+	v.RegisterForeign("LockstepIsEnabled", func(args []interface{}) (interface{}, error) {
+		lockstepMu.Lock()
+		en := lockstepEnabled
+		lockstepMu.Unlock()
+		if en {
+			return 1, nil
+		}
+		return 0, nil
+	})
+	v.RegisterForeign("MatchmakingHost", func(args []interface{}) (interface{}, error) {
+		if len(args) < 3 {
+			return nil, fmt.Errorf("MatchmakingHost(port, roomName, maxPlayers) requires 3 arguments")
+		}
+		port := toInt(args[0])
+		roomName := toString(args[1])
+		maxPlayers := toInt(args[2])
+		if maxPlayers <= 0 {
+			maxPlayers = 8
+		}
+		listener, err := kcp.Listen(fmt.Sprintf(":%d", port))
+		if err != nil {
+			return nil, nil
+		}
+		deadlineSrc, _ := listener.(deadlineListener)
+		serverId := addServer(listener, deadlineSrc)
+		matchmakingMu.Lock()
+		oldStop := matchmakingStop
+		matchmakingStop = make(chan struct{})
+		if oldStop != nil {
+			close(oldStop)
+		}
+		matchmakingRoomName = roomName
+		matchmakingMaxPlayers = maxPlayers
+		matchmakingGamePort = port
+		matchmakingMu.Unlock()
+		broadcastAddr, err := net.ResolveUDPAddr("udp4", fmt.Sprintf("255.255.255.255:%d", matchmakingDiscoveryPort))
+		if err != nil {
+			return serverId, nil
+		}
+		conn, err := net.DialUDP("udp4", nil, broadcastAddr)
+		if err != nil {
+			return serverId, nil
+		}
+		matchmakingBroadcastConn = conn
+		go func() {
+			ticker := time.NewTicker(1 * time.Second)
+			defer ticker.Stop()
+			for {
+				select {
+				case <-matchmakingStop:
+					return
+				case <-ticker.C:
+					netMu.Lock()
+					count := len(conns)
+					netMu.Unlock()
+					msg := fmt.Sprintf("CB_ROOM\t%d\t%s\t%d/%d", port, roomName, count, maxPlayers)
+					_, _ = conn.Write([]byte(msg))
+				}
+			}
+		}()
+		return serverId, nil
+	})
+	v.RegisterForeign("MatchmakingDiscover", func(args []interface{}) (interface{}, error) {
+		timeoutMs := 3000
+		if len(args) >= 1 {
+			timeoutMs = toInt(args[0])
+		}
+		if timeoutMs <= 0 {
+			timeoutMs = 1000
+		}
+		addr, err := net.ResolveUDPAddr("udp", fmt.Sprintf(":%d", matchmakingDiscoveryPort))
+		if err != nil {
+			return []interface{}{}, nil
+		}
+		conn, err := net.ListenUDP("udp", addr)
+		if err != nil {
+			return []interface{}{}, nil
+		}
+		defer conn.Close()
+		conn.SetReadDeadline(time.Now().Add(time.Duration(timeoutMs) * time.Millisecond))
+		seen := make(map[string]bool)
+		var rooms []map[string]interface{}
+		buf := make([]byte, 512)
+		for {
+			n, remoteAddr, err := conn.ReadFromUDP(buf)
+			if err != nil {
+				break
+			}
+			msg := string(buf[:n])
+			if !strings.HasPrefix(msg, "CB_ROOM\t") {
+				continue
+			}
+			parts := strings.SplitN(msg, "\t", 4)
+			if len(parts) < 4 {
+				continue
+			}
+			key := parts[1] + ":" + parts[2]
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			port, _ := strconv.Atoi(parts[1])
+			roomName := parts[2]
+			countStr := parts[3]
+			slash := strings.Index(countStr, "/")
+			playerCount := 0
+			if slash > 0 {
+				playerCount, _ = strconv.Atoi(countStr[:slash])
+			}
+			host := "127.0.0.1"
+			if remoteAddr != nil {
+				host = remoteAddr.IP.String()
+			}
+			rooms = append(rooms, map[string]interface{}{
+				"host":        host,
+				"port":        port,
+				"roomName":    roomName,
+				"playerCount": playerCount,
+			})
+		}
+		result := make(map[string]interface{})
+		result["count"] = len(rooms)
+		for i, r := range rooms {
+			result[strconv.Itoa(i)] = r
+		}
+		return result, nil
+	})
+	v.RegisterForeign("MatchmakingJoin", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("MatchmakingJoin(host, port) requires 2 arguments")
+		}
+		host := toString(args[0])
+		port := toInt(args[1])
+		addr := fmt.Sprintf("%s:%d", host, port)
+		conn, err := kcpDialWithTimeout(addr, 5*time.Second)
+		if err != nil {
+			return nil, nil
+		}
+		applyKCPTuning(conn)
+		netMu.Lock()
+		connCounter++
+		id := fmt.Sprintf("conn_%d", connCounter)
+		conns[id] = conn
+		netMu.Unlock()
+		go startReader(id, conn)
 		return id, nil
 	})
 	v.RegisterForeign("Broadcast", func(args []interface{}) (interface{}, error) {
@@ -1305,6 +1634,47 @@ func RegisterNet(v *vm.VM) {
 		}
 		return nil, nil
 	})
+	v.RegisterForeign("SetInterestFilter", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetInterestFilter(connectionId, mode, ...) requires at least 2 arguments")
+		}
+		connId := toString(args[0])
+		mode := strings.ToLower(strings.TrimSpace(toString(args[1])))
+		interestMu.Lock()
+		defer interestMu.Unlock()
+		if mode == "all" || mode == "" {
+			delete(interestFilters, connId)
+			return nil, nil
+		}
+		f := &interestFilter{mode: mode}
+		if mode == "distance" && len(args) >= 6 {
+			f.maxDist = toFloat(args[2])
+			f.originX = toFloat(args[3])
+			f.originY = toFloat(args[4])
+			f.originZ = toFloat(args[5])
+		} else if mode == "zone" && len(args) >= 3 {
+			f.zoneId = toString(args[2])
+		} else {
+			return nil, fmt.Errorf("SetInterestFilter: distance needs (connId, \"distance\", maxDist, ox, oy, oz); zone needs (connId, \"zone\", zoneId)")
+		}
+		interestFilters[connId] = f
+		return nil, nil
+	})
+	v.RegisterForeign("SetEntityInterestZone", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetEntityInterestZone(entityId, zoneId) requires 2 arguments")
+		}
+		entityId := toString(args[0])
+		zoneId := toString(args[1])
+		interestMu.Lock()
+		if zoneId == "" {
+			delete(entityInterestZones, entityId)
+		} else {
+			entityInterestZones[entityId] = zoneId
+		}
+		interestMu.Unlock()
+		return nil, nil
+	})
 	v.RegisterForeign("SyncEntity", func(args []interface{}) (interface{}, error) {
 		if len(args) < 4 {
 			return nil, fmt.Errorf("SyncEntity(connectionId, entityId, x, y) or SyncEntity(connectionId, entityId, x, y, z) requires 4 or 5 arguments")
@@ -1316,6 +1686,23 @@ func RegisterNet(v *vm.VM) {
 		z := 0.0
 		if len(args) >= 5 {
 			z = toFloat(args[4])
+		}
+		interestMu.Lock()
+		f := interestFilters[id]
+		entityZone := entityInterestZones[entityId]
+		interestMu.Unlock()
+		if f != nil {
+			if f.mode == "distance" {
+				dx := x - f.originX
+				dy := y - f.originY
+				dz := z - f.originZ
+				dist := dx*dx + dy*dy + dz*dz
+				if dist > f.maxDist*f.maxDist {
+					return true, nil
+				}
+			} else if f.mode == "zone" && entityZone != f.zoneId {
+				return true, nil
+			}
 		}
 		payload := fmt.Sprintf("E\t%s\t%g\t%g\t%g", entityId, x, y, z)
 		if len(payload) > maxMessageSize {
@@ -1332,6 +1719,146 @@ func RegisterNet(v *vm.VM) {
 		}
 		return true, nil
 	})
+	v.RegisterForeign("RollbackEnable", func(args []interface{}) (interface{}, error) {
+		return nil, nil
+	})
+	v.RegisterForeign("RollbackBroadcast", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("RollbackBroadcast(tickId, correctTickId) requires 2 arguments")
+		}
+		tickId := toString(args[0])
+		correctTickId := toString(args[1])
+		payload := "B\t" + tickId + "\t" + correctTickId
+		netMu.Lock()
+		for _, conn := range conns {
+			_, _ = fmt.Fprintln(conn, payload)
+		}
+		netMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("RegisterSnapshotHandler", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("RegisterSnapshotHandler(subName) requires 1 argument")
+		}
+		rollbackMu.Lock()
+		rollbackSnapshotSub = toString(args[0])
+		rollbackMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("RegisterRestoreHandler", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("RegisterRestoreHandler(subName) requires 1 argument")
+		}
+		rollbackMu.Lock()
+		rollbackRestoreSub = toString(args[0])
+		rollbackMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SnapshotCreate", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SnapshotCreate(tickId) requires 1 argument")
+		}
+		tickId := toString(args[0])
+		if netVM == nil || netVM.Chunk() == nil {
+			return nil, nil
+		}
+		rollbackMu.Lock()
+		sub := rollbackSnapshotSub
+		rollbackMu.Unlock()
+		if sub == "" {
+			return nil, fmt.Errorf("no snapshot handler registered; call RegisterSnapshotHandler(subName)")
+		}
+		if _, ok := netVM.Chunk().GetFunction(strings.ToLower(sub)); !ok {
+			return nil, fmt.Errorf("snapshot handler sub not found: %s", sub)
+		}
+		if err := netVM.InvokeSub(sub, []interface{}{tickId}); err != nil {
+			return nil, err
+		}
+		rollbackMu.Lock()
+		data := rollbackSnapshots[tickId]
+		rollbackMu.Unlock()
+		if data != "" {
+			return true, nil
+		}
+		return false, nil
+	})
+	v.RegisterForeign("SnapshotStoreResult", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SnapshotStoreResult(tickId, data) requires 2 arguments")
+		}
+		tickId := toString(args[0])
+		data := toString(args[1])
+		rollbackMu.Lock()
+		rollbackSnapshots[tickId] = data
+		rollbackMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("SnapshotRestore", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("SnapshotRestore(tickId) requires 1 argument")
+		}
+		tickId := toString(args[0])
+		rollbackMu.Lock()
+		data := rollbackSnapshots[tickId]
+		sub := rollbackRestoreSub
+		rollbackMu.Unlock()
+		if sub == "" {
+			return nil, fmt.Errorf("no restore handler registered; call RegisterRestoreHandler(subName)")
+		}
+		if netVM == nil || netVM.Chunk() == nil {
+			return nil, nil
+		}
+		if _, ok := netVM.Chunk().GetFunction(strings.ToLower(sub)); !ok {
+			return nil, fmt.Errorf("restore handler sub not found: %s", sub)
+		}
+		if err := netVM.InvokeSub(sub, []interface{}{tickId, data}); err != nil {
+			return nil, err
+		}
+		return true, nil
+	})
+	v.RegisterForeign("PredictionEnable", func(args []interface{}) (interface{}, error) {
+		predictionMu.Lock()
+		predictionEnabled = true
+		predictionMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("PredictionStoreInput", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("PredictionStoreInput(tickId, input) requires 2 arguments")
+		}
+		tickId := toString(args[0])
+		input := toString(args[1])
+		predictionMu.Lock()
+		predictionInputBuffer[tickId] = input
+		predictionMu.Unlock()
+		return nil, nil
+	})
+	v.RegisterForeign("PredictionReconcile", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("PredictionReconcile(tickId, stateJson) requires 2 arguments")
+		}
+		tickId := toString(args[0])
+		stateJson := toString(args[1])
+		rollbackMu.Lock()
+		sub := rollbackRestoreSub
+		rollbackMu.Unlock()
+		if sub == "" {
+			return nil, fmt.Errorf("no restore handler for prediction; call RegisterRestoreHandler(subName)")
+		}
+		if netVM == nil || netVM.Chunk() == nil {
+			return nil, nil
+		}
+		if _, ok := netVM.Chunk().GetFunction(strings.ToLower(sub)); !ok {
+			return nil, fmt.Errorf("restore handler sub not found: %s", sub)
+		}
+		if err := netVM.InvokeSub(sub, []interface{}{tickId, stateJson}); err != nil {
+			return nil, err
+		}
+		if _, ok := netVM.Chunk().GetFunction("onpredictioncorrected"); ok {
+			_ = netVM.InvokeSub("onpredictioncorrected", []interface{}{tickId})
+		}
+		return true, nil
+	})
 	v.RegisterForeign("SyncEntityToRoom", func(args []interface{}) (interface{}, error) {
 		if len(args) < 4 {
 			return nil, fmt.Errorf("SyncEntityToRoom(roomId, entityId, x, y) or SyncEntityToRoom(roomId, entityId, x, y, z) requires 4 or 5 arguments")
@@ -1344,6 +1871,9 @@ func RegisterNet(v *vm.VM) {
 		if len(args) >= 5 {
 			z = toFloat(args[4])
 		}
+		interestMu.Lock()
+		entityZone := entityInterestZones[entityId]
+		interestMu.Unlock()
 		payload := fmt.Sprintf("E\t%s\t%g\t%g\t%g", entityId, x, y, z)
 		if len(payload) > maxMessageSize {
 			return 0, nil
@@ -1361,6 +1891,21 @@ func RegisterNet(v *vm.VM) {
 		netMu.Unlock()
 		n := 0
 		for _, cid := range cids {
+			interestMu.Lock()
+			f := interestFilters[cid]
+			interestMu.Unlock()
+			if f != nil {
+				if f.mode == "distance" {
+					dx := x - f.originX
+					dy := y - f.originY
+					dz := z - f.originZ
+					if dx*dx+dy*dy+dz*dz > f.maxDist*f.maxDist {
+						continue
+					}
+				} else if f.mode == "zone" && entityZone != f.zoneId {
+					continue
+				}
+			}
 			netMu.Lock()
 			conn, ok := conns[cid]
 			netMu.Unlock()

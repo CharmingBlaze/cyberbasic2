@@ -203,6 +203,13 @@ const (
 	OpYield
 	OpWaitSeconds
 
+	// DATA/READ/RESTORE
+	OpRead    // read next DATA value into var (1 byte var index)
+	OpRestore // reset DATA read position to 0
+
+	// GOSUB/RETURN: GOSUB pushes to gosub stack and jumps; RETURN pops gosub stack first, else call stack
+	OpGosub // push IP, jump to sub (nameConstIndex, 2-byte target - same layout as OpCallUser)
+
 	// Special
 	OpQuit // exit program (like QUIT / END)
 	OpHalt
@@ -224,19 +231,22 @@ type Chunk struct {
 	Functions map[string]int   // user Sub/Function name (lowercase) -> code offset
 	// Enums: enum name (lowercase) -> member name (lowercase) -> value; used by Enum.getValue/getName/hasValue at runtime
 	Enums map[string]EnumMembers
+	// DataValues holds all DATA values in program order for READ/RESTORE
+	DataValues []Value
 	currentLine int // used by compiler when emitting; Write records this into Lines
 }
 
 // NewChunk creates a new bytecode chunk
 func NewChunk() *Chunk {
 	return &Chunk{
-		Code:      make([]byte, 0),
-		Lines:     make([]int, 0),
-		Constants: make([]Value, 0),
-		Variables: make(map[string]int),
-		VarDims:   make(map[string][]int),
-		Functions: make(map[string]int),
-		Enums:     make(map[string]EnumMembers),
+		Code:       make([]byte, 0),
+		Lines:      make([]int, 0),
+		Constants:  make([]Value, 0),
+		Variables:  make(map[string]int),
+		VarDims:    make(map[string][]int),
+		Functions:  make(map[string]int),
+		Enums:      make(map[string]EnumMembers),
+		DataValues: make([]Value, 0),
 	}
 }
 

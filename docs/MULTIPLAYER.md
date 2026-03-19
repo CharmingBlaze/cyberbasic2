@@ -1,6 +1,6 @@
-# Multiplayer (TCP)
+# Multiplayer
 
-CyberBASIC2 includes simple TCP client/server bindings so you can send and receive text messages between programs (e.g. for chat, lobby, or simple game state). No extra libraries; uses Go's standard `net` package. For encrypted channels over the internet, use **ConnectTLS** and **HostTLS**.
+CyberBASIC2 includes client/server bindings for multiplayer games. **Default transport:** KCP (reliable UDP) via kcp-go for lower latency and packet-loss resilience. Optional **Nakama** cloud backend for accounts, matchmaking, and realtime matches.
 
 ## Quick pick: choose your multiplayer type
 
@@ -10,7 +10,8 @@ Pick a use case and copy the snippet. Same commands work for all; only the flow 
 - **[Two players (1 server, 1 client)](#two-players-1-server-1-client)** – Simplest: one app hosts, one app connects. Good for testing or head-to-head.
 - **[Lobby + rooms (many players)](#lobby--rooms-many-players)** – Server creates a room, accepts many clients, broadcasts to the room. Good for chat, co-op, or game lobbies.
 - **[Listen server (host plays too)](#listen-server-host-plays-too)** – One app both hosts and plays; use **AcceptTimeout** in the game loop to add clients without blocking.
-- **[LAN vs Internet](#lan-vs-internet)** – Same code; only the address and (for internet) TLS and port forwarding change.
+- **[LAN vs Internet](#lan-vs-internet)** – Same code; only the address and port forwarding change.
+- **[Nakama Cloud Backend](#nakama-cloud-backend)** – Accounts, matchmaking, realtime matches via Nakama server.
 
 ---
 
@@ -269,10 +270,14 @@ Rooms let you group connections (e.g. a "lobby" or "game_1") and broadcast to ev
 - **AcceptTimeout**(serverId, timeoutMs) — like **Accept** but waits at most timeoutMs milliseconds. Returns a new connectionId when a client connects, or null on timeout. Lets the game loop poll for new clients without blocking (e.g. call each frame with a short timeout).
 - **GetLocalIP**() — returns this machine’s local IP (e.g. 192.168.1.x) so you can show "Connect to: GetLocalIP() : port" for LAN play.
 
+## Nakama Cloud Backend
+
+For cloud-hosted accounts, matchmaking, and realtime matches, use **Nakama**. Prerequisites: Nakama server. Quick start: `NakamaConnect`, `NakamaAuthenticateDevice`, `NakamaCreateSocket`, `NakamaSocketConnect`, `NakamaCreateMatch`. See [NAKAMA_GUIDE.md](NAKAMA_GUIDE.md).
+
 ## Security
 
-- **When to use plain TCP (Connect / Host):** LAN, localhost, or trusted development. Traffic is not encrypted.
-- **When to use TLS (ConnectTLS / HostTLS):** Internet or any untrusted network. Traffic is encrypted. You need a certificate and key on the server; clients verify the server by default. For testing you can use a self-signed certificate (e.g. `go run crypto/tls/generate_cert.go` or openssl); for production use a proper certificate (e.g. Let’s Encrypt).
+- **KCP (Connect / Host):** Default transport. Reliable UDP; suitable for LAN and trusted networks.
+- **ConnectTLS / HostTLS:** Deprecated (aliased to Connect/Host). You need a certificate and key on the server; clients verify the server by default. For testing you can use a self-signed certificate (e.g. `go run crypto/tls/generate_cert.go` or openssl); for production use a proper certificate (e.g. Let’s Encrypt).
 - **Best practices:** Validate and sanitize all received text; never trust the client for game authority (server should decide outcomes); optional token or password in the first message; rate limiting (e.g. limit messages per second per connection) in your BASIC logic. Message size is capped at 256 KB and newlines in payloads are rejected to keep the protocol safe and predictable.
 
 For other transports (e.g. WebSocket), a future binding could use a Go library such as gorilla/websocket; the same room and Send/Receive concepts would apply.
@@ -301,7 +306,7 @@ For deterministic or semi-deterministic multiplayer code, drive simulation from 
 - `OnFixedUpdate(label$)` sets the callback run on each fixed step.
 - `FixedDeltaTime()` returns the current fixed timestep in seconds.
 
-Design note: lockstep / rollback networking is not implemented yet. See [Multiplayer Design](MULTIPLAYER_DESIGN.md) for the current architecture plan and status.
+Design note: lockstep, rollback, prediction, matchmaking, and interest management are implemented. See [Multiplayer Design](MULTIPLAYER_DESIGN.md) for architecture and [MULTIPLAYER_ADVANCED.md](MULTIPLAYER_ADVANCED.md) for advanced patterns.
 
 ## RPC (remote procedure calls)
 
@@ -329,7 +334,7 @@ The shipping transport includes explicit entity-position sync helpers. It does *
 Replication note:
 
 - `ReplicatePosition`, `ReplicateRotation`, `ReplicateScale`, and `ReplicateValue` are currently marker-only bookkeeping helpers for future higher-level replication work.
-- They do not automatically transmit state over the TCP transport today.
+- They do not automatically transmit state over the KCP transport today.
 - For real networked state in the current engine, use `SyncEntity`, `SyncEntityToRoom`, `SendRPC`, or your own `Send*` messages.
 
 ## API summary
@@ -348,7 +353,7 @@ Replication note:
 | **ReceiveJSON**(connectionId) | Read next line; return it only if valid JSON, else null. Non-blocking. |
 | **ReceiveTable**(connectionId) | Read next message; if valid JSON, return as dictionary, else null. Non-blocking. |
 | **Disconnect**(connectionId) | Close the connection (and remove from all rooms). |
-| **HostTLS**(port, certFile, keyFile) | Start a TLS server. Returns serverId or null. |
+| **HostTLS**(port, certFile, keyFile) | Deprecated: alias for Host (KCP). |
 | **Accept**(serverId) | Wait for a client (blocking). Returns connectionId or null. |
 | **AcceptTimeout**(serverId, timeoutMs) | Wait for a client with timeout. Returns connectionId or null. |
 | **CloseServer**(serverId) | Stop the server. |
@@ -379,6 +384,27 @@ Replication note:
 | **SyncEntity**(connectionId, entityId, x, y) / (…, z) | Send entity position to one connection. Returns true if sent. |
 | **SyncEntityToRoom**(roomId, entityId, x, y) / (…, z) | Send entity position to every connection in the room. Returns count sent. |
 | **GetRemoteEntity**(entityId) | Last synced state (dict with x, y, z). Returns null if none. |
+| **LockstepEnable**(tickRate) | Enable lockstep mode. |
+| **LockstepSendInput**(tickId, inputData) | Client: send input for tick. |
+| **LockstepGetInputs**(tickId) | Server: get {connectionId: input} when tick ready. |
+| **LockstepDisable**() | Disable lockstep. |
+| **OnLockstepTickReady**(tickId) | Callback when tick has all inputs (server) or tick-ready received (client). |
+| **MatchmakingHost**(port, roomName, maxPlayers) | Host + LAN broadcast. Returns serverId. |
+| **MatchmakingDiscover**(timeoutMs) | Discover rooms. Returns table with count, "0", "1", ... (host, port, roomName, playerCount). |
+| **MatchmakingJoin**(host, port) | Connect to room. Returns connectionId. |
+| **SetInterestFilter**(connectionId, "distance", maxDist, ox, oy, oz) | Filter SyncEntity by distance. |
+| **SetInterestFilter**(connectionId, "zone", zoneId) | Filter SyncEntity by zone. |
+| **SetEntityInterestZone**(entityId, zoneId) | Assign entity to zone. |
+| **RegisterSnapshotHandler**(subName) | Sub(tickId) must call SnapshotStoreResult(tickId, data). |
+| **RegisterRestoreHandler**(subName) | Sub(tickId, data) restores state. |
+| **SnapshotCreate**(tickId) | Invoke snapshot handler. Returns true if SnapshotStoreResult was called. |
+| **SnapshotStoreResult**(tickId, data) | Called by snapshot handler to store state. |
+| **SnapshotRestore**(tickId) | Restore from snapshot. |
+| **RollbackBroadcast**(tickId, correctTickId) | Server: tell clients to rollback. |
+| **OnRollbackRequired**(tickId, correctTickId) | Callback when server requests rollback. |
+| **PredictionEnable**() | Enable client-side prediction. |
+| **PredictionStoreInput**(tickId, input) | Store input for tick. |
+| **PredictionReconcile**(tickId, stateJson) | Restore and resimulate; OnPredictionCorrected fires. |
 
 For the complete list of all network commands and signatures see [API Reference](../API_REFERENCE.md) section 18.
 
@@ -388,6 +414,7 @@ For the complete list of all network commands and signatures see [API Reference]
 
 ## See also
 
+- [Nakama Guide](NAKAMA_GUIDE.md) – Nakama cloud backend API
 - [Core Command Reference](CORE_COMMAND_REFERENCE.md) – DBP-style commands
 - [2D Game API](2D_GAME_API.md), [3D Game API](3D_GAME_API.md) – Multiplayer-safe commands
 - [API Reference](../API_REFERENCE.md) (section 18) – full network command list

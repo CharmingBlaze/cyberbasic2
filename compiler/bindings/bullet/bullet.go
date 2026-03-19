@@ -213,11 +213,17 @@ func loadOBJForCollision(path string) (tris []triangle, minV, maxV vec3, err err
 }
 
 type joint struct {
-	kind    string // "point_to_point" | "fixed"
-	bodyA   string
-	bodyB   string
-	anchorA vec3 // in body A local space
-	anchorB vec3 // in body B local space
+	kind         string  // "point_to_point" | "fixed" | "hinge" | "slider" | "cone_twist"
+	bodyA        string
+	bodyB        string
+	anchorA      vec3    // in body A local space
+	anchorB      vec3    // in body B local space
+	axisA        vec3    // axis in body A local space (hinge/slider/conetwist)
+	axisB        vec3    // axis in body B local space (hinge/slider/conetwist)
+	limitMin     float64 // angle (rad) or position for hinge/slider; cone angle for conetwist
+	limitMax     float64
+	motorTarget  float64 // target velocity (rad/s or m/s)
+	motorMaxForce float64
 }
 
 type world struct {
@@ -230,7 +236,8 @@ type world struct {
 const defaultPhysicsWorld = "default"
 
 var (
-	worlds         = make(map[string]*world)
+	bulletNativeAvailable = false // set to true by bullet_native.go when built with -tags bullet
+	worlds                = make(map[string]*world)
 	worldMu        sync.RWMutex
 	physicsBodySeq int
 	lastRay        struct {
@@ -246,12 +253,12 @@ func bulletFeatureAvailable(name string) bool {
 	switch strings.ToLower(strings.TrimSpace(name)) {
 	case "sphere", "box", "capsule", "cylinder", "cone", "raycast", "body_properties", "ccd", "kinematic", "torque", "torque_impulse":
 		return true
-	case "point_to_point_joint", "fixed_joint":
+	case "point_to_point_joint", "fixed_joint", "hinge_joint", "slider_joint", "cone_twist_joint",
+		"joint_limits", "joint_motor":
 		return true
 	case "mesh_collider":
 		return true
-	case "native", "native_backend", "joints", "hinge_joint", "slider_joint", "cone_twist_joint",
-		"joint_limits", "joint_motor", "heightmap", "compound", "compound_shapes", "exact_mesh_collision":
+	case "native", "native_backend", "joints", "heightmap", "compound", "compound_shapes", "exact_mesh_collision":
 		return false
 	default:
 		return false
@@ -414,6 +421,9 @@ func registerFlat3D(v *vm.VM) {
 		return "fallback", nil
 	})
 	v.RegisterForeign("BulletNativeAvailable", func(args []interface{}) (interface{}, error) {
+		if bulletNativeAvailable {
+			return 1, nil
+		}
 		return 0, nil
 	})
 	v.RegisterForeign("BulletFeatureAvailable", func(args []interface{}) (interface{}, error) {
@@ -1006,15 +1016,96 @@ func registerFlat3D(v *vm.VM) {
 	v.RegisterForeign("BulletJointsAvailable", func(args []interface{}) (interface{}, error) {
 		return 1, nil
 	})
-	// 3D joints: clearly gated in the shipped fallback backend.
+	// 3D joints: Hinge, Slider, ConeTwist implemented in pure-Go fallback.
 	v.RegisterForeign("CreateHingeJoint3D", func(args []interface{}) (interface{}, error) {
-		return nil, unsupportedBulletFeatureError("CreateHingeJoint3D")
+		if len(args) < 13 {
+			return nil, fmt.Errorf("CreateHingeJoint3D requires (worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisAx, axisAy, axisAz)")
+		}
+		w := getWorld(toString(args[0]))
+		if w == nil {
+			return nil, fmt.Errorf("world not found")
+		}
+		jid := toString(args[1])
+		ba, bb := toString(args[2]), toString(args[3])
+		if getBody(w, ba) == nil || getBody(w, bb) == nil {
+			return nil, fmt.Errorf("body not found")
+		}
+		w.mu.Lock()
+		if w.joints == nil {
+			w.joints = make(map[string]*joint)
+		}
+		w.joints[jid] = &joint{
+			kind:    "hinge",
+			bodyA:   ba,
+			bodyB:   bb,
+			anchorA: vec3{toFloat64(args[4]), toFloat64(args[5]), toFloat64(args[6])},
+			anchorB: vec3{toFloat64(args[7]), toFloat64(args[8]), toFloat64(args[9])},
+			axisA:   vec3{toFloat64(args[10]), toFloat64(args[11]), toFloat64(args[12])},
+			axisB:   vec3{toFloat64(args[10]), toFloat64(args[11]), toFloat64(args[12])},
+			limitMin: -math.Pi, limitMax: math.Pi,
+		}
+		w.mu.Unlock()
+		return nil, nil
 	})
 	v.RegisterForeign("CreateSliderJoint3D", func(args []interface{}) (interface{}, error) {
-		return nil, unsupportedBulletFeatureError("CreateSliderJoint3D")
+		if len(args) < 13 {
+			return nil, fmt.Errorf("CreateSliderJoint3D requires (worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisAx, axisAy, axisAz)")
+		}
+		w := getWorld(toString(args[0]))
+		if w == nil {
+			return nil, fmt.Errorf("world not found")
+		}
+		jid := toString(args[1])
+		ba, bb := toString(args[2]), toString(args[3])
+		if getBody(w, ba) == nil || getBody(w, bb) == nil {
+			return nil, fmt.Errorf("body not found")
+		}
+		w.mu.Lock()
+		if w.joints == nil {
+			w.joints = make(map[string]*joint)
+		}
+		w.joints[jid] = &joint{
+			kind:     "slider",
+			bodyA:    ba,
+			bodyB:    bb,
+			anchorA:  vec3{toFloat64(args[4]), toFloat64(args[5]), toFloat64(args[6])},
+			anchorB:  vec3{toFloat64(args[7]), toFloat64(args[8]), toFloat64(args[9])},
+			axisA:    vec3{toFloat64(args[10]), toFloat64(args[11]), toFloat64(args[12])},
+			axisB:    vec3{toFloat64(args[10]), toFloat64(args[11]), toFloat64(args[12])},
+			limitMin: -1e30, limitMax: 1e30,
+		}
+		w.mu.Unlock()
+		return nil, nil
 	})
 	v.RegisterForeign("CreateConeTwistJoint3D", func(args []interface{}) (interface{}, error) {
-		return nil, unsupportedBulletFeatureError("CreateConeTwistJoint3D")
+		if len(args) < 13 {
+			return nil, fmt.Errorf("CreateConeTwistJoint3D requires (worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisAx, axisAy, axisAz)")
+		}
+		w := getWorld(toString(args[0]))
+		if w == nil {
+			return nil, fmt.Errorf("world not found")
+		}
+		jid := toString(args[1])
+		ba, bb := toString(args[2]), toString(args[3])
+		if getBody(w, ba) == nil || getBody(w, bb) == nil {
+			return nil, fmt.Errorf("body not found")
+		}
+		w.mu.Lock()
+		if w.joints == nil {
+			w.joints = make(map[string]*joint)
+		}
+		w.joints[jid] = &joint{
+			kind:     "cone_twist",
+			bodyA:    ba,
+			bodyB:    bb,
+			anchorA:  vec3{toFloat64(args[4]), toFloat64(args[5]), toFloat64(args[6])},
+			anchorB:  vec3{toFloat64(args[7]), toFloat64(args[8]), toFloat64(args[9])},
+			axisA:    vec3{toFloat64(args[10]), toFloat64(args[11]), toFloat64(args[12])},
+			axisB:    vec3{toFloat64(args[10]), toFloat64(args[11]), toFloat64(args[12])},
+			limitMin: 0, limitMax: math.Pi / 2,
+		}
+		w.mu.Unlock()
+		return nil, nil
 	})
 	v.RegisterForeign("CreatePointToPointJoint3D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 10 {
@@ -1071,10 +1162,40 @@ func registerFlat3D(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterForeign("SetJointLimits3D", func(args []interface{}) (interface{}, error) {
-		return nil, unsupportedBulletFeatureError("SetJointLimits3D")
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetJointLimits3D requires (worldId, jointId, low, high)")
+		}
+		w := getWorld(toString(args[0]))
+		if w == nil || w.joints == nil {
+			return nil, nil
+		}
+		j := w.joints[toString(args[1])]
+		if j == nil {
+			return nil, nil
+		}
+		w.mu.Lock()
+		j.limitMin = toFloat64(args[2])
+		j.limitMax = toFloat64(args[3])
+		w.mu.Unlock()
+		return nil, nil
 	})
 	v.RegisterForeign("SetJointMotor3D", func(args []interface{}) (interface{}, error) {
-		return nil, unsupportedBulletFeatureError("SetJointMotor3D")
+		if len(args) < 4 {
+			return nil, fmt.Errorf("SetJointMotor3D requires (worldId, jointId, targetVel, maxForce)")
+		}
+		w := getWorld(toString(args[0]))
+		if w == nil || w.joints == nil {
+			return nil, nil
+		}
+		j := w.joints[toString(args[1])]
+		if j == nil {
+			return nil, nil
+		}
+		w.mu.Lock()
+		j.motorTarget = toFloat64(args[2])
+		j.motorMaxForce = toFloat64(args[3])
+		w.mu.Unlock()
+		return nil, nil
 	})
 
 	// Raycast (from->to)
@@ -1501,12 +1622,38 @@ func integrateBody(b *body, gravity vec3, dt float64) {
 	}
 }
 
-// solveJoints runs position-based constraint correction for PointToPoint and Fixed joints. Call with w.mu held.
+// vec3Norm normalizes v and returns length. If length < 1e-9, returns 0.
+func vec3Norm(v *vec3) float64 {
+	len := math.Sqrt(v.x*v.x + v.y*v.y + v.z*v.z)
+	if len < 1e-9 {
+		return 0
+	}
+	v.x /= len
+	v.y /= len
+	v.z /= len
+	return len
+}
+
+// vec3Dot returns dot product.
+func vec3Dot(a, b vec3) float64 {
+	return a.x*b.x + a.y*b.y + a.z*b.z
+}
+
+// vec3Cross returns cross product a x b.
+func vec3Cross(a, b vec3) vec3 {
+	return vec3{
+		a.y*b.z - a.z*b.y,
+		a.z*b.x - a.x*b.z,
+		a.x*b.y - a.y*b.x,
+	}
+}
+
+// solveJoints runs position-based constraint correction for PointToPoint, Fixed, Hinge, Slider, ConeTwist. Call with w.mu held.
 func solveJoints(w *world, dt float64) {
 	if w == nil || w.joints == nil {
 		return
 	}
-	const iterations = 4
+	const iterations = 6
 	const correctionFactor = 0.4
 	for iter := 0; iter < iterations; iter++ {
 		for _, j := range w.joints {
@@ -1524,15 +1671,6 @@ func solveJoints(w *world, dt float64) {
 				b.position.y + eulerRotate(j.anchorB, b.rotation).y,
 				b.position.z + eulerRotate(j.anchorB, b.rotation).z,
 			}
-			errX := worldA.x - worldB.x
-			errY := worldA.y - worldB.y
-			errZ := worldA.z - worldB.z
-			dist := math.Sqrt(errX*errX + errY*errY + errZ*errZ)
-			if dist < 1e-6 {
-				continue
-			}
-			invDist := 1.0 / dist
-			nx, ny, nz := errX*invDist, errY*invDist, errZ*invDist
 			ma, mb := a.mass, b.mass
 			if ma <= 0 {
 				ma = 1
@@ -1551,20 +1689,170 @@ func solveJoints(w *world, dt float64) {
 			if a.kinematic && b.kinematic {
 				continue
 			}
-			corr := dist * correctionFactor
-			if !a.kinematic {
-				a.position.x -= nx * corr * wa
-				a.position.y -= ny * corr * wa
-				a.position.z -= nz * corr * wa
-			}
-			if !b.kinematic {
-				b.position.x += nx * corr * wb
-				b.position.y += ny * corr * wb
-				b.position.z += nz * corr * wb
-			}
-			if j.kind == "fixed" {
+			switch j.kind {
+			case "point_to_point", "hinge", "cone_twist":
+				errX := worldA.x - worldB.x
+				errY := worldA.y - worldB.y
+				errZ := worldA.z - worldB.z
+				dist := math.Sqrt(errX*errX + errY*errY + errZ*errZ)
+				if dist >= 1e-6 {
+					invDist := 1.0 / dist
+					nx, ny, nz := errX*invDist, errY*invDist, errZ*invDist
+					corr := dist * correctionFactor
+					if !a.kinematic {
+						a.position.x -= nx * corr * wa
+						a.position.y -= ny * corr * wa
+						a.position.z -= nz * corr * wa
+					}
+					if !b.kinematic {
+						b.position.x += nx * corr * wb
+						b.position.y += ny * corr * wb
+						b.position.z += nz * corr * wb
+					}
+				}
+			case "slider":
+				axisA := eulerRotate(j.axisA, a.rotation)
+				if vec3Norm(&axisA) < 1e-9 {
+					axisA = vec3{1, 0, 0}
+				}
+				diff := vec3{worldB.x - worldA.x, worldB.y - worldA.y, worldB.z - worldA.z}
+				slideDist := vec3Dot(diff, axisA)
+				clamped := slideDist
+				if clamped < j.limitMin {
+					clamped = j.limitMin
+				}
+				if clamped > j.limitMax {
+					clamped = j.limitMax
+				}
+				perp := vec3{
+					diff.x - axisA.x*slideDist,
+					diff.y - axisA.y*slideDist,
+					diff.z - axisA.z*slideDist,
+				}
+				perpLen := math.Sqrt(perp.x*perp.x + perp.y*perp.y + perp.z*perp.z)
+				if perpLen >= 1e-6 {
+					invLen := 1.0 / perpLen
+					nx, ny, nz := perp.x*invLen, perp.y*invLen, perp.z*invLen
+					corrPerp := perpLen * correctionFactor
+					if !a.kinematic {
+						a.position.x += nx * corrPerp * wa
+						a.position.y += ny * corrPerp * wa
+						a.position.z += nz * corrPerp * wa
+					}
+					if !b.kinematic {
+						b.position.x -= nx * corrPerp * wb
+						b.position.y -= ny * corrPerp * wb
+						b.position.z -= nz * corrPerp * wb
+					}
+				}
+				corr := (clamped - slideDist) * correctionFactor
+				if !a.kinematic {
+					a.position.x += axisA.x * corr * wa
+					a.position.y += axisA.y * corr * wa
+					a.position.z += axisA.z * corr * wa
+				}
+				if !b.kinematic {
+					b.position.x -= axisA.x * corr * wb
+					b.position.y -= axisA.y * corr * wb
+					b.position.z -= axisA.z * corr * wb
+				}
+				if j.motorMaxForce > 0 {
+					velErr := j.motorTarget - (b.velocity.x*axisA.x + b.velocity.y*axisA.y + b.velocity.z*axisA.z)
+					impulse := velErr * 0.1
+					if impulse > j.motorMaxForce*dt {
+						impulse = j.motorMaxForce * dt
+					}
+					if impulse < -j.motorMaxForce*dt {
+						impulse = -j.motorMaxForce * dt
+					}
+					if !b.kinematic {
+						b.velocity.x += axisA.x * impulse / mb
+						b.velocity.y += axisA.y * impulse / mb
+						b.velocity.z += axisA.z * impulse / mb
+					}
+				}
+			case "fixed":
+				errX := worldA.x - worldB.x
+				errY := worldA.y - worldB.y
+				errZ := worldA.z - worldB.z
+				dist := math.Sqrt(errX*errX + errY*errY + errZ*errZ)
+				if dist >= 1e-6 {
+					invDist := 1.0 / dist
+					nx, ny, nz := errX*invDist, errY*invDist, errZ*invDist
+					corr := dist * correctionFactor
+					if !a.kinematic {
+						a.position.x -= nx * corr * wa
+						a.position.y -= ny * corr * wa
+						a.position.z -= nz * corr * wa
+					}
+					if !b.kinematic {
+						b.position.x += nx * corr * wb
+						b.position.y += ny * corr * wb
+						b.position.z += nz * corr * wb
+					}
+				}
 				b.rotation = a.rotation
 				b.angularVelocity = a.angularVelocity
+			}
+			if j.kind == "hinge" || j.kind == "cone_twist" {
+				axisA := eulerRotate(j.axisA, a.rotation)
+				axisB := eulerRotate(j.axisB, b.rotation)
+				if vec3Norm(&axisA) < 1e-9 {
+					axisA = vec3{1, 0, 0}
+				}
+				if vec3Norm(&axisB) < 1e-9 {
+					axisB = axisA
+				}
+				cross := vec3Cross(axisA, axisB)
+				sinAngle := math.Sqrt(cross.x*cross.x + cross.y*cross.y + cross.z*cross.z)
+				if sinAngle >= 1e-6 {
+					dot := vec3Dot(axisA, axisB)
+					angle := math.Atan2(sinAngle, math.Max(-1+1e-9, math.Min(1-1e-9, dot)))
+					targetAngle := angle
+					if j.kind == "cone_twist" {
+						if angle > j.limitMax {
+							targetAngle = j.limitMax
+						}
+					} else if j.kind == "hinge" {
+						if angle < j.limitMin {
+							targetAngle = j.limitMin
+						} else if angle > j.limitMax {
+							targetAngle = j.limitMax
+						}
+					}
+					corrAngle := (targetAngle - angle) * correctionFactor * 0.5
+					invLen := 1.0 / (math.Sqrt(cross.x*cross.x+cross.y*cross.y+cross.z*cross.z) + 1e-9)
+					cross.x *= invLen
+					cross.y *= invLen
+					cross.z *= invLen
+					if !b.kinematic {
+						ia := bodyInertia(b)
+						b.angularVelocity.x += cross.x * corrAngle / (dt*ia + 1e-9)
+						b.angularVelocity.y += cross.y * corrAngle / (dt*ia + 1e-9)
+						b.angularVelocity.z += cross.z * corrAngle / (dt*ia + 1e-9)
+					}
+				}
+				if j.motorMaxForce > 0 && j.kind == "hinge" {
+					axisAMotor := eulerRotate(j.axisA, a.rotation)
+					if vec3Norm(&axisAMotor) < 1e-9 {
+						axisAMotor = vec3{1, 0, 0}
+					}
+					angVelAlongAxis := b.angularVelocity.x*axisAMotor.x + b.angularVelocity.y*axisAMotor.y + b.angularVelocity.z*axisAMotor.z
+					velErr := j.motorTarget - angVelAlongAxis
+					impulse := velErr * 0.1
+					if impulse > j.motorMaxForce*dt {
+						impulse = j.motorMaxForce * dt
+					}
+					if impulse < -j.motorMaxForce*dt {
+						impulse = -j.motorMaxForce * dt
+					}
+					ia := bodyInertia(b)
+					if !b.kinematic && ia > 0 {
+						b.angularVelocity.x += axisAMotor.x * impulse / ia
+						b.angularVelocity.y += axisAMotor.y * impulse / ia
+						b.angularVelocity.z += axisAMotor.z * impulse / ia
+					}
+				}
 			}
 		}
 	}

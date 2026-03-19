@@ -27,11 +27,12 @@ All functions callable from BASIC. Names are **case-insensitive**. Use flat name
 - [15. Bullet (3D physics)](#15-bullet-3d-physics--bulletgo)
 - [16. ECS](#16-ecs--ecsgo)
 - [17. Std](#17-std-file-string-math-json-enum-dictionary-http-help-multi-window--stdgo)
-- [18. Multiplayer (TCP)](#18-multiplayer-tcp--netgo)
-- [19. SQL](#19-sql--sqlgo)
-- [20. UI](#20-ui--raylib_uigo-and-full-raygui--raylib_rayguigo)
-- [21. Language and built-ins](#21-language-and-built-ins)
-- [22. Multi-window (in-process)](#22-multi-window-in-process--raylib_multiwindowgo)
+- [18. Multiplayer (KCP)](#18-multiplayer-kcp--netgo)
+- [19. Nakama](#19-nakama--nakamago)
+- [20. SQL](#20-sql--sqlgo)
+- [21. UI](#21-ui--raylib_uigo-and-full-raygui--raylib_rayguigo)
+- [22. Language and built-ins](#22-language-and-built-ins)
+- [23. Multi-window (in-process)](#23-multi-window-in-process--raylib_multiwindowgo)
 - [Notes](#notes)
 
 ---
@@ -492,6 +493,9 @@ Other image commands: ImageFromImage, ImageFromChannel, ImageText, ImageTextEx, 
 | **DrawModelWithState** | (modelId [, tint]) | — | Draw model using stored transform |
 | **RotateModel** | (modelId, speedDegPerSec) | — | Add rotation each frame |
 | **DrawModelSimple** | (id, x, y, z [, angle]) | — | Draw at (x,y,z), scale 1; uses SetModelColor/RotateModel |
+| **MakeQuaternion** | (id, pitch, yaw, roll) | — | Create quaternion from Euler (store by id) |
+| **RotateObjectQuat** | (objectId, quatId) | — | Apply quaternion rotation to object |
+| **GetObjectMatrix** | (objectId) | [m0..m15] | Get 4x4 transform matrix (row-major) |
 
 ### Model animation
 
@@ -501,6 +505,8 @@ Other image commands: ImageFromImage, ImageFromChannel, ImageText, ImageTextEx, 
 | **GetModelAnimationId** | (path, index) | id | Animation id |
 | **UpdateModelAnimation** | (modelId, animId, frame) | — | Set animation frame |
 | **UpdateModelAnimationBones** | (modelId, animId, frame) | — | Update bones |
+| **SetBoneRotation** | (objectId, boneName, pitch, yaw, roll) | — | Manual bone rotation (rad) |
+| **SetBonePosition** | (objectId, boneName, x, y, z) | — | Manual bone position offset |
 | **UnloadModelAnimation** | (animId) | — | Unload animation |
 | **UnloadModelAnimations** | (animIds) | — | Unload animations |
 | **IsModelAnimationValid** | (modelId, animId) | bool | True if valid |
@@ -874,7 +880,7 @@ Use flat names only (no namespace). Legacy `BOX2D.*` in source is rewritten at c
 | **CreateCircle2D** | (worldId, x, y, radius, …) | bodyId | Create circle body |
 | **CreatePolygon2D** | (…) | bodyId | Create polygon |
 | **CreateEdge2D** | (…) | bodyId | Create edge |
-| **CreateChain2D** | (…) | bodyId | Create chain |
+| **CreateChain2D** | (worldId, bodyId, closed, x1, y1, x2, y2, …) | bodyId | Create chain (closed=1: loop; else open). Vertices as x,y pairs. |
 | **GetPositionX2D** | (worldId, bodyId) | float | Position X |
 | **GetPositionY2D** | (worldId, bodyId) | float | Position Y |
 | **SetPosition2D** | (worldId, bodyId, x, y) | — | Set position |
@@ -944,7 +950,15 @@ Use flat names only (no namespace). Legacy `BULLET.*` in source is rewritten at 
 | **GetCollisionCount3D** | (worldId, bodyId) | int | Collision count |
 | **GetCollisionOther3D** | (worldId, bodyId, index) | bodyId | Other body |
 
-Other legacy: CreateCapsule3D, CreateStaticMesh3D, CreateCylinder3D, CreateCone3D, CreateHeightmap3D, CreateCompound3D, AddShapeToCompound3D, SetScale3D, GetVelocityX3D/Y3D/Z3D, SetAngularVelocity3D, GetAngularVelocityX3D/Y3D/Z3D, ApplyTorque3D, ApplyTorqueImpulse3D, SetMass3D. **Body properties (implemented):** SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, SetGravity3D (per-body gravity scale), SetLinearFactor3D, SetAngularFactor3D, SetCCD3D (stored). **Unsupported in the shipped fallback:** CreateHeightmap3D, CreateCompound3D, AddShapeToCompound3D, ApplyTorque3D, ApplyTorqueImpulse3D, CreateHingeJoint3D, CreateSliderJoint3D, CreateConeTwistJoint3D, CreatePointToPointJoint3D, CreateFixedJoint3D, SetJointLimits3D, SetJointMotor3D. These now return explicit errors instead of silently succeeding.
+| **CreatePointToPointJoint3D** | (worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz) | — | Ball joint |
+| **CreateFixedJoint3D** | (worldId, jointId, bodyA, bodyB) | — | Weld bodies |
+| **CreateHingeJoint3D** | (worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisX, axisY, axisZ) | — | Hinge joint |
+| **CreateSliderJoint3D** | (worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisX, axisY, axisZ) | — | Slider joint |
+| **CreateConeTwistJoint3D** | (worldId, jointId, bodyA, bodyB, ax, ay, az, bx, by, bz, axisX, axisY, axisZ) | — | Cone twist joint |
+| **SetJointLimits3D** | (worldId, jointId, low, high) | — | Set joint limits (angle rad or position m) |
+| **SetJointMotor3D** | (worldId, jointId, targetVel, maxForce) | — | Set joint motor |
+
+Other legacy: CreateCapsule3D, CreateStaticMesh3D, CreateCylinder3D, CreateCone3D, CreateHeightmap3D, CreateCompound3D, AddShapeToCompound3D, SetScale3D, GetVelocityX3D/Y3D/Z3D, SetAngularVelocity3D, GetAngularVelocityX3D/Y3D/Z3D, ApplyTorque3D, ApplyTorqueImpulse3D, SetMass3D. **Body properties (implemented):** SetFriction3D, SetRestitution3D, SetDamping3D, SetKinematic3D, SetGravity3D (per-body gravity scale), SetLinearFactor3D, SetAngularFactor3D, SetCCD3D (stored). **Unsupported in the shipped fallback:** CreateHeightmap3D, CreateCompound3D, AddShapeToCompound3D. **CreateRagdoll**(modelId [, worldId]) — fallback: single sphere body; RagdollEnable/RagdollDisable.
 
 ---
 
@@ -1077,12 +1091,16 @@ See [docs/MULTI_WINDOW.md](docs/MULTI_WINDOW.md).
 
 ---
 
-## 18. Multiplayer (TCP) – `net.go`
+## 18. Multiplayer (KCP) – `net.go`
+
+Uses KCP (reliable UDP) transport via kcp-go.
 
 See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
 
 | Command | Arguments | Returns | Description |
 |---------|-----------|---------|-------------|
+| **NetStartServer** | (port) | serverId or null | Alias for Host(port) |
+| **NetStartClient** | (host, port) | connectionId or null | Alias for Connect(host, port) |
 | **Connect** | (host, port) | connectionId or null | Connect to server |
 | **ConnectToParent** | () | connectionId or null | Connect using CYBERBASIC_PARENT (spawned windows) |
 | **ConnectTLS** | (host, port) | connectionId or null | Encrypted connect |
@@ -1119,7 +1137,33 @@ See [docs/MULTIPLAYER.md](docs/MULTIPLAYER.md).
 
 ---
 
-## 19. SQL – `sql.go`
+## 19. Nakama – `nakama.go`
+
+Optional cloud backend for accounts, matchmaking, realtime matches. See [docs/NAKAMA_GUIDE.md](docs/NAKAMA_GUIDE.md).
+
+| Command | Arguments | Returns | Description |
+|---------|-----------|---------|-------------|
+| **NakamaConnect** | (host, port, serverKey [, useSSL]) | 1 or error | Create client |
+| **NakamaAuthenticateDevice** | (deviceId [, create, username]) | 1 or error | Auth with device ID |
+| **NakamaAuthenticateCustom** | (customId [, create, username]) | 1 or error | Auth with custom ID |
+| **NakamaAuthenticateEmail** | (email, password [, create, username]) | 1 or error | Email auth |
+| **NakamaCreateSocket** | () | 1 or error | Create realtime socket |
+| **NakamaSocketConnect** | () | 1 or error | Connect socket |
+| **NakamaCreateMatch** | ([name]) | matchId or null | Create match |
+| **NakamaJoinMatch** | (matchId [, token]) | matchId or null | Join match |
+| **NakamaLeaveMatch** | (matchId) | — | Leave match |
+| **NakamaSendMatchState** | (matchId, opCode, data [, reliable]) | 1 or error | Send to match |
+| **NakamaAddMatchmaker** | ([minPlayers, maxPlayers, query]) | ticket or null | Add to matchmaking |
+| **NakamaRemoveMatchmaker** | (ticket) | — | Remove from matchmaking |
+| **NakamaGetAccount** | () | JSON string | Current account |
+| **NakamaRPC** | (id, input) | response string | Call server RPC |
+| **NakamaProcessEvents** | () | — | Drain events; invoke callbacks |
+
+Callbacks: **OnNakamaMatchData**(matchId, opCode, data, sender), **OnNakamaMatchJoin**(matchId, presences), **OnNakamaMatchLeave**(matchId, presences), **OnNakamaMatchmakerMatched**(matchId, token).
+
+---
+
+## 20. SQL – `sql.go`
 
 See [docs/SQL.md](docs/SQL.md).
 
@@ -1142,7 +1186,7 @@ See [docs/SQL.md](docs/SQL.md).
 
 ---
 
-## 20. UI – `raylib_ui.go` and full raygui – `raylib_raygui.go`
+## 21. UI – `raylib_ui.go` and full raygui – `raylib_raygui.go`
 
 ### Pure-Go layout (raylib_ui.go, no CGO)
 
@@ -1184,7 +1228,7 @@ All coordinates and sizes in pixels. See [docs/GUI_GUIDE.md](docs/GUI_GUIDE.md).
 
 ---
 
-## 21. Language and built-ins
+## 22. Language and built-ins
 
 | Concept | Description |
 |--------|-------------|
@@ -1195,12 +1239,15 @@ All coordinates and sizes in pixels. See [docs/GUI_GUIDE.md](docs/GUI_GUIDE.md).
 | **StartCoroutine** | (subName) — start fiber at that sub. |
 | **Yield** | — switch to next fiber. |
 | **WaitSeconds** | (seconds) — yield current fiber for N seconds (non-blocking; other fibers keep running). |
+| **StopTask** | (subName) — stop coroutine by name. |
+| **PauseTask** | (subName) — pause coroutine by name. |
+| **ResumeTask** | (subName) — resume paused coroutine by name. |
 
 Fibers share the same chunk; each has its own IP, stack, and call stack.
 
 ---
 
-## 22. Multi-window (in-process) – `raylib_multiwindow.go`
+## 23. Multi-window (in-process) – `raylib_multiwindow.go`
 
 Logical windows (viewports) in one process; ID 0 = main screen. See [docs/MULTI_WINDOW_INPROCESS.md](docs/MULTI_WINDOW_INPROCESS.md).
 
@@ -1291,7 +1338,7 @@ Logical windows (viewports) in one process; ID 0 = main screen. See [docs/MULTI_
 | **SetWaterTexture** / **SetWaterReflectionTexture** / **SetWaterRefractionTexture** / **SetWaterNormalMap** / **SetWaterColor** / **SetWaterShininess** | (waterId, …) | — | Rendering params |
 | **WaterEnableFoam** / **WaterSetFoamIntensity** / **WaterSetDepthFade** / **WaterSetTransparency** | (waterId, …) | — | Advanced |
 | **WaterSetDensity** / **WaterSetDrag** | (waterId, …) | — | Physics (buoyancy) |
-| **WaterApplyBuoyancy** | (bodyId, waterId) | — | Apply buoyancy (stub) |
+| **WaterApplyBuoyancy** | (bodyId, waterId [, worldId]) | — | Apply buoyancy when submerged |
 
 ---
 
@@ -1310,7 +1357,7 @@ Logical windows (viewports) in one process; ID 0 = main screen. See [docs/MULTI_
 | **GrassSetWind** / **GrassSetHeight** / **GrassSetColor** / **GrassPaint** / **GrassErase** / **GrassSetDensity** / **GrassSetLOD** / **GrassEnableInstancing** | (grassId, …) | — | Grass state |
 | **GrassSetBendAmount** / **GrassSetInteraction** | (grassId, …) | — | Wind bend, interaction |
 | **DrawGrass** | (grassId) | — | Draw grass (Render3D) |
-| **TreeEnableCollision** / **TreeSetCollisionRadius** / **TreeSetWind** / **TreeApplyWind** / **TreeRaycast** | (…) | — | Tree physics (stubs) |
+| **TreeEnableCollision** / **TreeSetCollisionRadius** / **TreeSetWind** / **TreeApplyWind** / **TreeRaycast** | (…) | — | Tree physics (wind, raycast) |
 
 ---
 
@@ -1334,8 +1381,8 @@ Logical windows (viewports) in one process; ID 0 = main screen. See [docs/MULTI_
 |---------|-----------|---------|-------------|
 | **WorldSave** / **WorldLoad** | (path) | — | Save/load world (e.g. objects) |
 | **WorldExportJSON** / **WorldImportJSON** | (path) | — | Export/import JSON |
-| **WorldStreamEnable** / **WorldStreamSetRadius** / **WorldStreamSetCenter** | (…) | — | Chunk streaming (stubs) |
-| **WorldLoadChunk** / **WorldUnloadChunk** / **WorldIsChunkLoaded** / **WorldGetLoadedChunks** | (…) | — | Chunk API (stubs) |
+| **WorldStreamEnable** / **WorldStreamSetRadius** / **WorldStreamSetCenter** | (…) | — | Chunk streaming (state) |
+| **WorldLoadChunk** / **WorldUnloadChunk** / **WorldIsChunkLoaded** / **WorldGetLoadedChunks** | (…) | — | Chunk API (state + LoadLevel) |
 
 ---
 
@@ -1343,9 +1390,14 @@ Logical windows (viewports) in one process; ID 0 = main screen. See [docs/MULTI_
 
 | Command | Arguments | Returns | Description |
 |---------|-----------|---------|-------------|
-| **NavGridCreate** / **NavGridSetWalkable** / **NavGridSetCost** / **NavGridFindPath** | (…) | gridId / path | Grid pathfinding (stubs) |
-| **NavMeshCreateFromTerrain** / **NavMeshAddObstacle** / **NavMeshRemoveObstacle** / **NavMeshFindPath** | (…) | meshId / path | NavMesh (stubs) |
-| **NavAgentCreate** / **NavAgentSetSpeed** / **NavAgentSetRadius** / **NavAgentSetDestination** / **NavAgentGetNextWaypoint** | (…) | agentId / waypoint | Agents (stubs) |
+| **NavGridCreate** | (width, height) | gridId | Create grid with A* pathfinding |
+| **NavGridSetWalkable** | (gridId, x, y, flag) | — | Set cell walkable (0/1) |
+| **NavGridSetCost** | (gridId, x, y, cost) | — | Set cell walk cost |
+| **NavGridFindPath** | (gridId, startX, startY, endX, endY) | [x1,y1, x2,y2, …] | A* path (waypoints) |
+| **NavMeshLoadFromFile** | (path) | meshId | Load waypoint graph from file (format: `x y z` per waypoint, `i j` for edges) |
+| **NavMeshCreateFromTerrain** / **NavMeshAddObstacle** / **NavMeshRemoveObstacle** | (…) | meshId | NavMesh from terrain |
+| **NavMeshFindPathRaw** | (meshId, ox, oy, oz, dx, dy, dz) | [x1,y1,z1, …] | A* path on waypoint graph |
+| **NavAgentCreate** / **NavAgentSetSpeed** / **NavAgentSetRadius** / **NavAgentSetDestination** / **NavAgentGetNextWaypoint** / **NavAgentUpdate** | (…) | agentId / waypoint | Nav agents |
 
 ---
 
@@ -1353,11 +1405,11 @@ Logical windows (viewports) in one process; ID 0 = main screen. See [docs/MULTI_
 
 | Command | Arguments | Returns | Description |
 |---------|-----------|---------|-------------|
-| **RoomCreate** / **RoomSetBounds** / **RoomAddPortal** | (…) | roomId | Rooms (stubs) |
-| **PortalCreate** / **PortalSetOpen** | (…) | portalId | Portals (stubs) |
-| **DoorCreate** / **DoorSetOpen** / **DoorToggle** / **DoorSetLocked** | (…) | doorId | Doors (stubs) |
-| **LeverCreate** / **ButtonCreate** / **SwitchCreate** / **TriggerCreate** / **InteractableCreate** / **PickupCreate** / **LightZoneCreate** | (…) | id | Interaction (stubs) |
-| **WorldSaveInteractables** / **WorldLoadInteractables** | (path) | — | Save/load (stubs) |
+| **RoomCreate** / **RoomSetBounds** / **RoomAddPortal** | (…) | roomId | Rooms (state) |
+| **PortalCreate** / **PortalSetOpen** | (…) | portalId | Portals (state) |
+| **DoorCreate** / **DoorSetOpen** / **DoorToggle** / **DoorSetLocked** | (…) | doorId | Doors (state) |
+| **LeverCreate** / **ButtonCreate** / **SwitchCreate** / **TriggerCreate** / **InteractableCreate** / **PickupCreate** / **LightZoneCreate** | (…) | id | Interaction (state) |
+| **WorldSaveInteractables** / **WorldLoadInteractables** | (path) | — | Save/load (JSON) |
 
 ---
 

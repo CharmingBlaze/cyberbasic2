@@ -87,7 +87,7 @@ Two usage styles exist:
 - **MakeCircle2D**(id, x, y, radius, density) — simple wrapper: creates a dynamic circle in the default world. radius and density default to 0.5 and 1.0 if ≤ 0.
 - **CreatePolygon2D**(worldId, bodyId, x, y, mass, isDynamic, v1x, v1y, v2x, v2y, v3x, v3y, …) — polygon (vertices relative to body center).
 - **CreateEdge2D**(worldId, bodyId, x1, y1, x2, y2) — line segment (static).
-- **CreateChain2D** — chain of edges (stubbed in current build; see API Reference).
+- **CreateChain2D**(worldId, bodyId, closed, x1, y1, x2, y2, …) — chain of edges. closed=1 for a loop; else open. Vertices as x,y pairs.
 
 Use **SetSensor2D**(worldId, bodyId, 1) to make a body a sensor (no physical collision response). Other options: **SetFriction2D**, **SetRestitution2D**, **SetDamping2D**, **SetFixedRotation2D**, **SetGravityScale2D**, **SetMass2D**, **SetBullet2D** (continuous collision).
 

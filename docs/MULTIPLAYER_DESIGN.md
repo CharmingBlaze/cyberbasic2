@@ -6,7 +6,7 @@ Current multiplayer architecture, implementation status, deterministic patterns,
 
 ## Purpose
 
-- **TCP transport:** Connect, Host, Send, Receive for client/server games.
+- **KCP (reliable UDP) transport:** Connect, Host, Send, Receive for client/server games.
 - **Deterministic foundation:** Fixed-step simulation so server and clients can stay in sync.
 - **Event + polling:** ProcessNetworkEvents for callbacks; Receive* for polling.
 
@@ -28,9 +28,17 @@ OnMessage, OnEntitySync         OnClientConnect, OnMessage
 
 ---
 
-## Current Transport
+## Transport: kcp-go
 
-CyberBASIC2 currently ships a TCP line-based networking layer:
+CyberBASIC2 uses **KCP (reliable UDP)** via [kcp-go](https://github.com/xtaci/kcp-go) for lower latency and better packet-loss resilience than TCP. KCP provides ordered, reliable delivery over UDP with configurable trade-offs for latency vs throughput. Benefits:
+
+- **Lower latency** — KCP can achieve lower round-trip latency than TCP on lossy or high-latency links.
+- **Packet-loss resilience** — Fast retransmission and congestion control tuned for real-time games.
+- **Stream mode** — Same line-based protocol as before; messages are newline-terminated.
+
+## Current Transport API
+
+CyberBASIC2 ships a KCP line-based networking layer:
 
 - `Host`, `Accept`, `AcceptTimeout`, `CloseServer`
 - `Connect`, `Disconnect`, `IsConnected`
@@ -78,16 +86,23 @@ Recommended pattern:
 
 This gives multiplayer code a stable timestep without requiring lockstep or rollback infrastructure yet.
 
+## Implemented Advanced Features
+
+The following are now implemented:
+
+- **Lockstep** — `LockstepEnable(tickRate)`, `LockstepSendInput(tickId, data)`, `LockstepGetInputs(tickId)`, `OnLockstepTickReady(tickId)`. Server collects inputs per tick; when all clients have sent, broadcasts tick-ready. Clients wait for `T\t<tickId>` before advancing.
+- **Rollback** — `RegisterSnapshotHandler(sub)`, `RegisterRestoreHandler(sub)`, `SnapshotCreate(tickId)`, `SnapshotStoreResult(tickId, data)`, `SnapshotRestore(tickId)`, `RollbackBroadcast(tickId, correctTickId)`, `OnRollbackRequired(tickId, correctTickId)`. Handlers serialize/restore game state; server can broadcast rollback to clients.
+- **Prediction** — `PredictionEnable()`, `PredictionStoreInput(tickId, input)`, `PredictionReconcile(tickId, stateJson)`, `OnPredictionCorrected(tickId)`. Client-side prediction with server reconciliation.
+- **Matchmaking** — `MatchmakingHost(port, roomName, maxPlayers)`, `MatchmakingDiscover(timeoutMs)`, `MatchmakingJoin(host, port)`. LAN broadcast discovery; returns table of rooms with host, port, roomName, playerCount.
+- **Nakama (optional cloud)** — `NakamaConnect`, `NakamaAuthenticateDevice`, `NakamaCreateMatch`, `NakamaJoinMatch`, etc. Cloud backend for accounts, matchmaking, and realtime matches. See [NAKAMA_GUIDE.md](NAKAMA_GUIDE.md).
+- **Interest management** — `SetInterestFilter(connectionId, "distance", maxDist, ox, oy, oz)`, `SetInterestFilter(connectionId, "zone", zoneId)`, `SetEntityInterestZone(entityId, zoneId)`. Filters `SyncEntity` and `SyncEntityToRoom` by distance or zone.
+
 ## Current Limitations
 
-The following features are not implemented yet:
+The following are not implemented yet:
 
-- Deterministic lockstep scheduling
-- Rollback save/restore and resimulation
 - Snapshot interpolation buffers
-- Interest management / area-of-relevance filtering
 - Reliable-ordered vs unreliable channels
-- Matchmaking, lobby discovery, NAT traversal
 - Built-in host migration
 - Automatic high-level replication beyond explicit `SyncEntity` helper messages
 - Automatic use of `ReplicatePosition` / `ReplicateRotation` / `ReplicateScale` / `ReplicateValue` markers
@@ -114,23 +129,65 @@ For projects shipping on the current engine:
 4. Broadcast coarse state with `SyncEntity` or custom text/JSON messages.
 5. Reconcile visuals client-side if needed.
 
+## Nakama (optional cloud)
+
+When you need cloud-hosted accounts, matchmaking, or realtime matches:
+
+1. **Connect:** `NakamaConnect(host, port, serverKey [, useSSL])`
+2. **Authenticate:** `NakamaAuthenticateDevice(deviceId [, create, username])` or `NakamaAuthenticateEmail`, `NakamaAuthenticateCustom`
+3. **Socket:** `NakamaCreateSocket()`, `NakamaSocketConnect()`
+4. **Match:** `NakamaCreateMatch([name])`, `NakamaJoinMatch(matchId [, token])`, `NakamaSendMatchState(matchId, opCode, data [, reliable])`
+5. **Matchmaking:** `NakamaAddMatchmaker([minPlayers, maxPlayers, query])`, `OnNakamaMatchmakerMatched(matchId, token)`
+6. **Process:** Call `NakamaProcessEvents()` each frame to invoke `OnNakamaMatchData`, `OnNakamaMatchJoin`, `OnNakamaMatchLeave`, `OnNakamaMatchmakerMatched`
+
+See [NAKAMA_GUIDE.md](NAKAMA_GUIDE.md) for full API and examples.
+
 ## Status Summary
 
 Implemented now:
 
-- Stable TCP connect/host/send/receive path
+- Stable KCP (reliable UDP) connect/host/send/receive path
 - Single-consumption message queue semantics
 - Callback and polling APIs
 - RPC and entity-sync helpers
-- TLS-capable timed accept path
+- KCP transport with SetDeadline for timed accept
 - Per-connection numeric receive buffers
 - Fixed-step callback support for simulation
 
 Still roadmap work:
 
-- True deterministic multiplayer model
-- Rollback / prediction toolchain
 - Higher-level replication and session services
+- Automatic Replicate* integration with transport
+
+---
+
+## Lockstep
+
+Fixed tick rate; server advances only when all client inputs for tick N are received.
+
+- **Server:** `LockstepEnable(60)`; each frame call `ProcessNetworkEvents()`. When `OnLockstepTickReady(tickId)` fires, call `LockstepGetInputs(tickId)` to get `{connectionId: inputData}`. Run simulation, broadcast state.
+- **Client:** `LockstepEnable(60)`; each tick call `LockstepSendInput(tickId, inputData)` to send input. When `OnLockstepTickReady(tickId)` fires (after server broadcasts `T\t<tickId>`), advance simulation.
+- **Protocol:** `L\t<tickId>\t<data>` for input; `T\t<tickId>` for tick-ready broadcast.
+
+## Rollback and Prediction
+
+- **Snapshot:** Register `RegisterSnapshotHandler(subName)` and `RegisterRestoreHandler(subName)`. The snapshot sub receives `(tickId)` and must call `SnapshotStoreResult(tickId, jsonOrString)` before returning. The restore sub receives `(tickId, data)`.
+- **Rollback:** `SnapshotCreate(tickId)` invokes the snapshot handler; `SnapshotRestore(tickId)` invokes the restore handler. Server can `RollbackBroadcast(tickId, correctTickId)`; clients receive `OnRollbackRequired(tickId, correctTickId)`.
+- **Prediction:** `PredictionEnable()`; `PredictionStoreInput(tickId, input)` when sending input. When server state arrives, call `PredictionReconcile(tickId, stateJson)` to restore and re-simulate; `OnPredictionCorrected(tickId)` fires.
+
+## Matchmaking
+
+- **Host:** `MatchmakingHost(port, roomName, maxPlayers)` — starts KCP server and UDP broadcast every 1s on port 47777. Broadcast format: `CB_ROOM\t<port>\t<roomName>\t<count>/<max>`.
+- **Discover:** `MatchmakingDiscover(timeoutMs)` — listens for broadcasts, returns table with `count`, `"0"`, `"1"`, ... where each entry has `host`, `port`, `roomName`, `playerCount`.
+- **Join:** `MatchmakingJoin(host, port)` — alias for `Connect(host, port)`.
+
+## Interest Management
+
+- **SetInterestFilter(connectionId, "distance", maxDist, originX, originY, originZ)** — only send to this connection when entity is within `maxDist` of origin.
+- **SetInterestFilter(connectionId, "zone", zoneId)** — only send when entity's zone (from `SetEntityInterestZone`) matches.
+- **SetInterestFilter(connectionId, "all", "")** — disable filter.
+- **SetEntityInterestZone(entityId, zoneId)** — assign entity to zone.
+- `SyncEntity` and `SyncEntityToRoom` check each connection's filter before sending.
 
 ---
 
@@ -150,7 +207,7 @@ For deterministic or semi-deterministic multiplayer:
 - **Net package:** `compiler/bindings/net/net.go` — RegisterNet, Host, Connect, Send, Receive, ProcessNetworkEvents
 - **RPC:** `RegisterRPC(name, handler)`; handlers invoked when ProcessNetworkEvents runs
 - **SyncEntity:** Sends entity position; receiver gets OnEntitySync(entityId, x, y, z)
-- **TLS:** HostTLS, ConnectTLS for encrypted transport
+- **TLS:** HostTLS, ConnectTLS deprecated (aliased to Host, Connect; use KCP)
 - **Testing:** Use loopback (127.0.0.1) for local tests; no mock transport in tests yet
 
 ---

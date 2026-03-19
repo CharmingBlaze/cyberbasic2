@@ -122,8 +122,8 @@ Complete reference for the full required command set. All commands are DBP-style
 | LOAD MESH ANIMATION | `LoadMeshAnimation id, folder$, frameCount` | Load mesh sequence | Implemented |
 | PLAY MESH ANIMATION | `PlayMeshAnimation id, speed` | Play mesh frames | Implemented |
 | SET MESH ANIMATION FRAME | `SetMeshAnimationFrame id, frame` | Set frame index | Implemented |
-| SET BONE ROTATION | `SetBoneRotation id, bone$, pitch, yaw, roll` | Manual bone control | Stub |
-| SET BONE POSITION | `SetBonePosition id, bone$, x, y, z` | Manual bone offset | Stub |
+| SET BONE ROTATION | `SetBoneRotation id, bone$, pitch, yaw, roll` | Manual bone control | Implemented |
+| SET BONE POSITION | `SetBonePosition id, bone$, x, y, z` | Manual bone offset | Implemented |
 | IK SOLVE TWOBONE | `IKSolveTwoBone id, upper$, lower$, tx, ty, tz` | Two-bone IK | Experimental |
 
 ---

@@ -233,6 +233,7 @@ See [docs/WORLD_WATER_TERRAIN.md](WORLD_WATER_TERRAIN.md) for full reference and
 - `ObjectCollides(idA, idB)` - DBP objects AABB overlap (collision flag must be set)
 - `PointInObject(objectId, x, y, z)` - Point inside object AABB
 - `BodyCollides(bodyIdA$, bodyIdB$)` - Physics body collision (bullet)
+- `CreateRagdoll(modelId [, worldId])` — fallback: single sphere body; RagdollEnable/RagdollDisable
 
 ## Particles (dbp_particles.go)
 - `MakeParticles(id)` - Create particle system (integer id)
@@ -243,6 +244,7 @@ See [docs/WORLD_WATER_TERRAIN.md](WORLD_WATER_TERRAIN.md) for full reference and
 - `DeleteParticles(id)` - Remove system
 
 ## Networking (net package + dbp_net.go)
+- `NetStartServer(port)` / `NetStartClient(ip, port)` — aliases for Host(port) / Connect(ip, port)
 - `NetConnect(ip$, port)` - Connect, returns connectionId$
 - `NetSend(connectionId$, data$)` / `NetReceive(connectionId$)` - Send/receive text
 - `NetDisconnect(connectionId$)` - Close connection
@@ -261,7 +263,7 @@ See [docs/WORLD_WATER_TERRAIN.md](WORLD_WATER_TERRAIN.md) for full reference and
 
 ## Runtime (dbp_runtime.go + language)
 - `WaitFrames(n)` - Language construct: yield for n frames (~n/60 sec) in coroutines
-- `StopTask(name)` / `PauseTask(name)` / `ResumeTask(name)` - Stubs (need VM fiber name tracking)
+- `StopTask(name)` / `PauseTask(name)` / `ResumeTask(name)` - Implemented (stop/pause/resume coroutine by name; VM fiber name tracking)
 
 ## Replication (game package)
 - `ReplicatePosition(entityId$)` / `ReplicateRotation(entityId$)` / `ReplicateScale(entityId$)`
@@ -390,10 +392,15 @@ Note: Raylib has no built-in dynamic lights. The light registry stores state; vi
 - `MakeInstance(baseID, instanceID)` / `PositionInstance(instanceID, x, y, z)` / `DrawInstances(baseID)`
 
 ### Pathfinding
-- `NavMeshLoad(id, path)` / `NavMeshFindPath(id, startX, startY, startZ, endX, endY, endZ)` / `NavMeshDraw(id)`
+- **NavGrid (A*):** `NavGridCreate(width, height)` / `NavGridSetWalkable(gridId, x, y, flag)` / `NavGridSetCost(gridId, x, y, cost)` / `NavGridFindPath(gridId, startX, startY, endX, endY)` — returns waypoints
+- **NavMesh (waypoint graph):** `NavMeshLoadFromFile(path)` — load waypoint file (`x y z` per waypoint, `i j` edges); `NavMeshFindPathRaw(meshId, ox, oy, oz, dx, dy, dz)` — A* path
+- `NavMeshLoad(id, path)` / `NavMeshFindPath(id, …)` / `NavMeshDraw(id)` — legacy aliases
 
-### Matrix / Quaternion (stubs)
-- `MakeQuaternion(id, pitch, yaw, roll)` / `RotateObjectQuat(id, quatID)` / `GetObjectMatrix(id)`
+### Matrix / Quaternion
+- `MakeQuaternion(id, pitch, yaw, roll)` / `RotateObjectQuat(id, quatID)` / `GetObjectMatrix(id)` — implemented
+
+### Bones
+- `SetBoneRotation(objectId, boneName$, pitch, yaw, roll)` / `SetBonePosition(objectId, boneName$, x, y, z)` — implemented
 
 ### Runtime
 - `FixedUpdate(rate)` / `OnFixedUpdate(label$)`
