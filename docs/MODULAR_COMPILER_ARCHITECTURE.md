@@ -2,7 +2,7 @@
 
 Split the compiler into five clear, isolated groups. Each group has a single responsibility; no cross-boundary logic.
 
-**Implementation status:** Lexer, Parser, Semantic, and Codegen are implemented. The driver (`compiler/compiler.go`) is a thin orchestration layer: Lex → Parse → Semantic.Analyze → Codegen.Emit. All codegen logic lives in `compiler/codegen/` (codegen.go, stmt.go, expr.go, call.go, util.go).
+**Implementation status:** Lexer, Parser, Semantic, and Codegen are implemented. The driver (`compiler/compiler.go`) is a thin orchestration layer: Lex → Parse → Semantic.Analyze → Codegen.Emit. It also exposes a **staged API** (`Tokenize`, `ParseTokens`, `Parse`, `Analyze`, `CompileWithOptions`) so tools and tests can stop at any phase without reimplementing the lexer/parser. All codegen logic lives in `compiler/codegen/` (codegen.go, stmt.go, expr.go, call.go, util.go). See [ARCHITECTURE.md](ARCHITECTURE.md#compiler-engine-staged-api) for the phase table and extension notes.
 
 ---
 
@@ -62,7 +62,7 @@ Split the compiler into five clear, isolated groups. Each group has a single res
 | Codegen | `compiler/codegen/expr.go` | Compile expressions (binary, unary, call, member, etc.) |
 | Codegen | `compiler/codegen/call.go` | Compile function/procedure calls |
 | Codegen | `compiler/codegen/util.go` | Helpers (physics namespace map, WalkStatements, frame/3D predicates) |
-| Driver | `compiler/compiler.go` | Orchestration only: Lex → Parse → Semantic.Analyze → Codegen.Emit |
+| Driver | `compiler/compiler.go` | Single **`fullPipeline`** for every full compile (`Compile` / `CompileWithOptions`); staged `Tokenize`, `Parse`, `Analyze` for tools; CLI and `--gen-go` use the same `compiler` package |
 
 **Allowed:** Imports `parser` (AST), `vm` (Chunk, opcodes), `semantic` (Result). Emits bytecode only.  
 **Not allowed:** Tokenizing, parsing, or semantic checks (those stay in Lexer/Parser/Semantic).

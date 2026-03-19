@@ -26,6 +26,8 @@ CyberBASIC 2 is **not a script interpreter**. Your `.bas` source is compiled to 
 
 The entire stack — lexer, parser, code generator, VM, and all bindings — is written in **Go**. No C++ build step. No external engine DLLs. `go build -o cyberbasic .` produces a single executable. The result: fast iteration, easy contribution, and a runtime that ships anywhere Go runs.
 
+**Architecture (for contributors):** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — compiler pipeline, **`RegisterAll`** binding order, v2 **module DotObject** API vs legacy flat commands, how to add a binding.
+
 ---
 
 ## Full-Stack Game Development
@@ -70,6 +72,10 @@ CyberBASIC 2 integrates **full** implementations of industry-standard libraries.
 
 ## Quick Start
 
+**Implicit window** (no `InitWindow`): use `ON UPDATE` / `ON DRAW` and optional `window.*` properties. See `examples/implicit_loop.bas`.
+
+**Classic explicit loop** (unchanged):
+
 ```basic
 InitWindow(800, 600, "My Game")
 SetTargetFPS(60)
@@ -90,6 +96,8 @@ Run it:
 go build -o cyberbasic .
 ./cyberbasic examples/first_game.bas
 ```
+
+With no arguments, the CLI starts the **REPL**. High-level bindings include `PhysicsHighWorld` / `PhysicsHighDynamicBox`, `AssetsGet`, `InputMapRegister`, and `AudioLoadSound` (see `API_REFERENCE.md` / source under `compiler/bindings/`).
 
 For more control (manual loop, custom update/draw), see [Rendering and the game loop](docs/RENDERING_AND_GAME_LOOP.md).
 

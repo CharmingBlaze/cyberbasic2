@@ -8,6 +8,7 @@ import (
 
 	_ "modernc.org/sqlite"
 
+	"cyberbasic/compiler/bindings/modfacade"
 	"cyberbasic/compiler/vm"
 )
 
@@ -398,4 +399,6 @@ func RegisterSQL(v *vm.VM) {
 		setLastErr(nil)
 		return len(result), nil
 	})
+
+	v.SetGlobal("sql", modfacade.New(v, sqlV2))
 }

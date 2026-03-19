@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"sync"
 
+	"cyberbasic/compiler/bindings/modfacade"
 	"cyberbasic/compiler/bindings/objects"
 	"cyberbasic/compiler/vm"
 )
@@ -224,4 +225,6 @@ func RegisterWorld(v *vm.VM) {
 		}
 		return nil, nil
 	})
+
+	v.SetGlobal("world", modfacade.New(v, worldV2))
 }

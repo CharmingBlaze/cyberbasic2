@@ -15,6 +15,7 @@ import (
 	"sync"
 	"time"
 
+	"cyberbasic/compiler/bindings/modfacade"
 	"cyberbasic/compiler/vm"
 	"github.com/xtaci/kcp-go/v5"
 )
@@ -1933,4 +1934,6 @@ func RegisterNet(v *vm.VM) {
 		remoteEntitiesMu.Unlock()
 		return nil, nil
 	})
+
+	v.SetGlobal("net", modfacade.New(v, netV2Methods))
 }

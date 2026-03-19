@@ -235,12 +235,16 @@ func (e *Emitter) compileJSONIndexAccess(node *parser.JSONIndexAccess) error {
 	return nil
 }
 
-// compileMemberAccess compiles expr.member: UDT constant group, entity property, namespace constant (RL.*), or getter (pos.x).
+// compileMemberAccess compiles expr.member: UDT constant group, entity property, namespace constant (RL.*), vector .x/.y/.z, or DotObject OpGetProp chain.
 func (e *Emitter) compileMemberAccess(m *parser.MemberAccess) error {
-	mb := strings.ToLower(m.Member)
-	if id, ok := m.Object.(*parser.Identifier); ok {
+	segs, base := collectMemberAccessChain(m)
+	if len(segs) == 0 {
+		return fmt.Errorf("empty member access chain")
+	}
+	mb := strings.ToLower(segs[len(segs)-1])
+	if id, ok := base.(*parser.Identifier); ok {
 		objLower := strings.ToLower(id.Name)
-		if e.sem.EntityNames != nil && e.sem.EntityNames[objLower] {
+		if e.sem.EntityNames != nil && e.sem.EntityNames[objLower] && len(segs) == 1 {
 			entityIdx := e.chunk.WriteConstant(objLower)
 			propIdx := e.chunk.WriteConstant(mb)
 			if err := checkConstIndex(entityIdx, " for entity prop"); err != nil {
@@ -255,7 +259,7 @@ func (e *Emitter) compileMemberAccess(m *parser.MemberAccess) error {
 			return nil
 		}
 		if e.sem.TypeDefs != nil {
-			if td, ok := e.sem.TypeDefs[objLower]; ok {
+			if td, ok := e.sem.TypeDefs[objLower]; ok && len(segs) == 1 {
 				val, err := e.resolveUDTConstantMember(td, mb)
 				if err == nil {
 					key := objLower + "." + mb
@@ -275,7 +279,7 @@ func (e *Emitter) compileMemberAccess(m *parser.MemberAccess) error {
 				}
 			}
 		}
-		if (objLower == "rl" || objLower == "box2d" || objLower == "bullet" || objLower == "game") && mb != "x" && mb != "y" && mb != "z" {
+		if (objLower == "rl" || objLower == "box2d" || objLower == "bullet" || objLower == "game") && len(segs) == 1 && mb != "x" && mb != "y" && mb != "z" {
 			idx := e.chunk.WriteConstant(mb)
 			if err := checkConstIndex(idx, " for foreign constant"); err != nil {
 				return err
@@ -286,28 +290,52 @@ func (e *Emitter) compileMemberAccess(m *parser.MemberAccess) error {
 			return nil
 		}
 	}
-	if err := e.compileExpression(m.Object); err != nil {
+
+	// DotObject roots (window, physics, …): never treat .x/.y/.z as vector swizzle on the namespace itself.
+	if id, ok := base.(*parser.Identifier); ok {
+		if dotObjectRoots[strings.ToLower(id.Name)] {
+			if err := e.compileIdentifier(id); err != nil {
+				return err
+			}
+			return e.emitOpGetProp(segs)
+		}
+	}
+
+	// Vector components: single segment x/y/z on any expression (e.g. pos.x, GetMousePosition().x)
+	if len(segs) == 1 && (mb == "x" || mb == "y" || mb == "z") {
+		if err := e.compileExpression(base); err != nil {
+			return err
+		}
+		var name string
+		switch mb {
+		case "x":
+			name = "getvector2x"
+		case "y":
+			name = "getvector2y"
+		case "z":
+			name = "getvector3z"
+		}
+		idx := e.chunk.WriteConstant(name)
+		if err := checkConstIndex(idx, " for member getter"); err != nil {
+			return err
+		}
+		e.chunk.Write(byte(vm.OpCallForeign))
+		e.chunk.Write(byte(idx))
+		e.chunk.Write(byte(1))
+		return nil
+	}
+
+	// DotObject property path (WINDOW.*, nested handles, VAR.prop...)
+	if bid, ok := base.(*parser.Identifier); ok {
+		if err := e.compileIdentifier(bid); err != nil {
+			return err
+		}
+		return e.emitOpGetProp(segs)
+	}
+	if err := e.compileExpression(base); err != nil {
 		return err
 	}
-	var name string
-	switch mb {
-	case "x":
-		name = "getvector2x"
-	case "y":
-		name = "getvector2y"
-	case "z":
-		name = "getvector3z"
-	default:
-		name = "getvector2" + mb
-	}
-	idx := e.chunk.WriteConstant(name)
-	if err := checkConstIndex(idx, " for member getter"); err != nil {
-		return err
-	}
-	e.chunk.Write(byte(vm.OpCallForeign))
-	e.chunk.Write(byte(idx))
-	e.chunk.Write(byte(1))
-	return nil
+	return e.emitOpGetProp(segs)
 }
 
 // compileNumber compiles a number literal

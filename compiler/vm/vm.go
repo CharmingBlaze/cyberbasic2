@@ -107,6 +107,14 @@ func (vm *VM) Globals() map[string]Value {
 	return vm.globals
 }
 
+// SetGlobal sets a global variable before or after LoadChunk (e.g. WINDOW DotObject).
+func (vm *VM) SetGlobal(name string, v Value) {
+	if vm.globals == nil {
+		vm.globals = make(map[string]Value)
+	}
+	vm.globals[strings.ToLower(name)] = v
+}
+
 // RegisterEntityGetter registers a getter for entity property reads. Key is prop name (lowercase) or "entityname.prop".
 // When entityName.prop is loaded, if a getter is registered for that prop (or entity.prop), it is called; otherwise globals[entity] map is used.
 func (vm *VM) RegisterEntityGetter(key string, fn func(entityName, prop string) (Value, bool)) {

@@ -170,6 +170,26 @@ func (e *Emitter) compileAssignment(assign *parser.Assignment) error {
 		}
 	}
 
+	// DotObject property write: "window.title = value" or "a.b.c = value" (qualified name from parser)
+	if len(assign.Indices) == 0 && strings.Contains(assign.Variable, ".") {
+		parts := strings.Split(assign.Variable, ".")
+		if len(parts) >= 2 {
+			baseName := parts[0]
+			path := parts[1:]
+			lowerBase := strings.ToLower(baseName)
+			if lowerBase != "rl" && lowerBase != "box2d" && lowerBase != "bullet" && lowerBase != "game" {
+				if err := e.compileExpression(assign.Value); err != nil {
+					return err
+				}
+				ident := &parser.Identifier{Name: baseName, Line: assign.Line, Col: assign.Col}
+				if err := e.compileIdentifier(ident); err != nil {
+					return err
+				}
+				return e.emitOpSetProp(path)
+			}
+		}
+	}
+
 	err := e.compileExpression(assign.Value)
 	if err != nil {
 		return err

@@ -1,0 +1,19 @@
+# https://golangci-lint.run/usage/configuration/
+run:
+  timeout: 8m
+  tests: true
+
+linters:
+  disable-all: true
+  enable:
+    - govet
+    - ineffassign
+    - misspell
+    - staticcheck
+
+linters-settings:
+  staticcheck:
+    checks: ["SA*"]
+
+issues:
+  max-same-issues: 50

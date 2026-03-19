@@ -8,7 +8,8 @@ The codebase is split into clear modules so you can extend or replace parts with
 
 | Package | Role |
 |---------|------|
-| **main** | Entry point: CLI, file loading, compiles and runs BASIC. Registers all bindings with the VM. |
+| **main** | Thin entry: calls `internal/app`. |
+| **internal/app** | CLI: flags, compile, REPL, `bindings.RegisterAll`, run / implicit loop. |
 | **compiler** | Lexer, parser, AST, compiler (source → bytecode). Single package; internal files by concern. |
 | **compiler/vm** | Bytecode VM: execution, stack, opcodes. Physics opcodes deprecated; use foreign calls. |
 | **compiler/parser** | Parser and AST (parser.go, ast.go). |
@@ -18,7 +19,7 @@ The codebase is split into clear modules so you can extend or replace parts with
 
 ## Bindings (foreign API)
 
-All bindings register with the VM via `v.RegisterForeign("Name", fn)`. Main loads them in one place:
+All bindings register with the VM via `v.RegisterForeign("Name", fn)`. **`compiler/bindings.RegisterAll`** loads them in one documented order (see [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)); `internal/app` calls it after `LoadChunk` and `std.RegisterEnums`.
 
 - **compiler/bindings/raylib** – Graphics, window, input, audio, shapes, text, textures, 3D, fonts, misc.  
   Split into: `raylib.go` (shared helpers + `RegisterRaylib`), `raylib_core.go`, `raylib_shapes.go`, `raylib_textures.go`, `raylib_text.go`, `raylib_fonts.go`, `raylib_input.go`, `raylib_audio.go`, `raylib_3d.go`, `raylib_misc.go`.
@@ -31,7 +32,7 @@ In BASIC, call with or without namespace: `InitWindow(800, 450, "Title")` or `RL
 
 1. Create `compiler/bindings/<name>/<name>.go` in package `name`.
 2. Implement `func Register<Name>(v *vm.VM)` and call `v.RegisterForeign("NAMESPACE.FuncName", func(args []interface{}) (interface{}, error) { ... })`.
-3. In `main.go`, import the package and call `name.RegisterName(rt.GetVM())` next to `raylib.RegisterRaylib`, `box2d.RegisterBox2D`, `bullet.RegisterBullet`.
+3. In [`compiler/bindings/register.go`](compiler/bindings/register.go), import the package and call `name.RegisterName(v)` inside **`RegisterAll`** in the correct phase (add a short comment if order matters).
 
 No changes to lexer/parser/compiler are needed; the compiler emits `OpCallForeign` for any unknown name (and strips an optional `rl.` prefix).
 

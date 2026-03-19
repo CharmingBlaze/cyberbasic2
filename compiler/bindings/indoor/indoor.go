@@ -7,6 +7,7 @@ import (
 	"os"
 	"sync"
 
+	"cyberbasic/compiler/bindings/modfacade"
 	"cyberbasic/compiler/vm"
 )
 
@@ -387,6 +388,8 @@ func RegisterIndoor(v *vm.VM) {
 		indoorMu.Unlock()
 		return nil, nil
 	})
+
+	v.SetGlobal("indoor", modfacade.New(v, indoorV2))
 }
 
 func copyRooms(m map[string]*room) map[string]*room {

@@ -2,6 +2,7 @@ package vm
 
 import (
 	"bufio"
+	"cyberbasic/compiler/errors"
 	"fmt"
 	"math"
 	"math/rand"
@@ -1789,6 +1790,124 @@ func (vm *VM) executeInstruction(instruction byte) error {
 			}
 		} else {
 			fmt.Printf("APPLYFORCE: %v, %v, %v, %v\n", id, fx, fy, fz)
+		}
+
+	case OpGetProp:
+		if vm.ip+1 > len(vm.chunk.Code) {
+			return fmt.Errorf("unexpected end of code for OpGetProp")
+		}
+		n := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		if n < 1 || n > 32 || vm.ip+n > len(vm.chunk.Code) {
+			return fmt.Errorf("invalid OpGetProp path length")
+		}
+		path := make([]string, 0, n)
+		for i := 0; i < n; i++ {
+			ci := int(vm.chunk.Code[vm.ip])
+			vm.ip++
+			if ci < 0 || ci >= len(vm.chunk.Constants) {
+				return fmt.Errorf("OpGetProp: invalid const index")
+			}
+			s, ok := vm.chunk.Constants[ci].(string)
+			if !ok {
+				return fmt.Errorf("OpGetProp: path segment must be string")
+			}
+			path = append(path, s)
+		}
+		if len(vm.stack) < 1 {
+			return fmt.Errorf("stack underflow for OpGetProp")
+		}
+		obj := vm.pop()
+		d, ok := obj.(DotObject)
+		if !ok {
+			return &errors.CyberError{
+				Code:       errors.ErrDotAccess,
+				Message:    fmt.Sprintf("Value of type %T does not support property access", obj),
+				Suggestion: "Use a handle returned from PHYSICS, WINDOW, AUDIO, etc.",
+			}
+		}
+		val, err := d.GetProp(path)
+		if err != nil {
+			return err
+		}
+		vm.push(val)
+
+	case OpSetProp:
+		if vm.ip+1 > len(vm.chunk.Code) {
+			return fmt.Errorf("unexpected end of code for OpSetProp")
+		}
+		n := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		if n < 1 || n > 32 || vm.ip+n > len(vm.chunk.Code) {
+			return fmt.Errorf("invalid OpSetProp path length")
+		}
+		path := make([]string, 0, n)
+		for i := 0; i < n; i++ {
+			ci := int(vm.chunk.Code[vm.ip])
+			vm.ip++
+			if ci < 0 || ci >= len(vm.chunk.Constants) {
+				return fmt.Errorf("OpSetProp: invalid const index")
+			}
+			s, ok := vm.chunk.Constants[ci].(string)
+			if !ok {
+				return fmt.Errorf("OpSetProp: path segment must be string")
+			}
+			path = append(path, s)
+		}
+		if len(vm.stack) < 2 {
+			return fmt.Errorf("stack underflow for OpSetProp")
+		}
+		val := vm.pop()
+		obj := vm.pop()
+		d, ok := obj.(DotObject)
+		if !ok {
+			return &errors.CyberError{
+				Code:       errors.ErrDotAccess,
+				Message:    fmt.Sprintf("Cannot assign property on type %T", obj),
+				Suggestion: "Assign to handles returned from high-level APIs (WINDOW, PHYSICS, …).",
+			}
+		}
+		if err := d.SetProp(path, val); err != nil {
+			return err
+		}
+
+	case OpCallMethod:
+		if vm.ip+2 > len(vm.chunk.Code) {
+			return fmt.Errorf("unexpected end of code for OpCallMethod")
+		}
+		nameIdx := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		argCount := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		if nameIdx < 0 || nameIdx >= len(vm.chunk.Constants) {
+			return fmt.Errorf("OpCallMethod: invalid name const")
+		}
+		name, ok := vm.chunk.Constants[nameIdx].(string)
+		if !ok {
+			return fmt.Errorf("OpCallMethod: method name must be string")
+		}
+		if len(vm.stack) < argCount+1 {
+			return fmt.Errorf("stack underflow for OpCallMethod %s", name)
+		}
+		args := make([]Value, argCount)
+		for i := argCount - 1; i >= 0; i-- {
+			args[i] = vm.pop()
+		}
+		obj := vm.pop()
+		d, ok := obj.(DotObject)
+		if !ok {
+			return &errors.CyberError{
+				Code:       errors.ErrDotAccess,
+				Message:    fmt.Sprintf("Value of type %T has no methods", obj),
+				Suggestion: "Call methods on API handles (sound.PLAY, etc.).",
+			}
+		}
+		ret, err := d.CallMethod(strings.ToLower(name), args)
+		if err != nil {
+			return err
+		}
+		if ret != nil {
+			vm.push(ret)
 		}
 
 	case OpRayCast3D:

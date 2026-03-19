@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 	"sync"
 )
 
@@ -262,4 +263,53 @@ func RegisterScene(v *vm.VM) {
 		scenesMu.Unlock()
 		return data.SceneID, nil
 	})
+
+	v.SetGlobal("scenes", &scenesModuleDot{v: v})
+}
+
+// scenesModuleDot is the v2 SCENES.* namespace (global key "scenes").
+type scenesModuleDot struct {
+	v *vm.VM
+}
+
+func (s *scenesModuleDot) GetProp([]string) (vm.Value, error) { return nil, nil }
+func (s *scenesModuleDot) SetProp([]string, vm.Value) error {
+	return fmt.Errorf("scenes: namespace is not assignable")
+}
+
+func (s *scenesModuleDot) CallMethod(name string, args []vm.Value) (vm.Value, error) {
+	ia := make([]interface{}, len(args))
+	for i := range args {
+		ia[i] = args[i]
+	}
+	switch strings.ToLower(name) {
+	case "create":
+		return s.v.CallForeign("CreateScene", ia)
+	case "load":
+		return s.v.CallForeign("LoadScene", ia)
+	case "unload":
+		return s.v.CallForeign("UnloadScene", ia)
+	case "setcurrent":
+		return s.v.CallForeign("SetCurrentScene", ia)
+	case "getcurrent":
+		return s.v.CallForeign("GetCurrentScene", ia)
+	case "setworld":
+		return s.v.CallForeign("SetSceneWorld", ia)
+	case "save":
+		return s.v.CallForeign("SaveScene", ia)
+	case "add":
+		return s.v.CallForeign("AddToScene", ia)
+	case "remove":
+		return s.v.CallForeign("RemoveFromScene", ia)
+	case "exists":
+		return s.v.CallForeign("SceneExists", ia)
+	case "save2d":
+		return s.v.CallForeign("SceneSave2D", ia)
+	case "load2d":
+		return s.v.CallForeign("SceneLoad2D", ia)
+	case "loadfromfile":
+		return s.v.CallForeign("LoadSceneFromFile", ia)
+	default:
+		return nil, fmt.Errorf("unknown scenes method %q", name)
+	}
 }

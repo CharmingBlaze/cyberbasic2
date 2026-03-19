@@ -2,6 +2,21 @@
 
 Minimal snippets to get a game running.
 
+## v2 module namespaces (optional)
+
+Same engine as flat commands; dotted style for readability. Keys are case-insensitive.
+
+| Module | Example |
+|--------|---------|
+| **window** | `WINDOW.TARGETFPS = 60` |
+| **physics** | `physics.world(0, 9.8)` · `VAR b = physics.dynamicbox(100, 300, 40, 40)` |
+| **audio** | `VAR s = audio.load("hit.wav")` · `audio.playsoundid(s)` |
+| **input** | `input.map.register("fire", 32)` · `IF input.map.pressed("fire") THEN ...` |
+| **assets** | `assets.set("hero", texId)` · `VAR t = assets.get("hero")` |
+| **scenes** | `scenes.create("level1")` · `scenes.load("level1")` |
+
+See [API_REFERENCE.md](API_REFERENCE.md#module-api-v2-style-vs-legacy-flat-names).
+
 ## DBP-style 2D (zero boilerplate)
 
 No `InitWindow`, no `WHILE` loop. See [docs/DBP_PARITY.md](docs/DBP_PARITY.md).

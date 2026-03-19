@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"sync"
 
+	"cyberbasic/compiler/bindings/modfacade"
 	"cyberbasic/compiler/vm"
 )
 
@@ -162,4 +163,6 @@ func RegisterProcedural(v *vm.VM) {
 		_, err := v.CallForeign("ObjectRandomScatter", []interface{}{modelID, areaX, areaZ, count, minS, maxS})
 		return nil, err
 	})
+
+	v.SetGlobal("procedural", modfacade.New(v, proceduralV2))
 }

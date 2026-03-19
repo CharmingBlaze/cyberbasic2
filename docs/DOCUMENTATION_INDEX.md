@@ -123,6 +123,7 @@ Complete guide to all CyberBASIC2 documentation.
 ## API and Reference
 
 - **[API Reference (API_REFERENCE.md)](../API_REFERENCE.md)** – All bindings (raylib, Box2D, Bullet, GAME, ECS, std)
+- **[Architecture (ARCHITECTURE.md)](ARCHITECTURE.md)** – Compiler/VM pipeline, `RegisterAll`, v2 module DotObject API, how to add a binding
 - **[Cheatsheet (CHEATSHEET.md)](../CHEATSHEET.md)** – First 10 lines for 2D and 3D games
 - **[Modules (MODULES.md)](../MODULES.md)** – Codebase layout and adding bindings
 
@@ -156,6 +157,7 @@ Complete guide to all CyberBASIC2 documentation.
 | **Use in-process multi-window** | [In-process multi-window](MULTI_WINDOW_INPROCESS.md) |
 | **Use ECS** | [ECS Guide](ECS_GUIDE.md) → [API Reference](../API_REFERENCE.md) |
 | **Look up a function** | [API Reference](../API_REFERENCE.md) |
+| **Understand compiler/VM layout (contributors)** | [Architecture](ARCHITECTURE.md) → [Modules](../MODULES.md) |
 | **Look up DBP-style commands** | [Core Command Reference](CORE_COMMAND_REFERENCE.md) → [2D Game API](2D_GAME_API.md) / [3D Game API](3D_GAME_API.md) |
 | **Use zero-boilerplate (OnStart/OnUpdate/OnDraw)** | [DBP Parity](DBP_PARITY.md) → [examples/first_game.bas](../examples/first_game.bas) |
 | **Add water to my 3D scene** | [World, Water, Terrain](WORLD_WATER_TERRAIN.md#1-water-commands-simple-to-advanced) |

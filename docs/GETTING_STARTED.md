@@ -44,6 +44,18 @@ On Windows you get `cyberbasic.exe`; on Unix you get `cyberbasic`. The executabl
 
 This opens a window with a 3D cube. Drag to orbit, middle-mouse drag or Page Up/Down to zoom. See [Cheatsheet](../CHEATSHEET.md) for the “first 10 lines” of a 2D and 3D game.
 
+**Optional v2 module style** (same runtime as flat commands):
+
+```basic
+' Implicit loop: tune window and use dotted physics helpers
+WINDOW.WIDTH = 960
+WINDOW.HEIGHT = 540
+physics.world(0, 9.8)
+' VAR box = physics.dynamicbox(400, 100, 60, 60)
+```
+
+See [Architecture](ARCHITECTURE.md) and [API Reference](../API_REFERENCE.md#module-api-v2-style-vs-legacy-flat-names).
+
 ## Exit codes
 
 When running a script, the compiler exits with:

@@ -1,6 +1,7 @@
 package runtime
 
 import (
+	"cyberbasic/compiler/bindings/windowdot"
 	"cyberbasic/compiler/vm"
 	"fmt"
 	"strconv"
@@ -553,11 +554,22 @@ func (r *Runtime) RunImplicitLoop() error {
 		return fmt.Errorf("no chunk loaded")
 	}
 
-	// Init window and FPS
-	if err := r.InitializeGraphics(1280, 720, "CyberBASIC 2"); err != nil {
+	w, h, title := int32(1280), int32(720), "CyberBASIC 2"
+	if g := r.vm.Globals(); g != nil {
+		if wd, ok := g["window"].(*windowdot.WindowDot); ok {
+			w, h, title = wd.ImplicitSize()
+		}
+	}
+	if err := r.InitializeGraphics(int(w), int(h), title); err != nil {
 		return err
 	}
-	rl.SetTargetFPS(60)
+	tfps := int32(60)
+	if g := r.vm.Globals(); g != nil {
+		if wd, ok := g["window"].(*windowdot.WindowDot); ok {
+			tfps = wd.TargetFPS()
+		}
+	}
+	rl.SetTargetFPS(tfps)
 
 	// OnStart once
 	if _, ok := chunk.GetFunction("onstart"); ok {

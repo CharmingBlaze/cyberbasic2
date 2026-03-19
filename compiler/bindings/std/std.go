@@ -18,6 +18,7 @@ import (
 	"sync"
 	"time"
 
+	"cyberbasic/compiler/bindings/modfacade"
 	"cyberbasic/compiler/valueutil"
 	"cyberbasic/compiler/vm"
 	"github.com/google/uuid"
@@ -1199,6 +1200,8 @@ func RegisterStd(v *vm.VM) {
 		fmt.Println("CLI: cyberbasic --list-commands")
 		return nil, nil
 	})
+
+	v.SetGlobal("std", modfacade.New(v, stdV2))
 }
 
 // helpCommandLine returns a one-line help string for a command name, or "" if unknown.

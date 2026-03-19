@@ -3,6 +3,7 @@ package terrain
 import (
 	"fmt"
 
+	"cyberbasic/compiler/bindings/modfacade"
 	"cyberbasic/compiler/vm"
 )
 
@@ -337,4 +338,6 @@ func RegisterTerrain(v *vm.VM) {
 		ts.Bounce = val
 		return nil, nil
 	})
+
+	v.SetGlobal("terrain", modfacade.New(v, terrainV2))
 }

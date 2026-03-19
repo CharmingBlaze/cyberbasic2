@@ -9,6 +9,7 @@ import (
 	"strings"
 	"sync"
 
+	"cyberbasic/compiler/bindings/modfacade"
 	"cyberbasic/compiler/vm"
 )
 
@@ -540,6 +541,8 @@ func RegisterECS(v *vm.VM) {
 		// No-op; ECS runs by querying and iterating in script
 		return nil, nil
 	})
+
+	v.SetGlobal("ecs", modfacade.New(v, ecsV2))
 }
 
 func getWorldPosition(wid, eid string) (x, y, z float64) {

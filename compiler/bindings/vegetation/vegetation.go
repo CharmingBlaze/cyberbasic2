@@ -3,6 +3,7 @@ package vegetation
 import (
 	"fmt"
 
+	"cyberbasic/compiler/bindings/modfacade"
 	"cyberbasic/compiler/vm"
 )
 
@@ -273,4 +274,6 @@ func RegisterVegetation(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterRenderType("drawgrass", vm.Render3D)
+
+	v.SetGlobal("vegetation", modfacade.New(v, vegetationV2))
 }

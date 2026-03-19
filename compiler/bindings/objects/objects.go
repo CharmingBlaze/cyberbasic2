@@ -7,6 +7,7 @@ import (
 	"math/rand"
 	"sync"
 
+	"cyberbasic/compiler/bindings/modfacade"
 	"cyberbasic/compiler/vm"
 )
 
@@ -21,6 +22,8 @@ type ObjectInstance struct {
 	RotAxisY float32
 	RotAxisZ float32
 	RotAngle float32
+	// ShaderHandle is a v2 shader handle id (from SHADER.*); applied when drawing supports it.
+	ShaderHandle string
 }
 
 // ObjectExport is the JSON-serializable form for world save/load.
@@ -36,6 +39,7 @@ type ObjectExport struct {
 	RotAxisY float64 `json:"rotAxisY"`
 	RotAxisZ float64 `json:"rotAxisZ"`
 	RotAngle float64 `json:"rotAngle"`
+	ShaderHandle string  `json:"shaderHandle,omitempty"`
 }
 
 var (
@@ -278,6 +282,29 @@ func RegisterObjects(v *vm.VM) {
 		return []interface{}{1, hitID, ox + hitDist*dx, oy + hitDist*dy, oz + hitDist*dz}, nil
 	})
 
+	v.RegisterForeign("SetMeshShader", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("SetMeshShader(objectId, shaderHandle) requires 2 arguments")
+		}
+		id := toString(args[0])
+		sid := ""
+		if d, ok := args[1].(vm.DotObject); ok {
+			if v2, err := d.GetProp([]string{"id"}); err == nil && v2 != nil {
+				sid = fmt.Sprint(v2)
+			} else {
+				sid = fmt.Sprint(args[1])
+			}
+		} else {
+			sid = fmt.Sprint(args[1])
+		}
+		objectMu.Lock()
+		if o, ok := objectInstances[id]; ok {
+			o.ShaderHandle = sid
+		}
+		objectMu.Unlock()
+		return nil, nil
+	})
+
 	// DrawObject draws a single object by id.
 	v.RegisterForeign("DrawObject", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
@@ -317,6 +344,8 @@ func RegisterObjects(v *vm.VM) {
 		}
 		return nil, nil
 	})
+
+	v.SetGlobal("objects", modfacade.New(v, objectsV2))
 }
 
 // ExportForSave returns a snapshot of all object instances for world save.
@@ -331,6 +360,7 @@ func ExportForSave() map[string]ObjectExport {
 			ScaleX:   float64(o.ScaleX), ScaleY: float64(o.ScaleY), ScaleZ: float64(o.ScaleZ),
 			RotAxisX: float64(o.RotAxisX), RotAxisY: float64(o.RotAxisY), RotAxisZ: float64(o.RotAxisZ),
 			RotAngle: float64(o.RotAngle),
+			ShaderHandle: o.ShaderHandle,
 		}
 	}
 	return out
@@ -348,6 +378,7 @@ func ImportFromLoad(data map[string]ObjectExport) {
 			ScaleX:   float32(e.ScaleX), ScaleY: float32(e.ScaleY), ScaleZ: float32(e.ScaleZ),
 			RotAxisX: float32(e.RotAxisX), RotAxisY: float32(e.RotAxisY), RotAxisZ: float32(e.RotAxisZ),
 			RotAngle: float32(e.RotAngle),
+			ShaderHandle: e.ShaderHandle,
 		}
 	}
 }

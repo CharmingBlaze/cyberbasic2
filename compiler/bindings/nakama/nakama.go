@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"cyberbasic/compiler/bindings/modfacade"
 	"cyberbasic/compiler/vm"
 	"github.com/ascii8/nakama-go"
 )
@@ -435,6 +436,8 @@ func RegisterNakama(v *vm.VM) {
 		}
 		return nil, nil
 	})
+
+	v.SetGlobal("nakama", modfacade.New(v, nakamaV2))
 }
 
 // nakamaHandler implements ConnHandler for pushing events to the queue.

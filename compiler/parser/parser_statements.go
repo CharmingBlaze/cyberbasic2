@@ -320,9 +320,47 @@ func (p *Parser) moduleDecl() (Node, error) {
 	return &ModuleStatement{Name: moduleName, Body: body}, nil
 }
 
-// onEventStatement parses On KeyDown("ESCAPE") ... End On
+// onEventStatement parses On KeyDown("ESCAPE") ... End On, or ON UPDATE ... END ON / ON DRAW ... END ON (implicit loop subs).
 func (p *Parser) onEventStatement() (Node, error) {
 	p.advance() // Skip ON
+	// ON UPDATE / ON DRAW -> Sub OnUpdate(dt) / Sub OnDraw() for implicit window mode
+	if p.match(lexer.TokenIdentifier) {
+		kw := strings.ToUpper(p.previous().Value)
+		if kw == "UPDATE" {
+			body, err := p.block(false)
+			if err != nil {
+				return nil, err
+			}
+			if p.match(lexer.TokenEndOn) {
+			} else if p.match(lexer.TokenEnd) {
+				if !p.match(lexer.TokenOn) {
+					return nil, &Error{Message: "expected ON after END (use END ON)", Line: p.line(), Col: p.col()}
+				}
+			} else {
+				return nil, &Error{Message: "expected END ON after ON UPDATE block", Line: p.line(), Col: p.col()}
+			}
+			return &SubDecl{Name: "OnUpdate", Parameters: []string{"dt"}, Body: body}, nil
+		}
+		if kw == "DRAW" {
+			body, err := p.block(false)
+			if err != nil {
+				return nil, err
+			}
+			if p.match(lexer.TokenEndOn) {
+			} else if p.match(lexer.TokenEnd) {
+				if !p.match(lexer.TokenOn) {
+					return nil, &Error{Message: "expected ON after END (use END ON)", Line: p.line(), Col: p.col()}
+				}
+			} else {
+				return nil, &Error{Message: "expected END ON after ON DRAW block", Line: p.line(), Col: p.col()}
+			}
+			return &SubDecl{Name: "OnDraw", Parameters: []string{}, Body: body}, nil
+		}
+		// Not ON UPDATE/DRAW: rewind so KeyDown path can run — put identifier back is hard; use unread not available.
+		// Fall through only works if we didn't consume — we consumed UPDATE/DRAW only in branches above.
+		// For wrong identifier after ON, error:
+		return nil, &Error{Message: "expected UPDATE, DRAW, KeyDown, or KeyPressed after ON", Line: p.line(), Col: p.col()}
+	}
 	eventType := ""
 	switch {
 	case p.match(lexer.TokenKeyDown):

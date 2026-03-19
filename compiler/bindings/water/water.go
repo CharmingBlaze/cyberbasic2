@@ -6,6 +6,7 @@ import (
 	"math"
 	"sync"
 
+	"cyberbasic/compiler/bindings/modfacade"
 	"cyberbasic/compiler/vm"
 )
 
@@ -533,6 +534,8 @@ func RegisterWater(v *vm.VM) {
 		}
 		return nil, nil
 	})
+
+	v.SetGlobal("water", modfacade.New(v, waterV2))
 }
 
 // GetWaterByID returns WaterState for internal string id (for DBP id mapping).

@@ -213,6 +213,11 @@ const (
 	// Special
 	OpQuit // exit program (like QUIT / END)
 	OpHalt
+
+	// DotObject: GetProp / SetProp / CallMethod (path segments as byte-count + byte const indices each)
+	OpGetProp    // n path segments (1 byte), n×constIdx (1 byte each); pop object, push property value
+	OpSetProp    // n path segments; pop value, pop object, SetProp
+	OpCallMethod // methodNameConstIdx (1 byte), argCount (1 byte); pop argCount args then object, push result
 )
 
 // Value represents a value in the VM

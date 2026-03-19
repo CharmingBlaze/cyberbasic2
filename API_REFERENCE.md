@@ -4,7 +4,41 @@ All functions callable from BASIC. Names are **case-insensitive**. Use flat name
 
 [COMMAND_REFERENCE.md](docs/COMMAND_REFERENCE.md) groups commands by feature (Window, Input, Math, Camera, 2D, 3D, etc.) for task-based lookup. This document lists **all bindings by source file**. Each section below uses a table for quick lookup.
 
-**Maintaining this document:** When adding a command, (1) register it in the appropriate file under [compiler/bindings/](compiler/bindings/); (2) add one row to the corresponding section table (Command, Arguments, Returns, Description).
+**Maintaining this document:** When adding a command, (1) register it in the appropriate file under [compiler/bindings/](compiler/bindings/); (2) add one row to the corresponding section table (Command, Arguments, Returns, Description). Prefer registering new surface area through **`bindings.RegisterAll`** ([`compiler/bindings/register.go`](compiler/bindings/register.go)) so the VM wiring stays DRY.
+
+### Module API (v2 style) vs legacy flat names
+
+High-level modules install a global **DotObject** (VM key is lowercase). Dotted **methods** compile to `OpCallMethod`. **Legacy flat** `RegisterForeign` names remain available.
+
+| Module (BASIC) | v2 usage (examples) | Legacy / flat (same backend) |
+|----------------|---------------------|------------------------------|
+| **window** | `WINDOW.WIDTH`, `WINDOW.TITLE = "x"` | InitWindow, GetScreenWidth, … |
+| **physics** | `physics.world(0, 9.8)`, `physics.dynamicbox(x,y,w,h)` | PhysicsHighWorld, PhysicsHighDynamicBox, … |
+| **audio** | `audio.load(path)`, `audio.playsoundid(id)` | AudioLoadSound, AudioPlaySoundId |
+| **input** | `input.map.register(act, key)`, `input.map.pressed(act)` | InputMapRegister, InputPressed, … |
+| **assets** | `assets.set(k, v)`, `assets.get(k)` | AssetsSet, AssetsGet, … |
+| **shader** | `shader.pbr()`, `shader.toon()`, `shader.dissolve()`, `shader.load(path)`, handle `.set` / `set` | Shader factories + ShaderHandleSet (see `shadersys`) |
+| **ai** | `ai.version()` (stub) | AisysVersion |
+| **scenes** | `scenes.create(id)`, `scenes.load(id)`, `scenes.save2d(path)` | CreateScene, LoadScene, SceneSave2D, … |
+| **ecs** | `ecs.createentity()`, `ecs.addcomponent(...)`, … | Same-name `RegisterForeign` entries (see §16) |
+| **net** | `net.host(...)`, `net.connect(...)`, … | KCP / net foreigns in `net` package |
+| **sql** | `sql.open(...)`, `sql.query(...)`, … | SQL foreigns |
+| **nakama** | `nakama.*` methods | Nakama foreigns |
+| **terrain** | `terrain.*` methods | Terrain foreigns |
+| **water** | `water.*` methods | Water foreigns |
+| **vegetation** | `vegetation.*` methods | Vegetation foreigns |
+| **world** | `world.*` methods | World foreigns |
+| **navigation** | `navigation.*` methods | Navigation foreigns |
+| **indoor** | `indoor.*` methods | Indoor foreigns |
+| **procedural** | `procedural.*` methods | Procedural foreigns |
+| **objects** | `objects.*` including `setmeshshader` | Objects / mesh foreigns |
+| **effect** | `effect.bloom()`, `effect.vignette()`, `effect.dof()` (stub handles) | EffectSysVersion; camera FX via stubs |
+| **camera** | `camera.fx.add(kindOrHandle)`, `camera.fx.clear()` | CameraFXAddStub, CameraFXClearStub |
+| **tween** | `tween.register(target, prop$, from, to, sec)`, `tween.count()` | TweenRegister |
+| **std** | `std.readfile(path)`, `std.getenv(name)`, … (subset) | ReadFile, GetEnv, HELP, … |
+| **engine** | `engine.ecs`, `engine.net`, … (property = other module global) | Composition only; no new foreigns |
+
+See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for registration order and how to add a binding.
 
 ---
 

@@ -11,6 +11,7 @@ import (
 	"strings"
 	"sync"
 
+	"cyberbasic/compiler/bindings/modfacade"
 	"cyberbasic/compiler/bindings/terrain"
 	"cyberbasic/compiler/vm"
 )
@@ -487,6 +488,8 @@ func RegisterNavigation(v *vm.VM) {
 		}
 		return a.z, nil
 	})
+
+	v.SetGlobal("navigation", modfacade.New(v, navigationV2))
 }
 
 type gridCell struct {

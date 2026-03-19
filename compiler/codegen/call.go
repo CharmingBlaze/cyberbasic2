@@ -32,13 +32,13 @@ func (e *Emitter) compileCall(call *parser.Call) error {
 	}
 
 	if strings.Contains(call.Name, ".") {
-		for _, arg := range call.Arguments {
-			if err := e.compileExpression(arg); err != nil {
-				return err
-			}
-		}
 		nameConst := strings.ToLower(call.Name)
 		if e.sem.UserFuncs != nil && e.sem.UserFuncs[nameConst] {
+			for _, arg := range call.Arguments {
+				if err := e.compileExpression(arg); err != nil {
+					return err
+				}
+			}
 			idx := e.chunk.WriteConstant(nameConst)
 			if err := checkConstIndex(idx, " for user call"); err != nil {
 				return err
@@ -47,6 +47,18 @@ func (e *Emitter) compileCall(call *parser.Call) error {
 			e.chunk.Write(byte(idx))
 			e.chunk.Write(byte(len(call.Arguments)))
 			return nil
+		}
+		parts := strings.Split(call.Name, ".")
+		first := strings.ToLower(parts[0])
+		if first != "rl" && first != "box2d" && first != "bullet" && first != "game" {
+			if flat := physicsNamespaceToFlat(nameConst); flat == "" {
+				return e.compileDotMethodCall(call, parts)
+			}
+		}
+		for _, arg := range call.Arguments {
+			if err := e.compileExpression(arg); err != nil {
+				return err
+			}
 		}
 		if flat := physicsNamespaceToFlat(nameConst); flat != "" {
 			nameConst = flat

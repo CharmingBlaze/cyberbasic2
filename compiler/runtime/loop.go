@@ -2,7 +2,9 @@
 package runtime
 
 import (
+	"cyberbasic/compiler/bindings/inputmap"
 	"cyberbasic/compiler/bindings/raylib"
+	"cyberbasic/compiler/bindings/tween"
 	"cyberbasic/compiler/runtime/renderer"
 	"cyberbasic/compiler/runtime/time"
 	"cyberbasic/compiler/vm"
@@ -14,6 +16,7 @@ const maxFixedCatchupSteps = 8
 
 func beginRuntimeFrame(v *vm.VM) (float64, error) {
 	rl.PollInputEvents()
+	inputmap.TickInputMap(v)
 	raylib.CaptureOrbitWheel()
 	dt, err := v.CallForeign("GetFrameTime", nil)
 	if err != nil {
@@ -48,6 +51,7 @@ func beginRuntimeFrame(v *vm.VM) (float64, error) {
 	if steps == maxFixedCatchupSteps {
 		time.ClampAccumulator(fixedStep)
 	}
+	tween.Tick(float64(dtVal))
 	return float64(dtVal), nil
 }
 
