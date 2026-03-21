@@ -83,6 +83,70 @@ func registerMisc(v *vm.VM) {
 		radius := toFloat32(args[4])
 		return rl.CheckCollisionPointCircle(point, center, radius), nil
 	})
+	// Raylib 5.x shape collision (parity batch — 2D games)
+	v.RegisterForeign("CheckCollisionCircleLine", func(args []interface{}) (interface{}, error) {
+		if len(args) < 7 {
+			return nil, fmt.Errorf("CheckCollisionCircleLine requires (centerX, centerY, radius, lineP1X, lineP1Y, lineP2X, lineP2Y)")
+		}
+		center := rl.Vector2{X: toFloat32(args[0]), Y: toFloat32(args[1])}
+		radius := toFloat32(args[2])
+		p1 := rl.Vector2{X: toFloat32(args[3]), Y: toFloat32(args[4])}
+		p2 := rl.Vector2{X: toFloat32(args[5]), Y: toFloat32(args[6])}
+		return rl.CheckCollisionCircleLine(center, radius, p1, p2), nil
+	})
+	v.RegisterForeign("CheckCollisionLines", func(args []interface{}) (interface{}, error) {
+		if len(args) < 8 {
+			return nil, fmt.Errorf("CheckCollisionLines requires (start1X, start1Y, end1X, end1Y, start2X, start2Y, end2X, end2Y)")
+		}
+		s1 := rl.Vector2{X: toFloat32(args[0]), Y: toFloat32(args[1])}
+		e1 := rl.Vector2{X: toFloat32(args[2]), Y: toFloat32(args[3])}
+		s2 := rl.Vector2{X: toFloat32(args[4]), Y: toFloat32(args[5])}
+		e2 := rl.Vector2{X: toFloat32(args[6]), Y: toFloat32(args[7])}
+		var hitPt rl.Vector2
+		hit := rl.CheckCollisionLines(s1, e1, s2, e2, &hitPt)
+		if hit {
+			return []interface{}{true, float64(hitPt.X), float64(hitPt.Y)}, nil
+		}
+		return []interface{}{false, float64(0), float64(0)}, nil
+	})
+	v.RegisterForeign("CheckCollisionPointLine", func(args []interface{}) (interface{}, error) {
+		if len(args) < 7 {
+			return nil, fmt.Errorf("CheckCollisionPointLine requires (pointX, pointY, lineP1X, lineP1Y, lineP2X, lineP2Y, threshold)")
+		}
+		point := rl.Vector2{X: toFloat32(args[0]), Y: toFloat32(args[1])}
+		p1 := rl.Vector2{X: toFloat32(args[2]), Y: toFloat32(args[3])}
+		p2 := rl.Vector2{X: toFloat32(args[4]), Y: toFloat32(args[5])}
+		th := int32(toInt32(args[6]))
+		return rl.CheckCollisionPointLine(point, p1, p2, th), nil
+	})
+	v.RegisterForeign("CheckCollisionPointTriangle", func(args []interface{}) (interface{}, error) {
+		if len(args) < 8 {
+			return nil, fmt.Errorf("CheckCollisionPointTriangle requires (pointX, pointY, p1x, p1y, p2x, p2y, p3x, p3y)")
+		}
+		point := rl.Vector2{X: toFloat32(args[0]), Y: toFloat32(args[1])}
+		p1 := rl.Vector2{X: toFloat32(args[2]), Y: toFloat32(args[3])}
+		p2 := rl.Vector2{X: toFloat32(args[4]), Y: toFloat32(args[5])}
+		p3 := rl.Vector2{X: toFloat32(args[6]), Y: toFloat32(args[7])}
+		return rl.CheckCollisionPointTriangle(point, p1, p2, p3), nil
+	})
+	v.RegisterForeign("CheckCollisionPointPoly", func(args []interface{}) (interface{}, error) {
+		if len(args) < 5 {
+			return nil, fmt.Errorf("CheckCollisionPointPoly requires (pointX, pointY, vertexCount, x1, y1, x2, y2, ...) with vertexCount >= 3")
+		}
+		point := rl.Vector2{X: toFloat32(args[0]), Y: toFloat32(args[1])}
+		n := int(toInt32(args[2]))
+		if n < 3 {
+			return nil, fmt.Errorf("CheckCollisionPointPoly: vertexCount must be >= 3")
+		}
+		if len(args) < 3+2*n {
+			return nil, fmt.Errorf("CheckCollisionPointPoly: need %d args after point and count, got %d", 3+2*n, len(args))
+		}
+		pts := make([]rl.Vector2, n)
+		for i := 0; i < n; i++ {
+			pts[i] = rl.Vector2{X: toFloat32(args[3+2*i]), Y: toFloat32(args[3+2*i+1])}
+		}
+		return rl.CheckCollisionPointPoly(point, pts), nil
+	})
 	v.RegisterForeign("GetCollisionRec", func(args []interface{}) (interface{}, error) {
 		if len(args) < 8 {
 			return nil, fmt.Errorf("GetCollisionRec requires (x1,y1,w1,h1, x2,y2,w2,h2)")

@@ -705,6 +705,26 @@ func registerCore(v *vm.VM) {
 		}
 		return nil, nil
 	})
+	v.RegisterForeign("SetShaderUniformVec4", func(args []interface{}) (interface{}, error) {
+		if len(args) < 6 {
+			return nil, fmt.Errorf("SetShaderUniformVec4 requires (shaderId, name, r, g, b, a)")
+		}
+		id := toString(args[0])
+		name := toString(args[1])
+		shaderMu.Lock()
+		sh, ok := shaders[id]
+		shaderMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("unknown shader id: %s", id)
+		}
+		loc := rl.GetShaderLocation(sh, name)
+		if loc >= 0 {
+			rl.SetShaderValue(sh, loc, []float32{
+				toFloat32(args[2]), toFloat32(args[3]), toFloat32(args[4]), toFloat32(args[5]),
+			}, rl.ShaderUniformVec4)
+		}
+		return nil, nil
+	})
 	// SetShaderValueMatrix(shaderId, uniformName, m0..m15): set shader uniform to 4x4 matrix (row-major: M0,M4,M8,M12, M1,M5,M9,M13, ...).
 	v.RegisterForeign("SetShaderValueMatrix", func(args []interface{}) (interface{}, error) {
 		if len(args) < 19 {

@@ -1,6 +1,7 @@
 package navigation
 
-var navigationV2 = map[string]string{
+// MethodToForeign maps lowercase navigation.* / ai.* method names to RegisterForeign names.
+var MethodToForeign = map[string]string{
 	"navgridcreate":           "NavGridCreate",
 	"navgridsetwalkable":      "NavGridSetWalkable",
 	"navgridsetcost":          "NavGridSetCost",

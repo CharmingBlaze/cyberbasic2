@@ -191,6 +191,111 @@ func register3D(v *vm.VM) {
 		rl.EndMode3D()
 		return nil, nil
 	})
+	// rcamera helpers (default global camera3D) — raylib parity / games
+	v.RegisterForeign("CameraMoveForward", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("CameraMoveForward requires (distance [, moveInWorldPlane 0|1])")
+		}
+		dist := toFloat32(args[0])
+		mw := uint8(0)
+		if len(args) >= 2 {
+			mw = uint8(toInt32(args[1]))
+		}
+		cam := camera3D
+		rl.CameraMoveForward(&cam, dist, mw)
+		camera3D = cam
+		return nil, nil
+	})
+	v.RegisterForeign("CameraMoveRight", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("CameraMoveRight requires (distance [, moveInWorldPlane 0|1])")
+		}
+		dist := toFloat32(args[0])
+		mw := uint8(0)
+		if len(args) >= 2 {
+			mw = uint8(toInt32(args[1]))
+		}
+		cam := camera3D
+		rl.CameraMoveRight(&cam, dist, mw)
+		camera3D = cam
+		return nil, nil
+	})
+	v.RegisterForeign("CameraMoveUp", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("CameraMoveUp requires (distance)")
+		}
+		cam := camera3D
+		rl.CameraMoveUp(&cam, toFloat32(args[0]))
+		camera3D = cam
+		return nil, nil
+	})
+	v.RegisterForeign("CameraMoveToTarget", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("CameraMoveToTarget requires (delta)")
+		}
+		cam := camera3D
+		rl.CameraMoveToTarget(&cam, toFloat32(args[0]))
+		camera3D = cam
+		return nil, nil
+	})
+	v.RegisterForeign("CameraYaw", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("CameraYaw requires (angleRadians [, rotateAroundTarget 0|1])")
+		}
+		angle := toFloat32(args[0])
+		rot := uint8(0)
+		if len(args) >= 2 {
+			rot = uint8(toInt32(args[1]))
+		}
+		cam := camera3D
+		rl.CameraYaw(&cam, angle, rot)
+		camera3D = cam
+		return nil, nil
+	})
+	v.RegisterForeign("CameraPitch", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("CameraPitch requires (angleRadians, lockView, rotateAroundTarget, rotateUp — each 0|1 except angle)")
+		}
+		angle := toFloat32(args[0])
+		lv, rt, ru := uint8(1), uint8(0), uint8(0)
+		if len(args) >= 2 {
+			lv = uint8(toInt32(args[1]))
+		}
+		if len(args) >= 3 {
+			rt = uint8(toInt32(args[2]))
+		}
+		if len(args) >= 4 {
+			ru = uint8(toInt32(args[3]))
+		}
+		cam := camera3D
+		rl.CameraPitch(&cam, angle, lv, rt, ru)
+		camera3D = cam
+		return nil, nil
+	})
+	v.RegisterForeign("CameraRoll", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("CameraRoll requires (angleRadians)")
+		}
+		cam := camera3D
+		rl.CameraRoll(&cam, toFloat32(args[0]))
+		camera3D = cam
+		return nil, nil
+	})
+	v.RegisterForeign("GetCameraForward", func(args []interface{}) (interface{}, error) {
+		cam := camera3D
+		f := rl.GetCameraForward(&cam)
+		return []interface{}{float64(f.X), float64(f.Y), float64(f.Z)}, nil
+	})
+	v.RegisterForeign("GetCameraRight", func(args []interface{}) (interface{}, error) {
+		cam := camera3D
+		r := rl.GetCameraRight(&cam)
+		return []interface{}{float64(r.X), float64(r.Y), float64(r.Z)}, nil
+	})
+	v.RegisterForeign("GetCameraUp", func(args []interface{}) (interface{}, error) {
+		cam := camera3D
+		u := rl.GetCameraUp(&cam)
+		return []interface{}{float64(u.X), float64(u.Y), float64(u.Z)}, nil
+	})
 	v.RegisterForeign("LoadModel", func(args []interface{}) (interface{}, error) {
 		if len(args) < 1 {
 			return nil, fmt.Errorf("LoadModel requires (fileName)")

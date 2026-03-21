@@ -489,7 +489,7 @@ func RegisterNavigation(v *vm.VM) {
 		return a.z, nil
 	})
 
-	v.SetGlobal("navigation", modfacade.New(v, navigationV2))
+	v.SetGlobal("navigation", modfacade.New(v, MethodToForeign))
 }
 
 type gridCell struct {

@@ -17,8 +17,8 @@ High-level modules install a global **DotObject** (VM key is lowercase). Dotted 
 | **audio** | `audio.load(path)`, `audio.playsoundid(id)` | AudioLoadSound, AudioPlaySoundId |
 | **input** | `input.map.register(act, key)`, `input.map.pressed(act)` | InputMapRegister, InputPressed, … |
 | **assets** | `assets.set(k, v)`, `assets.get(k)` | AssetsSet, AssetsGet, … |
-| **shader** | `shader.pbr()`, `shader.toon()`, `shader.dissolve()`, `shader.load(path)`, handle `.set` / `set` | Shader factories + ShaderHandleSet (see `shadersys`) |
-| **ai** | `ai.version()` (stub) | AisysVersion |
+| **shader** | `shader.pbr()`, `shader.toon()`, `shader.dissolve()`, `shader.load(vsPath$, fsPath$)`, handle `.id`, `.set` / `set` (float or vec4), `.unload()` | `LoadShader` / `LoadShaderFromMemory`, `ShaderHandleSet`, `ShaderSysVersion` |
+| **ai** | `ai.version()`, same methods as `navigation.*` (e.g. `navgridcreate`, `navagentcreate`, …), `ai.agent(id$)` handle | Delegates to `Nav*` foreigns; `AisysVersion` |
 | **scenes** | `scenes.create(id)`, `scenes.load(id)`, `scenes.save2d(path)` | CreateScene, LoadScene, SceneSave2D, … |
 | **ecs** | `ecs.createentity()`, `ecs.addcomponent(...)`, … | Same-name `RegisterForeign` entries (see §16) |
 | **net** | `net.host(...)`, `net.connect(...)`, … | KCP / net foreigns in `net` package |
@@ -39,6 +39,8 @@ High-level modules install a global **DotObject** (VM key is lowercase). Dotted 
 | **engine** | `engine.ecs`, `engine.net`, … (property = other module global) | Composition only; no new foreigns |
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for registration order and how to add a binding.
+
+**Coverage matrix (2D/3D games and apps):** [docs/COMMAND_COVERAGE.md](docs/COMMAND_COVERAGE.md) maps pillars to modules, smoke examples, and stub APIs. **Generated inventory:** [docs/generated/foreign_commands.json](docs/generated/foreign_commands.json) and [docs/generated/raylib_parity.json](docs/generated/raylib_parity.json) (regenerate with `make foreign-audit`).
 
 ---
 
@@ -67,6 +69,8 @@ See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for registration order and how 
 - [21. UI](#21-ui--raylib_uigo-and-full-raygui--raylib_rayguigo)
 - [22. Language and built-ins](#22-language-and-built-ins)
 - [23. Multi-window (in-process)](#23-multi-window-in-process--raylib_multiwindowgo)
+- [Shadersys](#shadersys--compilerbindingsshadersys)
+- [Aisys](#aisys--compilerbindingsaisys)
 - [Notes](#notes)
 
 ---
@@ -159,6 +163,8 @@ The compiler does not inject frame or mode calls; your code compiles as written.
 | **LoadShaderFromMemory** | (vsCode, fsCode) | id | Load shader from strings |
 | **UnloadShader** | (id) | — | Unload shader |
 | **IsShaderValid** | (id) | bool | True if shader valid |
+| **SetShaderUniform** | (shaderId, name, value) | — | Set float uniform |
+| **SetShaderUniformVec4** | (shaderId, name, r, g, b, a) | — | Set vec4 uniform |
 | **SwapScreenBuffer** | () | — | Swap buffers |
 | **PollInputEvents** | () | — | Poll input (call each frame) |
 
@@ -302,6 +308,8 @@ When **update(dt)** and/or **draw()** are defined and the main loop is a game lo
 | **SetShapesTexture** | (textureId, source) | — | Set texture for shapes |
 | **GetShapesTextureRectangle** | () | rect | Get shapes texture rect |
 | **DrawRectangle** | (x, y, w, h, r, g, b, a) | — | Filled rectangle |
+| **DrawRectangleGradientH** | (x, y, w, h, r1,g1,b1,a1, r2,g2,b2,a2) | — | Horizontal two-color gradient |
+| **DrawRectangleGradientV** | (x, y, w, h, topRGBA…, bottomRGBA…) | — | Vertical two-color gradient |
 | **DrawRectangleV** | (pos, size, color) | — | Filled rectangle (vector) |
 | **DrawRectangleRec** | (rec, color) | — | Filled rectangle (rec) |
 | **DrawRectanglePro** | (rec, origin, rotation, color) | — | Filled rectangle (rotated) |
@@ -482,6 +490,16 @@ Other image commands: ImageFromImage, ImageFromChannel, ImageText, ImageTextEx, 
 | **SetCamera3D** | (camera) | — | Set 3D camera |
 | **BeginMode3D** | (camera) | — | Begin 3D mode. In the hybrid loop (when using update/draw), the engine wraps 3D automatically; calling these in draw() has no effect. |
 | **EndMode3D** | () | — | End 3D mode. In the hybrid loop, calling in draw() has no effect. |
+| **CameraMoveForward** | (distance [, moveInWorldPlane 0 or 1]) | — | Move default camera along forward |
+| **CameraMoveRight** | (distance [, moveInWorldPlane 0 or 1]) | — | Move along right |
+| **CameraMoveUp** | (distance) | — | Move along up |
+| **CameraMoveToTarget** | (delta) | — | Dolly toward/away from target |
+| **CameraYaw** | (angleRadians [, rotateAroundTarget 0 or 1]) | — | Yaw default camera |
+| **CameraPitch** | (angleRadians, lockView, rotateAroundTarget, rotateUp — each 0 or 1) | — | Pitch default camera |
+| **CameraRoll** | (angleRadians) | — | Roll default camera |
+| **GetCameraForward** | () | x, y, z | Forward unit vector (default camera) |
+| **GetCameraRight** | () | x, y, z | Right unit vector |
+| **GetCameraUp** | () | x, y, z | Up unit vector |
 | **DrawCube** | (posX, posY, posZ, width, height, length, color) | — | Filled 3D cube |
 | **DrawCubeV** | (position, size, color) | — | Filled cube (vectors) |
 | **DrawCubeWires** | (posX, posY, posZ, width, height, length, color) | — | Cube outline |
@@ -762,6 +780,11 @@ Not supported from BASIC (return error): SetAudioStreamCallback, AttachAudioStre
 | **CheckCollisionCircleRec** | (center, radius, rec) | bool | Circle vs rect |
 | **CheckCollisionPointRec** | (point, rec) | bool | Point in rect |
 | **CheckCollisionPointCircle** | (point, center, radius) | bool | Point in circle |
+| **CheckCollisionCircleLine** | (centerX, centerY, radius, p1x, p1y, p2x, p2y) | bool | Circle vs segment |
+| **CheckCollisionLines** | (s1x, s1y, e1x, e1y, s2x, s2y, e2x, e2y) | hit, ix, iy | Segment vs segment; intersection point when hit |
+| **CheckCollisionPointLine** | (px, py, p1x, p1y, p2x, p2y, threshold) | bool | Point near infinite line (threshold in px) |
+| **CheckCollisionPointTriangle** | (px, py, p1x, p1y, p2x, p2y, p3x, p3y) | bool | Point in triangle |
+| **CheckCollisionPointPoly** | (px, py, vertexCount, x1, y1, …) | bool | Point in polygon (vertexCount ≥ 3) |
 | **GetCollisionRec** | (rec1, rec2) | rec | Overlap rect |
 | **CheckCollisionSpheres** | (c1, r1, c2, r2) | bool | Sphere overlap |
 | **CheckCollisionBoxes** | (box1, box2) | bool | AABB overlap |
@@ -1457,6 +1480,25 @@ Logical windows (viewports) in one process; ID 0 = main screen. See [docs/MULTI_
 | **ScatterTrees** | (treeSystemId, treeTypeId, areaX, areaZ, density) | — | Scatter trees |
 | **ScatterGrass** | (grassId, centerX, centerZ, radius, density) | — | Scatter grass |
 | **ScatterObjects** | (modelId, areaX, areaZ, count [, minScale, maxScale]) | — | Scatter objects |
+
+---
+
+## Shadersys – `compiler/bindings/shadersys`
+
+| API | Description |
+|-----|-------------|
+| **`shader` global** | `shader.pbr()`, `shader.toon()`, `shader.dissolve()` — embedded GLSL (OpenGL 3.3) loaded with **`LoadShaderFromMemory`**. `shader.load(vsPath$, fsPath$)` → **`LoadShader`**. |
+| **Handle** | **`.id`** — raylib shader id string (pass to **`BeginShaderMode`** / **`SetShaderUniform`**). **`.set(uniform$, x)`** or **`.set(uniform$, r,g,b,a)`** for vec4. **`.unload()`** → **`UnloadShader`**. Assigning **`handle.myuniform = x`** sets a float via **`ShaderHandleSet`**. |
+| **ShaderSysVersion** | Foreign: returns **`v2-raylib`**. |
+| **ShaderHandleSet** | `(shaderId, uniformName$, value)` or `(shaderId, uniformName$, r, g, b, a)` — forwards to **`SetShaderUniform`** / **`SetShaderUniformVec4`**. |
+
+## Aisys – `compiler/bindings/aisys`
+
+| API | Description |
+|-----|-------------|
+| **`ai` global** | **`ai.version()`**; **`ai.<name>(...)`** for every **`navigation.*`** method (same spelling, lowercase) — delegates to the matching **`Nav*`** foreign. |
+| **`ai.agent(navAgentId$)`** | Dot handle: **`setdestination(x,y,z)`**, **`update(dt)`**, **`setposition(x,y,z)`**, **`setspeed`**, **`setradius`**, **`nextwaypoint`** → **`NavAgent*`** foreigns. **`.id`** returns the agent id. |
+| **AisysVersion** | Foreign: returns **`v1-nav-delegate`**. |
 
 ---
 

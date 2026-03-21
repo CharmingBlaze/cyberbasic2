@@ -460,18 +460,26 @@ Logical windows (viewports) in one process. Window ID **0** = main screen. See [
 
 ### Camera (extended)
 | **CameraFPS**() | **CameraFree**() | **CameraSetFOV**(fov) | **CameraSetClipping**(near, far) | **CameraShake**(amount, duration) | **CAMERA3D**() → cameraId | **SetCurrentCamera**(cameraId) | **BeginMode3D** **EndMode3D** |
+| **CameraMoveForward**(dist [, moveInWorldPlane]) **CameraMoveRight** **CameraMoveUp** **CameraMoveToTarget**(delta) | **CameraYaw**(rad [, rotateAroundTarget]) **CameraPitch**(rad, lockView, rotateAroundTarget, rotateUp) **CameraRoll**(rad) | **GetCameraForward**() **GetCameraRight**() **GetCameraUp**() → x,y,z | Default **SetCamera3D** camera (rcamera API) |
 
 ### Shaders & lighting
-| **LoadShader**(vsPath, fsPath) **UnloadShader**(id) | **BeginShaderMode**(shaderId) **EndShaderMode**() | **SetShaderUniform**(id, name, value) | **SetShaderValueMatrix**(id, name, m0…m15) | **SetShaderValueTexture**(id, name, textureId) |
+| **LoadShader**(vsPath, fsPath) **UnloadShader**(id) | **BeginShaderMode**(shaderId) **EndShaderMode**() | **SetShaderUniform**(id, name, value) **SetShaderUniformVec4**(id, name, r, g, b, a) | **SetShaderValueMatrix**(id, name, m0…m15) | **SetShaderValueTexture**(id, name, textureId) |
+| **`shader.pbr` / `toon` / `dissolve`** (embedded GLSL) **`shader.load`(vs$, fs$)** | Handle **`.id`** for **BeginShaderMode**; **`.set`** (float or vec4) / **`.unload()`** | | | |
 
 ### 3D raycasting & collision
 | **GetMouseRay**() | **GetRayCollisionMesh**(rayPos 3, rayDir 3, meshId, pos 3, scale 3) | **GetRayCollisionModel**(ray 6, modelId, pos 3, scale 3) | **GetRayCollisionTriangle**(ray 6, p1 3, p2 3, p3 3) | Use **GetRayCollisionPointX/Y/Z**(), **GetRayCollisionDistance**() for last hit |
+
+### 2D geometric collision (raylib shapes)
+| **CheckCollisionRecs**(x1,y1,w1,h1, x2,y2,w2,h2) | **CheckCollisionCircles**(x1,y1,r1, x2,y2,r2) | **CheckCollisionCircleRec**(cx,cy,r, rx,ry,rw,rh) | **CheckCollisionPointRec**(px,py, rx,ry,rw,rh) | **CheckCollisionPointCircle**(px,py, cx,cy,r) |
+| **CheckCollisionCircleLine**(cx,cy,r, p1x,p1y, p2x,p2y) | **CheckCollisionLines**(s1x,s1y, e1x,e1y, s2x,s2y, e2x,e2y) → hit, ix, iy (array/tuple) | **CheckCollisionPointLine**(px,py, p1x,p1y, p2x,p2y, threshold) | **CheckCollisionPointTriangle**(px,py, p1x,p1y, p2x,p2y, p3x,p3y) | **CheckCollisionPointPoly**(px,py, vertexCount, x1,y1, …) (vertexCount ≥ 3) |
+| **GetCollisionRec**(x1,y1,w1,h1, x2,y2,w2,h2) → intersection rect as x,y,w,h | **CheckCollisionSpheres** / **CheckCollisionBoxes** / **CheckCollisionBoxSphere** (3D) — see API_REFERENCE |
 
 ### 3D models (extended)
 | **LoadModelAnimated**(path) | **PlayModelAnimation**(model, anim) | **SetModelTexture**(model, texture) | **LoadTexture**(path) **UnloadTexture**(id) | **SetObjectPosition**(obj, x,y,z) **SetObjectRotation**(obj, pitch,yaw,roll) **SetObjectScale**(obj, sx,sy,sz) | **ObjectLookAt**(obj, x,y,z) |
 
 ### 2D drawing (extended)
 | **DrawSprite**(spriteId, x, y) | **LoadSprite**(path) (alias LoadTexture) | **DrawLine**(x1,y1,x2,y2, r,g,b,a) | **DrawTriangle**(…) | **DrawTexture**(id, x, y) **sprite**(…) (alias) | **MeasureText**(text, size) |
+| **DrawRectangleGradientH**(x,y,w,h, r1,g1,b1,a1, r2,g2,b2,a2) | **DrawRectangleGradientV**(x,y,w,h, topRGBA…, bottomRGBA…) | | |
 
 ### Audio (extended)
 | **LoadMusic**(path) | **PlayMusic**(id) **PauseMusic**(id) **ResumeMusic**(id) | **SetMusicVolume**(id, vol) | **IsMusicPlaying**(id) |
@@ -717,6 +725,7 @@ State is stored for use with custom shaders; raylib has no built-in lighting.
 |--------|-------------|
 | **LoadShader**(vertexPath, fragmentPath) | Load shader → shaderId |
 | **SetShaderUniform**(shaderId, name, value) | Set float uniform |
+| **SetShaderUniformVec4**(shaderId, name, r, g, b, a) | Set vec4 uniform |
 | **ApplyShader**(shaderId) | Same as BeginShaderMode |
 | **RemoveShader**() | End current shader mode |
 | **SetMaterialTexture**(modelId, textureId) | Set model diffuse texture |

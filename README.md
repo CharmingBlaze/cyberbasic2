@@ -26,7 +26,7 @@ CyberBASIC 2 is **not a script interpreter**. Your `.bas` source is compiled to 
 
 The entire stack — lexer, parser, code generator, VM, and all bindings — is written in **Go**. No C++ build step. No external engine DLLs. `go build -o cyberbasic .` produces a single executable. The result: fast iteration, easy contribution, and a runtime that ships anywhere Go runs.
 
-**Architecture (for contributors):** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — compiler pipeline, **`RegisterAll`** binding order, v2 **module DotObject** API vs legacy flat commands, how to add a binding.
+**Architecture (for contributors):** [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — compiler pipeline, **`RegisterAll`** binding order, v2 **module DotObject** API vs legacy flat commands, how to add a binding. **Command coverage matrix + generated inventory:** [docs/COMMAND_COVERAGE.md](docs/COMMAND_COVERAGE.md); after changing bindings run `make foreign-audit` and commit `docs/generated/*`.
 
 ---
 

@@ -46,6 +46,7 @@ Complete guide to all CyberBASIC2 documentation.
 - **[3D Game API](3D_GAME_API.md)** – Domain-specific 3D commands with examples (objects, camera, lighting)
 - **[Command Reference](COMMAND_REFERENCE.md)** – Broader raylib + physics + utilities
 - **[API Reference](../API_REFERENCE.md)** – Exhaustive flat API list (for lookup)
+- **[Command coverage matrix](COMMAND_COVERAGE.md)** – 2D/3D/app pillars, v2 modules, smoke examples, stub honesty; links to generated `foreign_commands.json` / `raylib_parity.json`
 - **[DBP Extended](DBP_EXTENDED.md)** – Module-by-module implementation details (for contributors)
 
 ## Game Development

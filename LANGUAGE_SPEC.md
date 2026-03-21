@@ -83,11 +83,11 @@ END ENUM
 Some subsystems expose a **namespace object** in globals (stored under a **lowercase** key; names are still case-insensitive in source). Use **property** access for state (`WINDOW.TITLE = "Game"`) and **dotted calls** for factories/helpers (`physics.dynamicbox(x, y, w, h)`). Nested namespaces use another segment (`input.map.register("jump", key)`).
 
 - **Classic commands** (e.g. `PhysicsHighWorld`, `CreateWorld2D`) remain valid; v2 modules call the same foreign functions underneath.
-- **Handles** returned from module methods may support **dot properties** (e.g. body `x` / `y`) via `OpSetProp` / `OpGetProp` where implemented.
+- **Handles** returned from module methods may support **dot properties** (e.g. body `x` / `y`) via `OpSetProp` / `OpGetProp` where implemented. Examples: **`shader.pbr()`** → **`.id`** (for **BeginShaderMode**), **`.set`**, **`.unload()`**; **`ai.agent(agentId$)`** → **`.id`**, **`.update(dt)`**, **`.setdestination(x,y,z)`**, etc.
 - **Composition:** global **`engine`** exposes subsystems by name (`engine.net`, `engine.ecs`, …) as aliases of the same lowercase globals — optional sugar, not a second API surface.
 - **Tier 0 escape hatches** stay special-cased in codegen: `rl.*`, flat `box2d`/`bullet` rewrites, and `game.*` helpers.
 
-Full mapping table: [API_REFERENCE.md](API_REFERENCE.md#module-api-v2-style-vs-legacy-flat-names). Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+Full mapping table: [API_REFERENCE.md](API_REFERENCE.md#module-api-v2-style-vs-legacy-flat-names). **Pillar coverage** (2D/3D games and apps, smoke examples, stubs): [docs/COMMAND_COVERAGE.md](docs/COMMAND_COVERAGE.md). Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ### 1.2 Control flow
 

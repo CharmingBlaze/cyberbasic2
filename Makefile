@@ -3,7 +3,7 @@
 GO       ?= go
 EXAMPLES := $(wildcard examples/*.bas)
 
-.PHONY: build test lint examples clean
+.PHONY: build test lint examples foreign-audit clean
 
 build:
 	$(GO) build -o cyberbasic .
@@ -17,6 +17,12 @@ lint:
 # Compile-check every example program (no run — safe in headless CI).
 examples: build
 	@set -e; for f in $(EXAMPLES); do echo "==> $$f"; ./cyberbasic --lint "$$f"; done
+
+foreign-audit:
+	$(GO) run ./internal/tools/foreignaudit -root . \
+		-out-json docs/generated/foreign_commands.json \
+		-out-md docs/generated/FOREIGN_COMMANDS_INDEX.md \
+		-parity-json docs/generated/raylib_parity.json
 
 clean:
 	rm -f cyberbasic cyberbasic.exe

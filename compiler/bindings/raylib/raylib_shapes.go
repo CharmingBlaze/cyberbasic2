@@ -52,6 +52,26 @@ func registerShapes(v *vm.VM) {
 		rl.DrawRectangle(x, y, w, h, c)
 		return nil, nil
 	})
+	v.RegisterForeign("DrawRectangleGradientH", func(args []interface{}) (interface{}, error) {
+		if len(args) < 12 {
+			return nil, fmt.Errorf("DrawRectangleGradientH requires (x, y, w, h, r1,g1,b1,a1, r2,g2,b2,a2)")
+		}
+		x, y, w, h := toInt32(args[0]), toInt32(args[1]), toInt32(args[2]), toInt32(args[3])
+		left := rl.NewColor(uint8(toInt32(args[4])), uint8(toInt32(args[5])), uint8(toInt32(args[6])), uint8(toInt32(args[7])))
+		right := rl.NewColor(uint8(toInt32(args[8])), uint8(toInt32(args[9])), uint8(toInt32(args[10])), uint8(toInt32(args[11])))
+		rl.DrawRectangleGradientH(x, y, w, h, left, right)
+		return nil, nil
+	})
+	v.RegisterForeign("DrawRectangleGradientV", func(args []interface{}) (interface{}, error) {
+		if len(args) < 12 {
+			return nil, fmt.Errorf("DrawRectangleGradientV requires (x, y, w, h, topR,topG,topB,topA, botR,botG,botB,botA)")
+		}
+		x, y, w, h := toInt32(args[0]), toInt32(args[1]), toInt32(args[2]), toInt32(args[3])
+		top := rl.NewColor(uint8(toInt32(args[4])), uint8(toInt32(args[5])), uint8(toInt32(args[6])), uint8(toInt32(args[7])))
+		bottom := rl.NewColor(uint8(toInt32(args[8])), uint8(toInt32(args[9])), uint8(toInt32(args[10])), uint8(toInt32(args[11])))
+		rl.DrawRectangleGradientV(x, y, w, h, top, bottom)
+		return nil, nil
+	})
 	v.RegisterForeign("DrawCircle", func(args []interface{}) (interface{}, error) {
 		if len(args) < 4 {
 			return nil, fmt.Errorf("DrawCircle requires (centerX, centerY, radius, color)")

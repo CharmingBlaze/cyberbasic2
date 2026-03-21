@@ -49,7 +49,7 @@ All foreign functions and global DotObject namespaces are registered in **one pl
 3. Bullet, Box2D, high-level `physics2d`.
 4. ECS, net, Nakama, scene, game.
 5. DBP 2D overlay, SQL, terrain + DBP terrain overlay, objects + DBP DrawObject overlay, procedural, water + DBP water, vegetation, world, navigation, indoor.
-6. Std (global `std`), audiosys, inputmap, assets, **shadersys**, **effect** (stub FX + `effect` global), **cameradot** (`camera.fx`), **tween** (`TweenRegister` + frame **Tick** in `runtime`), aisys (stub), **windowdot** (`window`), **engine** (composition: `engine.<subsystem>` → same global as lowercase name).
+6. Std (global `std`), audiosys, inputmap, assets, **shadersys** (raylib `LoadShader` + embedded presets), **effect** (stub FX + `effect` global), **cameradot** (`camera.fx`), **tween** (`TweenRegister` + frame **Tick** in `runtime`), **aisys** (`ai.*` → `navigation.*` facade), **windowdot** (`window`), **engine** (composition: `engine.<subsystem>` → same global as lowercase name).
 7. Reset `physics2d` world flags from `opts.Source`.
 
 Application code should call **`RegisterAll`** after `LoadChunk`, **`std.RegisterEnums(chunk.Enums)`**, and **`vm.SetRuntime(rt)`** — see [`internal/app`](../internal/app).
@@ -80,7 +80,7 @@ Avoid import cycles; keep `errors` free of `vm` imports.
 | `input` | `input.map.register(action, key)`, `input.map.pressed(action)`, … |
 | `assets` | `assets.set`, `assets.get`, `assets.unload`, … |
 | `shader` | PBR/toon/dissolve/load factories; shader handles with `set` / properties where implemented |
-| `ai` | `ai.version()` (stub) |
+| `ai` | `ai.version()`, navigation aliases, `ai.agent(id$)` |
 | `scenes` | `scenes.create`, `scenes.load`, `scenes.save2d`, … |
 | `ecs`, `net`, `sql`, `nakama` | Thin `modfacade` namespaces → existing foreigns |
 | `terrain`, `water`, `vegetation`, `world`, `navigation`, `indoor`, `procedural`, `objects` | Same pattern |
