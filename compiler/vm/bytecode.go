@@ -218,6 +218,10 @@ const (
 	OpGetProp    // n path segments (1 byte), n×constIdx (1 byte each); pop object, push property value
 	OpSetProp    // n path segments; pop value, pop object, SetProp
 	OpCallMethod // methodNameConstIdx (1 byte), argCount (1 byte); pop argCount args then object, push result
+
+	// Sub/Function parameter slots (indices 0..n-1); address stack[frame.stackBase+idx] while in OpCallUser frame.
+	OpLoadParam  // paramIndex (1 byte)
+	OpStoreParam // paramIndex (1 byte); pop value
 )
 
 // Value represents a value in the VM
@@ -291,8 +295,44 @@ func (c *Chunk) PatchJumpOffset(at int, offset int) {
 	c.Code[at+1] = byte(off >> 8)
 }
 
-// WriteConstant adds a constant to the chunk and returns its index
+// constantEqual reports whether two pool values are the same for deduplication.
+func constantEqual(a, b Value) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	switch av := a.(type) {
+	case string:
+		bv, ok := b.(string)
+		return ok && av == bv
+	case float64:
+		bv, ok := b.(float64)
+		return ok && av == bv
+	case int:
+		bv, ok := b.(int)
+		return ok && av == bv
+	case int64:
+		bv, ok := b.(int64)
+		return ok && av == bv
+	case bool:
+		bv, ok := b.(bool)
+		return ok && av == bv
+	default:
+		return false
+	}
+}
+
+// WriteConstant adds a constant to the chunk and returns its index.
+// Equal values reuse the same index so the 256-entry pool is not exhausted
+// by repeated foreign names or numeric literals.
 func (c *Chunk) WriteConstant(value Value) int {
+	for i, v := range c.Constants {
+		if constantEqual(v, value) {
+			return i
+		}
+	}
 	c.Constants = append(c.Constants, value)
 	return len(c.Constants) - 1
 }

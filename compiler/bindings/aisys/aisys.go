@@ -14,6 +14,12 @@ func RegisterAisys(v *vm.VM) {
 	v.RegisterForeign("AisysVersion", func(args []interface{}) (interface{}, error) {
 		return "v1-nav-delegate", nil
 	})
+	v.RegisterForeign("BTreeTickJSON", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("BTreeTickJSON(json$) requires 1 argument")
+		}
+		return TickJSON(fmt.Sprint(args[0]))
+	})
 	v.SetGlobal("ai", &aiModuleDot{v: v})
 }
 
@@ -31,6 +37,8 @@ func (a *aiModuleDot) CallMethod(name string, args []vm.Value) (vm.Value, error)
 	switch low {
 	case "version":
 		return a.v.CallForeign("AisysVersion", dotargs.From(args))
+	case "btreetick":
+		return a.v.CallForeign("BTreeTickJSON", dotargs.From(args))
 	case "agent":
 		if len(args) < 1 {
 			return nil, fmt.Errorf("ai.agent requires (navAgentId$)")

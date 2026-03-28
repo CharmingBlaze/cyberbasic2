@@ -391,7 +391,7 @@ func (e *Emitter) compileNilLiteral() error {
 func (e *Emitter) compileIdentifier(ident *parser.Identifier) error {
 	if e.funcParamIndices != nil {
 		if idx, ok := e.funcParamIndices[strings.ToLower(ident.Name)]; ok {
-			e.chunk.Write(byte(vm.OpLoadVar))
+			e.chunk.Write(byte(vm.OpLoadParam))
 			e.chunk.Write(byte(idx))
 			return nil
 		}

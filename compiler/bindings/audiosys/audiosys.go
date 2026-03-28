@@ -5,6 +5,7 @@ import (
 	"cyberbasic/compiler/vm"
 	"fmt"
 	"strings"
+	"sync"
 )
 
 // RegisterAudiosys registers AudioLoadSound (returns sound id), AudioPlaySoundId.
@@ -41,32 +42,85 @@ func (a *audioModuleDot) CallMethod(name string, args []vm.Value) (vm.Value, err
 		ia[i] = args[i]
 	}
 	switch strings.ToLower(name) {
-	case "load":
-		return a.v.CallForeign("AudioLoadSound", ia)
+	case "load", "sound":
+		r, err := a.v.CallForeign("AudioLoadSound", ia)
+		if err != nil {
+			return nil, err
+		}
+		id := fmt.Sprint(r)
+		return &SoundDot{v: a.v, id: id, vol: 1.0}, nil
 	case "playsoundid", "playid":
 		return a.v.CallForeign("AudioPlaySoundId", ia)
 	default:
-		return nil, fmt.Errorf("unknown audio method %q (use load, playsoundid)", name)
+		return nil, fmt.Errorf("unknown audio method %q (use load, sound, playsoundid)", name)
 	}
 }
 
-// SoundDot stub for future DotObject sound handles.
+// SoundDot is a vm.DotObject for a loaded sound id (string).
 type SoundDot struct {
-	path string
-	v    *vm.VM
+	v   *vm.VM
+	id  string
+	vol float64
+	mu  sync.RWMutex
 }
 
 func (s *SoundDot) GetProp(path []string) (vm.Value, error) {
-	if len(path) == 1 && strings.ToLower(path[0]) == "path" {
-		return s.path, nil
+	if len(path) != 1 {
+		return nil, fmt.Errorf("sound: single property")
 	}
-	return nil, nil
+	switch strings.ToLower(path[0]) {
+	case "id":
+		return s.id, nil
+	case "volume":
+		s.mu.RLock()
+		v := s.vol
+		s.mu.RUnlock()
+		return v, nil
+	default:
+		return nil, nil
+	}
 }
-func (s *SoundDot) SetProp(path []string, val vm.Value) error { return nil }
-func (s *SoundDot) CallMethod(name string, args []vm.Value) (vm.Value, error) {
-	if name == "play" {
-		_, err := s.v.CallForeign("PlaySound", []interface{}{s.path})
-		return nil, err
+
+func (s *SoundDot) SetProp(path []string, val vm.Value) error {
+	if len(path) != 1 {
+		return fmt.Errorf("sound: single property")
 	}
-	return nil, nil
+	if strings.ToLower(path[0]) != "volume" {
+		return fmt.Errorf("sound: only volume is writable")
+	}
+	vol := toF64(val)
+	s.mu.Lock()
+	s.vol = vol
+	s.mu.Unlock()
+	_, err := s.v.CallForeign("SetSoundVolume", []interface{}{s.id, vol})
+	return err
+}
+
+func (s *SoundDot) CallMethod(name string, args []vm.Value) (vm.Value, error) {
+	switch strings.ToLower(name) {
+	case "play":
+		_, err := s.v.CallForeign("PlaySound", []interface{}{s.id})
+		return nil, err
+	case "stop":
+		_, err := s.v.CallForeign("StopSound", []interface{}{s.id})
+		return nil, err
+	case "unload":
+		_, err := s.v.CallForeign("UnloadSound", []interface{}{s.id})
+		return nil, err
+	default:
+		return nil, fmt.Errorf("sound: use play, stop, unload")
+	}
+}
+
+func toF64(v vm.Value) float64 {
+	switch x := v.(type) {
+	case float64:
+		return x
+	case int:
+		return float64(x)
+	case int32:
+		return float64(x)
+	default:
+		return 0
+	}
 }

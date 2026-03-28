@@ -47,6 +47,7 @@ Complete guide to all CyberBASIC2 documentation.
 - **[Command Reference](COMMAND_REFERENCE.md)** – Broader raylib + physics + utilities
 - **[API Reference](../API_REFERENCE.md)** – Exhaustive flat API list (for lookup)
 - **[Command coverage matrix](COMMAND_COVERAGE.md)** – 2D/3D/app pillars, v2 modules, smoke examples, stub honesty; links to generated `foreign_commands.json` / `raylib_parity.json`
+- **[Stub backlog](STUB_BACKLOG.md)** – Follow-ups outside the CI health gate (effect/camera FX, raylib parity tranches, BTREE)
 - **[DBP Extended](DBP_EXTENDED.md)** – Module-by-module implementation details (for contributors)
 
 ## Game Development

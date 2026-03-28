@@ -22,6 +22,7 @@ jobs:
       - name: Go build
         run: go build -o cyberbasic .
 
+      # Inventory lives under docs/generated/ (tracked in git). Root /generated/ is gitignored separately.
       - name: Foreign command inventory (must match committed)
         run: |
           go run ./internal/tools/foreignaudit -root . \
@@ -37,6 +38,43 @@ jobs:
             echo "==> $f"
             ./cyberbasic --lint "$f"
           done
+
+      - name: golangci-lint
+        uses: golangci/golangci-lint-action@v6
+        with:
+          version: v1.64.5
+
+  windows:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+
+      - name: Go test
+        run: go test ./...
+
+      - name: Go build
+        run: go build -o cyberbasic.exe .
+
+      - name: Foreign command inventory (must match committed)
+        run: |
+          go run ./internal/tools/foreignaudit -root . `
+            -out-json docs/generated/foreign_commands.json `
+            -out-md docs/generated/FOREIGN_COMMANDS_INDEX.md `
+            -parity-json docs/generated/raylib_parity.json
+          git diff --exit-code docs/generated/
+
+      - name: Lint examples (compile-only)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          Get-ChildItem examples\*.bas | ForEach-Object {
+            Write-Host "==> $($_.Name)"
+            & .\cyberbasic.exe --lint $_.FullName
+          }
 
       - name: golangci-lint
         uses: golangci/golangci-lint-action@v6

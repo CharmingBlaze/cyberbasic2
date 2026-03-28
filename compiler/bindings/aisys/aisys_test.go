@@ -44,6 +44,36 @@ func TestAINavGridDelegatesToNavigation(t *testing.T) {
 	}
 }
 
+func TestBTreeJSONSequence(t *testing.T) {
+	st, err := TickJSON(`{"type":"sequence","children":[{"type":"always_success"},{"type":"always_success"}]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st != "success" {
+		t.Fatalf("got %q", st)
+	}
+	st2, err := TickJSON(`{"type":"sequence","children":[{"type":"always_success"},{"type":"always_fail"}]}`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if st2 != "failure" {
+		t.Fatalf("got %q", st2)
+	}
+}
+
+func TestBTreeForeignViaVM(t *testing.T) {
+	v := vm.NewVM()
+	navigation.RegisterNavigation(v)
+	RegisterAisys(v)
+	out, err := v.CallForeign("BTreeTickJSON", []interface{}{`{"type":"invert","children":[{"type":"always_fail"}]}`})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if out != "success" {
+		t.Fatalf("invert fail = success, got %v", out)
+	}
+}
+
 func TestAIAgentDotDelegates(t *testing.T) {
 	v := vm.NewVM()
 	navigation.RegisterNavigation(v)

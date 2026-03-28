@@ -17,7 +17,9 @@ type VM struct {
 	chunk          *Chunk
 	ip             int // instruction pointer
 	stack          []Value
-	callStack      []int   // return addresses for user Sub/Function calls
+	callStack      []int // return addresses (OpCallUser, InvokeSub, events); see userCallFrames
+	// userCallFrames: one entry per OpCallUser/InvokeSub frame; stackBase is len(stack) before args were appended.
+	userCallFrames []userCallFrame
 	globals        map[string]Value
 	running        bool
 	runtime        GameRuntime // optional: when set, game opcodes call runtime instead of no-op
@@ -80,11 +82,16 @@ type eventHandler struct {
 	handlerIP int
 }
 
+type userCallFrame struct {
+	stackBase int // callee args start at stack[stackBase]; truncate stack to stackBase on return
+}
+
 type fiberState struct {
-	ip            int
-	stack         []Value
-	callStack     []int
+	ip             int
+	stack          []Value
+	callStack      []int
 	drawFrameStack []bool
+	userCallFrames []userCallFrame
 }
 
 // NewVM creates a new virtual machine instance
@@ -132,6 +139,25 @@ func (vm *VM) RegisterEntitySetter(key string, fn func(entityName, prop string, 
 	vm.entitySetters[strings.ToLower(key)] = fn
 }
 
+// shrinkStackAfterUserReturn truncates the stack to the caller's length when returning from OpCallUser/InvokeSub.
+// Invariant: len(userCallFrames) <= len(callStack)+1; after popping one return address, if len(userCallFrames) > len(callStack), the return was from a user frame.
+func (vm *VM) shrinkStackAfterUserReturn() {
+	if len(vm.userCallFrames) > len(vm.callStack) {
+		fr := vm.userCallFrames[len(vm.userCallFrames)-1]
+		vm.userCallFrames = vm.userCallFrames[:len(vm.userCallFrames)-1]
+		if fr.stackBase > len(vm.stack) {
+			fr.stackBase = len(vm.stack)
+		}
+		vm.stack = vm.stack[:fr.stackBase]
+	}
+}
+
+// paramSlot returns the stack index for the current callee's parameter (must be inside a user call frame).
+func (vm *VM) paramSlot(paramIdx int) int {
+	fr := vm.userCallFrames[len(vm.userCallFrames)-1]
+	return fr.stackBase + paramIdx
+}
+
 // LoadChunk loads a bytecode chunk into the VM
 func (vm *VM) LoadChunk(chunk *Chunk) {
 	vm.chunk = chunk
@@ -140,7 +166,7 @@ func (vm *VM) LoadChunk(chunk *Chunk) {
 	vm.callStack = vm.callStack[:0]
 	vm.eventHandlers = vm.eventHandlers[:0]
 	vm.collisionHandlers = make(map[string]string)
-	vm.fibers = []fiberState{{ip: 0, stack: []Value{}, callStack: []int{}}}
+	vm.fibers = []fiberState{{ip: 0, stack: []Value{}, callStack: []int{}, userCallFrames: nil}}
 	vm.fiberQueue = []int{0}
 	vm.currentFiber = 0
 	vm.fiberNames = map[int]string{0: ""} // main fiber has no name
@@ -153,6 +179,7 @@ func (vm *VM) LoadChunk(chunk *Chunk) {
 	vm.nextFileHandle = 1
 	vm.insideDraw = false
 	vm.drawFrameStack = vm.drawFrameStack[:0]
+	vm.userCallFrames = vm.userCallFrames[:0]
 	vm.renderQueue2D = nil
 	vm.renderQueue3D = nil
 	vm.renderQueueGUI = nil
@@ -198,12 +225,13 @@ func (vm *VM) InvokeSub(name string, args []interface{}) error {
 		return nil
 	}
 	savedIP := vm.ip
-	// Match OpCallUser: stack becomes [args[0], args[1], ...] for LoadVar 0, 1, ...
 	argVals := make([]Value, len(args))
 	for i, a := range args {
 		argVals[i] = a
 	}
-	vm.stack = append(vm.stack[:0], argVals...)
+	restoreLen := len(vm.stack)
+	vm.userCallFrames = append(vm.userCallFrames, userCallFrame{stackBase: restoreLen})
+	vm.stack = append(vm.stack, argVals...)
 	returnAddr := len(vm.chunk.Code)
 	vm.callStack = append(vm.callStack, vm.ip)
 	isDraw := strings.ToLower(name) == "draw"

@@ -13,9 +13,37 @@ import (
 var (
 	fxMu      sync.Mutex
 	fxSlots   []string // effect kind ids for debugging
-	cameraFX  []string
+	cameraFX  []string // entries "id:kind" from CameraFXAddStub / camera.fx.add
 	nextFX    int
 )
+
+// PostFXEntry is one queued camera post-process for the unified renderer.
+type PostFXEntry struct {
+	ID   string
+	Kind string
+}
+
+// SnapshotPostFX returns a copy of the current camera.fx queue (for the renderer pass).
+func SnapshotPostFX() []PostFXEntry {
+	fxMu.Lock()
+	defer fxMu.Unlock()
+	out := make([]PostFXEntry, 0, len(cameraFX))
+	for _, s := range cameraFX {
+		id, kind := s, "unknown"
+		if i := strings.Index(s, ":"); i >= 0 {
+			id, kind = s[:i], s[i+1:]
+		}
+		out = append(out, PostFXEntry{ID: id, Kind: kind})
+	}
+	return out
+}
+
+// HasPostFXQueued reports whether camera.fx has any effects to apply this frame.
+func HasPostFXQueued() bool {
+	fxMu.Lock()
+	defer fxMu.Unlock()
+	return len(cameraFX) > 0
+}
 
 // RegisterEffect registers EFFECT module, stub foreigns for camera FX queue, and globals used by cameradot.
 func RegisterEffect(v *vm.VM) {

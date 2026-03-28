@@ -6,26 +6,36 @@ import (
 	"cyberbasic/compiler/bindings/assets"
 	"cyberbasic/compiler/bindings/audiosys"
 	"cyberbasic/compiler/bindings/box2d"
+	"cyberbasic/compiler/bindings/box2ddot"
 	"cyberbasic/compiler/bindings/bullet"
+	"cyberbasic/compiler/bindings/bulletdot"
 	"cyberbasic/compiler/bindings/cameradot"
 	"cyberbasic/compiler/bindings/dbp"
+	"cyberbasic/compiler/bindings/drawdot"
+	"cyberbasic/compiler/bindings/gamedot"
 	"cyberbasic/compiler/bindings/ecs"
 	"cyberbasic/compiler/bindings/effect"
 	"cyberbasic/compiler/bindings/engine"
+	"cyberbasic/compiler/bindings/filedot"
 	"cyberbasic/compiler/bindings/game"
+	"cyberbasic/compiler/bindings/httpdot"
 	"cyberbasic/compiler/bindings/indoor"
 	"cyberbasic/compiler/bindings/inputmap"
 	"cyberbasic/compiler/bindings/nakama"
 	"cyberbasic/compiler/bindings/navigation"
+	"cyberbasic/compiler/bindings/objectdot"
 	"cyberbasic/compiler/bindings/net"
 	"cyberbasic/compiler/bindings/objects"
 	"cyberbasic/compiler/bindings/physics2d"
 	"cyberbasic/compiler/bindings/procedural"
 	"cyberbasic/compiler/bindings/raylib"
+	"cyberbasic/compiler/bindings/raylibdot"
+	"cyberbasic/compiler/bindings/spritedot"
 	"cyberbasic/compiler/bindings/scene"
 	"cyberbasic/compiler/bindings/shadersys"
 	"cyberbasic/compiler/bindings/sql"
 	"cyberbasic/compiler/bindings/std"
+	"cyberbasic/compiler/bindings/texturedot"
 	"cyberbasic/compiler/bindings/tween"
 	"cyberbasic/compiler/bindings/terrain"
 	"cyberbasic/compiler/bindings/vegetation"
@@ -60,21 +70,29 @@ func RegisterAll(v *vm.VM, opts RegisterOptions) error {
 	if !opts.SkipRaylib {
 		raylib.RegisterRaylib(v)
 		runtime.RegisterFlushOverride(v)
+		drawdot.RegisterDrawDot(v)
+		texturedot.RegisterTextureDot(v)
+		spritedot.RegisterSpriteDot(v)
+		raylibdot.Register(v)
 	}
 	dbp.RegisterDBP(v)
+	objectdot.RegisterObjectDot(v)
 	if !opts.SkipRaylib {
 		renderer.SetDraw3D(dbp.DrawScene3D)
 		renderer.SetPreDraw2D(dbp.UpdateSpriteAnimations)
 		renderer.SetVM(v)
 	}
 	bullet.RegisterBullet(v)
+	bulletdot.Register(v)
 	box2d.RegisterBox2D(v)
+	box2ddot.Register(v)
 	physics2d.RegisterPhysics2DHigh(v)
 	ecs.RegisterECS(v)
 	net.RegisterNet(v)
 	nakama.RegisterNakama(v)
 	scene.RegisterScene(v)
 	game.RegisterGame(v)
+	gamedot.Register(v)
 	dbp.Register2D(v)
 	sql.RegisterSQL(v)
 	terrain.RegisterTerrain(v)
@@ -89,6 +107,8 @@ func RegisterAll(v *vm.VM, opts RegisterOptions) error {
 	navigation.RegisterNavigation(v)
 	indoor.RegisterIndoor(v)
 	std.RegisterStd(v)
+	filedot.RegisterFileDot(v)
+	httpdot.RegisterHTTPDot(v)
 	audiosys.RegisterAudiosys(v)
 	inputmap.RegisterInputmap(v)
 	assets.RegisterAssets(v)

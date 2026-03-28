@@ -30,9 +30,9 @@ Thumbs.db
 .env.local
 *.local
 
-# Generated
+# Generated (root only — do not use bare `generated/` or it ignores docs/generated/)
 *_gen.go
-generated/
+/generated/
 
 # Optional C engine build artifacts
 engine/*.o

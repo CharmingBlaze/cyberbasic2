@@ -13,11 +13,12 @@ import (
 
 // RegisterWindowDot installs the global WINDOW handle on the VM (lowercase key "window").
 func RegisterWindowDot(v *vm.VM) {
-	v.SetGlobal("window", NewWindowDot())
+	v.SetGlobal("window", NewWindowDot(v))
 }
 
 // WindowDot implements vm.DotObject for WINDOW.* properties.
 type WindowDot struct {
+	v  *vm.VM
 	mu sync.RWMutex
 	pendingTitle      string
 	pendingW, pendingH int32
@@ -29,8 +30,9 @@ type WindowDot struct {
 }
 
 // NewWindowDot creates a WINDOW handle with defaults matching implicit loop.
-func NewWindowDot() *WindowDot {
+func NewWindowDot(v *vm.VM) *WindowDot {
 	return &WindowDot{
+		v:                v,
 		pendingTitle:     "CyberBasic 2",
 		pendingW:         1280,
 		pendingH:         720,
@@ -185,12 +187,36 @@ func (w *WindowDot) SetProp(path []string, val vm.Value) error {
 	return nil
 }
 
-// CallMethod implements vm.DotObject.
+// CallMethod implements vm.DotObject (flat-command aliases).
 func (w *WindowDot) CallMethod(name string, args []vm.Value) (vm.Value, error) {
-	return nil, &errors.CyberError{
-		Code:       errors.ErrDotAccess,
-		Message:    fmt.Sprintf("WINDOW has no method %q", name),
-		Suggestion: "Use properties only (e.g. WINDOW.TITLE)",
+	if w.v == nil {
+		return nil, fmt.Errorf("window: VM not wired")
+	}
+	ia := make([]interface{}, len(args))
+	for i := range args {
+		ia[i] = args[i]
+	}
+	switch strings.ToLower(name) {
+	case "initwindow":
+		return w.v.CallForeign("InitWindow", ia)
+	case "close", "closewindow":
+		return w.v.CallForeign("CloseWindow", ia)
+	case "resize", "setwindowsize":
+		return w.v.CallForeign("SetWindowSize", ia)
+	case "setwindowminsize":
+		return w.v.CallForeign("SetWindowMinSize", ia)
+	case "togglefullscreen":
+		return w.v.CallForeign("ToggleFullscreen", ia)
+	case "settargetfps":
+		return w.v.CallForeign("SetTargetFPS", ia)
+	case "windowshouldclose":
+		return w.v.CallForeign("WindowShouldClose", ia)
+	default:
+		return nil, &errors.CyberError{
+			Code:       errors.ErrDotAccess,
+			Message:    fmt.Sprintf("Unknown WINDOW method %q", name),
+			Suggestion: "Use initwindow, close, resize, setwindowminsize, togglefullscreen, settargetfps, windowshouldclose, or properties (title, width, …)",
+		}
 	}
 }
 

@@ -29,8 +29,20 @@ func (c *cameraRootDot) SetProp([]string, vm.Value) error {
 	return fmt.Errorf("camera: namespace is not assignable")
 }
 
-func (c *cameraRootDot) CallMethod(string, []vm.Value) (vm.Value, error) {
-	return nil, fmt.Errorf("camera: use camera.fx.add / camera.fx.clear")
+func (c *cameraRootDot) CallMethod(name string, args []vm.Value) (vm.Value, error) {
+	ia := dotargs.From(args)
+	switch strings.ToLower(name) {
+	case "setcamera3d", "setcamera":
+		return c.v.CallForeign("SetCamera3D", ia)
+	case "beginmode3d", "begin3d":
+		return c.v.CallForeign("BeginMode3D", ia)
+	case "endmode3d", "end3d":
+		return c.v.CallForeign("EndMode3D", ia)
+	case "camera3d":
+		return c.v.CallForeign("CAMERA3D", ia)
+	default:
+		return nil, fmt.Errorf("camera: use setcamera3d, beginmode3d, endmode3d, camera3d, or camera.fx.*")
+	}
 }
 
 type cameraFXDot struct {

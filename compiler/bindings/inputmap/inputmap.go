@@ -130,8 +130,21 @@ func (r *inputRootDot) SetProp([]string, vm.Value) error {
 	return fmt.Errorf("input: namespace is not assignable")
 }
 
-func (r *inputRootDot) CallMethod(string, []vm.Value) (vm.Value, error) {
-	return nil, fmt.Errorf("input: use input.map.register / pressed / held / released")
+func (r *inputRootDot) CallMethod(name string, args []vm.Value) (vm.Value, error) {
+	ia := make([]interface{}, len(args))
+	for i := range args {
+		ia[i] = args[i]
+	}
+	switch strings.ToLower(name) {
+	case "pressed":
+		return r.v.CallForeign("InputPressed", ia)
+	case "held":
+		return r.v.CallForeign("InputHeld", ia)
+	case "released":
+		return r.v.CallForeign("InputReleased", ia)
+	default:
+		return nil, fmt.Errorf("input: use input.map.* or input.pressed / held / released (action$)")
+	}
 }
 
 type inputMapDot struct {

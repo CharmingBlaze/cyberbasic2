@@ -59,8 +59,6 @@ func TestBulletUnsupportedFeaturesReturnErrors(t *testing.T) {
 
 	for _, name := range []string{
 		"CreateHeightmap3D",
-		"CreateCompound3D",
-		"AddShapeToCompound3D",
 		"CreateHingeJoint3D",
 		"CreateSliderJoint3D",
 		"CreateConeTwistJoint3D",

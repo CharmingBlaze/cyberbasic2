@@ -87,7 +87,12 @@ type physicsModuleDot struct {
 	v *vm.VM
 }
 
-func (p *physicsModuleDot) GetProp([]string) (vm.Value, error) { return nil, nil }
+func (p *physicsModuleDot) GetProp(path []string) (vm.Value, error) {
+	if len(path) == 1 && strings.ToLower(path[0]) == "dynamic" {
+		return &physicsDynamicDot{v: p.v}, nil
+	}
+	return nil, nil
+}
 
 func (p *physicsModuleDot) SetProp([]string, vm.Value) error {
 	return fmt.Errorf("physics: namespace is not assignable")
@@ -193,8 +198,20 @@ func (b *BodyDot) GetProp(path []string) (vm.Value, error) {
 		return anyToF(ry), nil
 	case "id":
 		return b.id, nil
+	case "vx":
+		rx, err := b.v.CallForeign("GetVelocityX2D", []interface{}{b.world, b.id})
+		if err != nil {
+			return nil, err
+		}
+		return anyToF(rx), nil
+	case "vy":
+		ry, err := b.v.CallForeign("GetVelocityY2D", []interface{}{b.world, b.id})
+		if err != nil {
+			return nil, err
+		}
+		return anyToF(ry), nil
 	default:
-		return nil, &errors.CyberError{Code: errors.ErrDotAccess, Message: fmt.Sprintf("unknown body property %q", path[0]), Suggestion: "Use x, y, id"}
+		return nil, &errors.CyberError{Code: errors.ErrDotAccess, Message: fmt.Sprintf("unknown body property %q", path[0]), Suggestion: "Use x, y, vx, vy, id"}
 	}
 }
 
@@ -214,11 +231,51 @@ func (b *BodyDot) SetProp(path []string, val vm.Value) error {
 		}
 		_, err := b.v.CallForeign("SetPosition2D", []interface{}{b.world, b.id, x, y})
 		return err
+	case "vx", "vy":
+		vxr, _ := b.v.CallForeign("GetVelocityX2D", []interface{}{b.world, b.id})
+		vyr, _ := b.v.CallForeign("GetVelocityY2D", []interface{}{b.world, b.id})
+		vx, vy := anyToF(vxr), anyToF(vyr)
+		if strings.ToLower(path[0]) == "vx" {
+			vx = toF(val)
+		} else {
+			vy = toF(val)
+		}
+		_, err := b.v.CallForeign("SetVelocity2D", []interface{}{b.world, b.id, vx, vy})
+		return err
+	case "friction":
+		_, err := b.v.CallForeign("SetFriction2D", []interface{}{b.world, b.id, toF(val)})
+		return err
 	default:
 		return &errors.CyberError{Code: errors.ErrDotAccess, Message: fmt.Sprintf("unknown or read-only property %q", path[0])}
 	}
 }
 
 func (b *BodyDot) CallMethod(name string, args []vm.Value) (vm.Value, error) {
-	return nil, &errors.CyberError{Code: errors.ErrDotAccess, Message: "body methods not implemented in this build", Suggestion: "Use SetProp for position"}
+	switch strings.ToLower(name) {
+	case "delete":
+		_, err := b.v.CallForeign("DestroyBody2D", []interface{}{b.world, b.id})
+		return nil, err
+	default:
+		return nil, &errors.CyberError{Code: errors.ErrDotAccess, Message: fmt.Sprintf("unknown body method %q", name), Suggestion: "Use delete or SetProp x/y for position"}
+	}
+}
+
+// physicsDynamicDot is physics.dynamic.* (nested namespace).
+type physicsDynamicDot struct {
+	v *vm.VM
+}
+
+func (d *physicsDynamicDot) GetProp([]string) (vm.Value, error) { return nil, nil }
+func (d *physicsDynamicDot) SetProp([]string, vm.Value) error {
+	return fmt.Errorf("physics.dynamic: not assignable")
+}
+
+func (d *physicsDynamicDot) CallMethod(name string, args []vm.Value) (vm.Value, error) {
+	ia := valuesToIface(args)
+	switch strings.ToLower(name) {
+	case "box":
+		return d.v.CallForeign("PhysicsHighDynamicBox", ia)
+	default:
+		return nil, fmt.Errorf("physics.dynamic: unknown method %q (box)", name)
+	}
 }

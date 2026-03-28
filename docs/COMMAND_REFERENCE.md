@@ -1048,7 +1048,11 @@ Node-based shader building; **ShaderGraphCompile**(graphId) returns minimal pass
 | **ObjectPaint**(modelId, x, z, radius, density) | **ObjectErase**(x, z, radius) |
 | **ObjectGetAt**(x, z) | Nearest object id at (x,z) |
 | **ObjectRaycast**(ox, oy, oz, dx, dy, dz) | Ray vs objects → [hit, objectId, hx, hy, hz] |
-| **DrawObject**(objectId) | **DrawAllObjects**() |
+| **DrawObject**(objectId) | Draw one procedural / loaded object by id |
+| **DrawObjectRange**(firstId, lastId) | Draw every id from first through last inclusive (skips missing ids) |
+| **DeleteObject**(objectId) | Unload one object by id |
+| **DeleteObjectRange**(firstId, lastId) | Delete every id in range inclusive (skips missing ids) |
+| **DrawAllObjects**() | Draw all placed objects |
 
 ---
 

@@ -139,7 +139,7 @@ func registerEditor(v *vm.VM) {
 	// ---- Mouse ray (3D picking) ----
 	v.RegisterForeign("GetMouseRay", func(args []interface{}) (interface{}, error) {
 		mousePos := rl.GetMousePosition()
-		ray := rl.GetMouseRay(mousePos, camera3D)
+		ray := rl.GetScreenToWorldRay(mousePos, camera3D)
 		lastMouseRayMu.Lock()
 		lastMouseRay = ray
 		lastMouseRayMu.Unlock()
@@ -207,7 +207,7 @@ func registerEditor(v *vm.VM) {
 	})
 	v.RegisterForeign("PickGroundPlane", func(args []interface{}) (interface{}, error) {
 		mousePos := rl.GetMousePosition()
-		ray := rl.GetMouseRay(mousePos, camera3D)
+		ray := rl.GetScreenToWorldRay(mousePos, camera3D)
 		lastMouseRayMu.Lock()
 		lastMouseRay = ray
 		lastMouseRayMu.Unlock()

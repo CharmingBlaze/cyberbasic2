@@ -186,7 +186,7 @@ func ensureShadowShadersLocked() {
 
 func pickActiveShadowLightLocked() bool {
 	activeLightValid = false
-	var dirFallback, spotFallback, pointFallback *ShadowLight
+	var spotFallback, pointFallback *ShadowLight
 	for i := range shadowLights {
 		light := shadowLights[i]
 		if !light.Shadows {
@@ -194,10 +194,6 @@ func pickActiveShadowLightLocked() bool {
 		}
 		switch light.Type {
 		case shadowLightDirectional:
-			if dirFallback == nil {
-				copyLight := light
-				dirFallback = &copyLight
-			}
 			activeShadowLight = light
 			activeShadowLight.Direction = normalizeShadowDirection(activeShadowLight.Direction)
 			activeLightValid = true
@@ -213,12 +209,6 @@ func pickActiveShadowLightLocked() bool {
 				pointFallback = &copyLight
 			}
 		}
-	}
-	if dirFallback != nil {
-		activeShadowLight = *dirFallback
-		activeShadowLight.Direction = normalizeShadowDirection(activeShadowLight.Direction)
-		activeLightValid = true
-		return true
 	}
 	if spotFallback != nil {
 		activeShadowLight = *spotFallback

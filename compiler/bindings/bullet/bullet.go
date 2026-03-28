@@ -88,6 +88,8 @@ type body struct {
 	meshTriangles []triangle
 	meshAABBMin   vec3 // local space
 	meshAABBMax   vec3 // local space
+	// compound collider: multiple axis-aligned boxes in parent space (center offset + half extents)
+	compound []struct{ ox, oy, oz, hx, hy, hz float64 }
 }
 
 func bodyUsesCapsuleBounds(b *body) bool {
@@ -98,8 +100,22 @@ func bodyIsMesh(b *body) bool {
 	return b != nil && len(b.meshTriangles) > 0
 }
 
+func bodyIsCompound(b *body) bool {
+	return b != nil && len(b.compound) > 0
+}
+
 // bodyBoxParams returns (center, halfExt) for box or mesh bodies. For sphere, halfExt is radius (caller must use sphere overlap).
 func bodyBoxParams(b *body) (cx, cy, cz, hx, hy, hz float64) {
+	if bodyIsCompound(b) {
+		min, max := bodyAABB(b)
+		cx = (min.x + max.x) / 2
+		cy = (min.y + max.y) / 2
+		cz = (min.z + max.z) / 2
+		hx = (max.x - min.x) / 2
+		hy = (max.y - min.y) / 2
+		hz = (max.z - min.z) / 2
+		return
+	}
 	if bodyIsMesh(b) {
 		cx = b.position.x + (b.meshAABBMin.x+b.meshAABBMax.x)/2
 		cy = b.position.y + (b.meshAABBMin.y+b.meshAABBMax.y)/2
@@ -117,6 +133,41 @@ func bodyBoxParams(b *body) (cx, cy, cz, hx, hy, hz float64) {
 func bodyAABB(b *body) (min, max vec3) {
 	if b == nil {
 		return vec3{}, vec3{}
+	}
+	if bodyIsCompound(b) {
+		first := true
+		var cmin, cmax vec3
+		for _, p := range b.compound {
+			wx := b.position.x + p.ox
+			wy := b.position.y + p.oy
+			wz := b.position.z + p.oz
+			pmin := vec3{wx - p.hx, wy - p.hy, wz - p.hz}
+			pmax := vec3{wx + p.hx, wy + p.hy, wz + p.hz}
+			if first {
+				cmin, cmax = pmin, pmax
+				first = false
+				continue
+			}
+			if pmin.x < cmin.x {
+				cmin.x = pmin.x
+			}
+			if pmin.y < cmin.y {
+				cmin.y = pmin.y
+			}
+			if pmin.z < cmin.z {
+				cmin.z = pmin.z
+			}
+			if pmax.x > cmax.x {
+				cmax.x = pmax.x
+			}
+			if pmax.y > cmax.y {
+				cmax.y = pmax.y
+			}
+			if pmax.z > cmax.z {
+				cmax.z = pmax.z
+			}
+		}
+		return cmin, cmax
 	}
 	if bodyIsMesh(b) {
 		return vec3{b.position.x + b.meshAABBMin.x, b.position.y + b.meshAABBMin.y, b.position.z + b.meshAABBMin.z},
@@ -258,7 +309,9 @@ func bulletFeatureAvailable(name string) bool {
 		return true
 	case "mesh_collider":
 		return true
-	case "native", "native_backend", "joints", "heightmap", "compound", "compound_shapes", "exact_mesh_collision":
+	case "compound", "compound_shapes":
+		return true
+	case "native", "native_backend", "joints", "heightmap", "exact_mesh_collision":
 		return false
 	default:
 		return false
@@ -689,13 +742,57 @@ func registerFlat3D(v *vm.VM) {
 		return nil, nil
 	})
 	v.RegisterForeign("CreateHeightmap3D", func(args []interface{}) (interface{}, error) {
-		return nil, unsupportedBulletFeatureError("CreateHeightmap3D")
+		return nil, fmt.Errorf("CreateHeightmap3D: use CreateStaticMesh3D with a heightfield mesh or a large static CreateBox3D in the pure-Go fallback; heightfield sampling is not implemented here")
 	})
 	v.RegisterForeign("CreateCompound3D", func(args []interface{}) (interface{}, error) {
-		return nil, unsupportedBulletFeatureError("CreateCompound3D")
+		if len(args) < 6 {
+			return nil, fmt.Errorf("CreateCompound3D requires (world$, body$, x, y, z, mass)")
+		}
+		wid := toString(args[0])
+		bid := toString(args[1])
+		w := getWorld(wid)
+		if w == nil {
+			w = getOrCreateWorld(wid, 0, -9.81, 0)
+		}
+		w.mu.Lock()
+		w.bodies[bid] = &body{
+			id:       bid,
+			position: vec3{toFloat64(args[2]), toFloat64(args[3]), toFloat64(args[4])},
+			halfExt:  vec3{0, 0, 0},
+			mass:     toFloat64(args[5]),
+			active:   true,
+			scale:    vec3{1, 1, 1},
+			compound: nil,
+		}
+		w.mu.Unlock()
+		return nil, nil
 	})
 	v.RegisterForeign("AddShapeToCompound3D", func(args []interface{}) (interface{}, error) {
-		return nil, unsupportedBulletFeatureError("AddShapeToCompound3D")
+		if len(args) < 8 {
+			return nil, fmt.Errorf("AddShapeToCompound3D requires (world$, body$, ox, oy, oz, sizeX, sizeY, sizeZ)")
+		}
+		w := getWorld(toString(args[0]))
+		if w == nil {
+			return nil, fmt.Errorf("world not found")
+		}
+		bid := toString(args[1])
+		sx, sy, sz := toFloat64(args[5]), toFloat64(args[6]), toFloat64(args[7])
+		w.mu.Lock()
+		b := w.bodies[bid]
+		if b == nil {
+			w.mu.Unlock()
+			return nil, fmt.Errorf("body not found")
+		}
+		if len(b.meshTriangles) > 0 {
+			w.mu.Unlock()
+			return nil, fmt.Errorf("AddShapeToCompound3D: cannot add compound shape to mesh body")
+		}
+		b.compound = append(b.compound, struct{ ox, oy, oz, hx, hy, hz float64 }{
+			ox: toFloat64(args[2]), oy: toFloat64(args[3]), oz: toFloat64(args[4]),
+			hx: sx / 2, hy: sy / 2, hz: sz / 2,
+		})
+		w.mu.Unlock()
+		return nil, nil
 	})
 
 	// Position
@@ -1253,10 +1350,11 @@ func registerFlat3D(v *vm.VM) {
 		}
 		return 0, nil
 	})
-	// RayCastFromDir3D(worldId, startX, startY, startZ, dirX, dirY, dirZ, maxDist): same as legacy BULLET.RayCast; use RayHit*3D for results.
+	// RayCastFromDir3D(worldId, startX, startY, startZ, dirX, dirY, dirZ, maxDist [, excludeBody$]):
+	// optional 9th arg skips that body id (e.g. "player") so foot rays don't hit the character.
 	v.RegisterForeign("RayCastFromDir3D", func(args []interface{}) (interface{}, error) {
 		if len(args) < 8 {
-			return nil, fmt.Errorf("RayCastFromDir3D requires (worldId, startX, startY, startZ, dirX, dirY, dirZ, maxDist)")
+			return nil, fmt.Errorf("RayCastFromDir3D requires (worldId, startX, startY, startZ, dirX, dirY, dirZ, maxDist [, excludeBody$])")
 		}
 		w := getWorld(toString(args[0]))
 		if w == nil {
@@ -1268,6 +1366,10 @@ func registerFlat3D(v *vm.VM) {
 		sx, sy, sz := toFloat64(args[1]), toFloat64(args[2]), toFloat64(args[3])
 		dx, dy, dz := toFloat64(args[4]), toFloat64(args[5]), toFloat64(args[6])
 		maxDist := toFloat64(args[7])
+		exclude := ""
+		if len(args) >= 9 {
+			exclude = strings.ToLower(strings.TrimSpace(toString(args[8])))
+		}
 		norm := math.Sqrt(dx*dx + dy*dy + dz*dz)
 		if norm < 1e-9 {
 			lastRayMu.Lock()
@@ -1284,6 +1386,9 @@ func registerFlat3D(v *vm.VM) {
 		var hitNorm vec3
 		for id, b := range w.bodies {
 			if !b.active {
+				continue
+			}
+			if exclude != "" && strings.ToLower(id) == exclude {
 				continue
 			}
 			min, max := bodyAABB(b)
@@ -1973,6 +2078,59 @@ func resolveCollisions(w *world) {
 	}
 }
 
+// overlapBoxWithBody tests an axis-aligned box vs body b (same rules as overlapBodies for b).
+func overlapBoxWithBody(ax, ay, az, ahx, ahy, ahz float64, b *body) (nx, ny, nz, depth float64) {
+	if b == nil {
+		return 0, 0, 0, 0
+	}
+	if bodyUsesCapsuleBounds(b) {
+		br := b.radius
+		b.radius = 0
+		nx, ny, nz, depth = overlapBoxWithBody(ax, ay, az, ahx, ahy, ahz, b)
+		b.radius = br
+		return nx, ny, nz, depth
+	}
+	if bodyIsCompound(b) {
+		best := 0.0
+		for _, p := range b.compound {
+			bx := b.position.x + p.ox
+			by := b.position.y + p.oy
+			bz := b.position.z + p.oz
+			nnx, nny, nnz, dd := overlapBoxBox(ax, ay, az, ahx, ahy, ahz, bx, by, bz, p.hx, p.hy, p.hz)
+			if dd > best {
+				best = dd
+				nx, ny, nz = nnx, nny, nnz
+			}
+		}
+		return nx, ny, nz, best
+	}
+	bx, by, bz := b.position.x, b.position.y, b.position.z
+	bhx, bhy, bhz := b.halfExt.x, b.halfExt.y, b.halfExt.z
+	if bodyIsMesh(b) {
+		bx, by, bz, bhx, bhy, bhz = bodyBoxParams(b)
+	}
+	bIsSphere := !bodyIsMesh(b) && b.radius > 0
+	if bIsSphere {
+		return overlapSphereBox(b.position.x, b.position.y, b.position.z, b.radius, ax, ay, az, ahx, ahy, ahz)
+	}
+	return overlapBoxBox(ax, ay, az, ahx, ahy, ahz, bx, by, bz, bhx, bhy, bhz)
+}
+
+func overlapCompoundWithBody(a, b *body) (nx, ny, nz, depth float64) {
+	best := 0.0
+	for _, p := range a.compound {
+		ax := a.position.x + p.ox
+		ay := a.position.y + p.oy
+		az := a.position.z + p.oz
+		nnx, nny, nnz, dd := overlapBoxWithBody(ax, ay, az, p.hx, p.hy, p.hz, b)
+		if dd > best {
+			best = dd
+			nx, ny, nz = nnx, nny, nnz
+		}
+	}
+	return nx, ny, nz, best
+}
+
 // overlapBodies returns contact normal (from a toward b) and penetration depth. Depth > 0 means overlap. Caller holds world lock.
 func overlapBodies(a, b *body) (nx, ny, nz, depth float64) {
 	if bodyUsesCapsuleBounds(a) {
@@ -1988,6 +2146,32 @@ func overlapBodies(a, b *body) (nx, ny, nz, depth float64) {
 		nx, ny, nz, depth = overlapBodies(a, b)
 		b.radius = bSphere
 		return nx, ny, nz, depth
+	}
+	if bodyIsCompound(a) && bodyIsCompound(b) {
+		best := 0.0
+		for _, pa := range a.compound {
+			ax := a.position.x + pa.ox
+			ay := a.position.y + pa.oy
+			az := a.position.z + pa.oz
+			for _, pb := range b.compound {
+				bx := b.position.x + pb.ox
+				by := b.position.y + pb.oy
+				bz := b.position.z + pb.oz
+				nnx, nny, nnz, dd := overlapBoxBox(ax, ay, az, pa.hx, pa.hy, pa.hz, bx, by, bz, pb.hx, pb.hy, pb.hz)
+				if dd > best {
+					best = dd
+					nx, ny, nz = nnx, nny, nnz
+				}
+			}
+		}
+		return nx, ny, nz, best
+	}
+	if bodyIsCompound(a) {
+		return overlapCompoundWithBody(a, b)
+	}
+	if bodyIsCompound(b) {
+		nx, ny, nz, depth = overlapCompoundWithBody(b, a)
+		return -nx, -ny, -nz, depth
 	}
 	// Resolve mesh to box params for overlap
 	ax, ay, az := a.position.x, a.position.y, a.position.z
@@ -2122,42 +2306,49 @@ func overlapBoxBox(ax, ay, az, ahx, ahy, ahz, bx, by, bz, bhx, bhy, bhz float64)
 	return 0, 0, -1, penZ
 }
 
-// rayAABB returns ray parameter t for intersection with AABB, or -1 if no hit.
+// rayAABB returns the smallest t >= 0 where ray (origin + t*dir) hits the AABB, or -1 if no hit.
+// Handles axis-aligned rays (zero dir components) and rays that start inside the box (t=0).
 func rayAABB(ox, oy, oz, dx, dy, dz, minX, minY, minZ, maxX, maxY, maxZ float64) float64 {
-	tmin := (minX - ox) / dx
-	tmax := (maxX - ox) / dx
-	if dx < 0 {
-		tmin, tmax = tmax, tmin
+	const eps = 1e-9
+	t0, t1 := 0.0, math.Inf(1)
+
+	slab := func(o, d, mn, mx float64) bool {
+		if math.Abs(d) < eps {
+			if o < mn-eps || o > mx+eps {
+				return false
+			}
+			return true
+		}
+		tNear := (mn - o) / d
+		tFar := (mx - o) / d
+		if tNear > tFar {
+			tNear, tFar = tFar, tNear
+		}
+		if tNear > t0 {
+			t0 = tNear
+		}
+		if tFar < t1 {
+			t1 = tFar
+		}
+		return t0 <= t1
 	}
-	tyMin := (minY - oy) / dy
-	tyMax := (maxY - oy) / dy
-	if dy < 0 {
-		tyMin, tyMax = tyMax, tyMin
-	}
-	if tmin > tyMax || tyMin > tmax {
+
+	if !slab(ox, dx, minX, maxX) {
 		return -1
 	}
-	if tyMin > tmin {
-		tmin = tyMin
-	}
-	if tyMax < tmax {
-		tmax = tyMax
-	}
-	tzMin := (minZ - oz) / dz
-	tzMax := (maxZ - oz) / dz
-	if dz < 0 {
-		tzMin, tzMax = tzMax, tzMin
-	}
-	if tmin > tzMax || tzMin > tmax {
+	if !slab(oy, dy, minY, maxY) {
 		return -1
 	}
-	if tzMin > tmin {
-		tmin = tzMin
-	}
-	if tmin < 0 {
+	if !slab(oz, dz, minZ, maxZ) {
 		return -1
 	}
-	return tmin
+	if t0 < 0 {
+		t0 = 0
+	}
+	if t0 > t1 {
+		return -1
+	}
+	return t0
 }
 
 // Exported API for Go codegen (same behavior as VM foreign calls)

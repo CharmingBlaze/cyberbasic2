@@ -212,7 +212,7 @@ func (e *Emitter) compileAssignment(assign *parser.Assignment) error {
 
 	if e.funcParamIndices != nil {
 		if idx, ok := e.funcParamIndices[strings.ToLower(assign.Variable)]; ok {
-			e.chunk.Write(byte(vm.OpStoreVar))
+			e.chunk.Write(byte(vm.OpStoreParam))
 			e.chunk.Write(byte(idx))
 			return nil
 		}
@@ -233,8 +233,26 @@ func (e *Emitter) compileCompoundAssign(ca *parser.CompoundAssign) error {
 	var varIndex int
 	if e.funcParamIndices != nil {
 		if idx, ok := e.funcParamIndices[strings.ToLower(ca.Variable)]; ok {
-			varIndex = idx
-			goto emitCompound
+			e.chunk.Write(byte(vm.OpLoadParam))
+			e.chunk.Write(byte(idx))
+			if err := e.compileExpression(ca.Value); err != nil {
+				return err
+			}
+			switch ca.Op {
+			case "+=":
+				e.chunk.Write(byte(vm.OpAdd))
+			case "-=":
+				e.chunk.Write(byte(vm.OpSub))
+			case "*=":
+				e.chunk.Write(byte(vm.OpMul))
+			case "/=":
+				e.chunk.Write(byte(vm.OpDiv))
+			default:
+				return errWithLine(ca, fmt.Errorf("unsupported compound assign op: %s", ca.Op))
+			}
+			e.chunk.Write(byte(vm.OpStoreParam))
+			e.chunk.Write(byte(idx))
+			return nil
 		}
 	}
 	if idx, exists := e.chunk.GetVariable(ca.Variable); exists {
@@ -242,7 +260,6 @@ func (e *Emitter) compileCompoundAssign(ca *parser.CompoundAssign) error {
 	} else {
 		varIndex = e.chunk.AddVariable(ca.Variable)
 	}
-emitCompound:
 	// Load current value
 	e.chunk.Write(byte(vm.OpLoadVar))
 	e.chunk.Write(byte(varIndex))
@@ -801,7 +818,7 @@ func (e *Emitter) compileFunctionDecl(fn *parser.FunctionDecl) error {
 	return nil
 }
 
-// compileSubDecl compiles a sub procedure declaration. VM replaces stack with [arg0, arg1, ...] on call.
+// compileSubDecl compiles a sub procedure declaration. Parameters use OpLoadParam/OpStoreParam; other vars use global stack slots; caller stack is preserved across OpCallUser.
 func (e *Emitter) compileSubDecl(sub *parser.SubDecl) error {
 	name := semantic.QualifiedName(sub)
 	e.chunk.Functions[name] = len(e.chunk.Code)

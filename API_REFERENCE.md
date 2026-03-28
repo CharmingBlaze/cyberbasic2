@@ -4,7 +4,7 @@ All functions callable from BASIC. Names are **case-insensitive**. Use flat name
 
 [COMMAND_REFERENCE.md](docs/COMMAND_REFERENCE.md) groups commands by feature (Window, Input, Math, Camera, 2D, 3D, etc.) for task-based lookup. This document lists **all bindings by source file**. Each section below uses a table for quick lookup.
 
-**Maintaining this document:** When adding a command, (1) register it in the appropriate file under [compiler/bindings/](compiler/bindings/); (2) add one row to the corresponding section table (Command, Arguments, Returns, Description). Prefer registering new surface area through **`bindings.RegisterAll`** ([`compiler/bindings/register.go`](compiler/bindings/register.go)) so the VM wiring stays DRY.
+**Maintaining this document:** When adding a command, (1) register it in the appropriate file under [compiler/bindings/](compiler/bindings/); (2) add one row to the corresponding section table (Command, Arguments, Returns, Description). Prefer registering new surface area through **`bindings.RegisterAll`** ([`compiler/bindings/register.go`](compiler/bindings/register.go)) so the VM wiring stays DRY. For new **dot namespaces**, add the root to `dotObjectRoots` in [`compiler/codegen/dot_emit.go`](compiler/codegen/dot_emit.go) and consider stubbing a `map[string]string` via [`internal/tools/dotmapgen`](internal/tools/dotmapgen/main.go) (reads `docs/generated/foreign_commands.json`).
 
 ### Module API (v2 style) vs legacy flat names
 
@@ -12,10 +12,26 @@ High-level modules install a global **DotObject** (VM key is lowercase). Dotted 
 
 | Module (BASIC) | v2 usage (examples) | Legacy / flat (same backend) |
 |----------------|---------------------|------------------------------|
-| **window** | `WINDOW.WIDTH`, `WINDOW.TITLE = "x"` | InitWindow, GetScreenWidth, … |
-| **physics** | `physics.world(0, 9.8)`, `physics.dynamicbox(x,y,w,h)` | PhysicsHighWorld, PhysicsHighDynamicBox, … |
-| **audio** | `audio.load(path)`, `audio.playsoundid(id)` | AudioLoadSound, AudioPlaySoundId |
-| **input** | `input.map.register(act, key)`, `input.map.pressed(act)` | InputMapRegister, InputPressed, … |
+| **window** | `WINDOW.WIDTH`, `WINDOW.TITLE = "x"`; methods `initwindow`, `close`, `resize`, `togglefullscreen`, `settargetfps`, `windowshouldclose`, … | InitWindow, CloseWindow, SetWindowSize, … |
+| **draw** | `draw.begin`, `draw.end`, `draw.clear`, `draw.text`, `draw.circle`, `draw.rectangle`, `draw.line` | BeginDrawing, EndDrawing, ClearBackground, DrawText, DrawCircle, DrawRectangle, DrawLine |
+| **texture** | `texture.load(path)` → handle `.id`, `.draw`, `.drawex`, `.unload` | LoadTexture, DrawTexture, DrawTextureEx, UnloadTexture |
+| **sprite** | `sprite.load(...)` → handle `.draw`, `.unload` | LoadSprite, … |
+| **file** | `file.read` / `write` / `loadtext` / `savetext` / `delete` / `copy` / `listdir` / `dir` | ReadFile, WriteFile, LoadText, SaveText, … |
+| **http** | `http.get(...)` (sync only; no `AWAIT`) | HttpGet |
+| **object** | `object.load(path)` or `object.load(id, path)` → handle methods mirror DBP: `draw`, `delete`, `position`/`rotate`/`scale`, `move`, `turn`, `yrotate`, `hide`/`show`, `clone`/`copy`, `exists`, `fix`/`unfix`, `setcolor`, `setalpha`, `settexture`, `setnormalmap`, `setroughness`, `setmetallic`, `setemissive`, `setshader`, `setwireframe`, `setcollision`; props `x`/`y`/`z`, `pitch`/`yaw`/`roll`, `scalex`/`y`/`z` | LoadObjectId, DrawObject, SetObjectTexture, … |
+| **model** | `model.loadmodel`, `model.drawmodel`, `model.setmodelposition`, animation/material helpers, … (lowercase = flat name) | Same raylib_3d `RegisterForeign` names |
+| **shapes3d** | `shapes3d.drawcube`, `shapes3d.drawsphere`, `shapes3d.drawgrid`, … | DrawCube, DrawSphere, … |
+| **mesh** | `mesh.genmeshcube`, `mesh.drawmesh`, `mesh.uploadmesh`, … | raylib_mesh foreigns |
+| **image** | `image.loadimage`, `image.unloadimage`, `image.genimagecolor`, … | raylib_images foreigns |
+| **font** | `font.loadfont`, `font.measuretextex`, … | raylib_fonts foreigns |
+| **rlaudio** | `rlaudio.loadsound`, `rlaudio.initaudiodevice`, `rlaudio.loadmusicstream`, … | raylib_audio foreigns (parallel to `audio.*` handles) |
+| **box2d** | `box2d.createworld2d`, `box2d.step2d`, `box2d.createbox2d`, … | Box2D flat foreigns |
+| **bullet** | `bullet.createworld3d`, `bullet.step3d`, `bullet.createbox3d`, … | Bullet / 3D physics flat foreigns |
+| **game** | `game.createparticlesystem`, `game.tilemapcreate`, `game.dialogueload`, … | `game` package foreigns |
+| **camera** | `camera.setcamera3d`, `camera.beginmode3d`, `camera.endmode3d`, `camera.camera3d`; `camera.fx.add` / `camera.fx.clear` (stubs) | SetCamera3D, BeginMode3D, EndMode3D, CameraFXAddStub, … |
+| **physics** | `physics.world(0, 9.8)`, `physics.dynamic.box(...)`, body `.x`/`.y`/`.vx`/`.vy`/`.friction`, `delete` | PhysicsHighWorld, PhysicsHighDynamicBox, DestroyBody2D, … |
+| **audio** | `audio.load(path)` / `audio.sound(...)` → handle `.id`, `.volume`, `.play`, `.stop`, `.unload` | AudioLoadSound, SetSoundVolume, PlaySound, … |
+| **input** | `input.pressed` / `held` / `released`; `input.map.register`, `input.map.pressed`, … | InputPressed, IsKeyDown, … |
 | **assets** | `assets.set(k, v)`, `assets.get(k)` | AssetsSet, AssetsGet, … |
 | **shader** | `shader.pbr()`, `shader.toon()`, `shader.dissolve()`, `shader.load(vsPath$, fsPath$)`, handle `.id`, `.set` / `set` (float or vec4), `.unload()` | `LoadShader` / `LoadShaderFromMemory`, `ShaderHandleSet`, `ShaderSysVersion` |
 | **ai** | `ai.version()`, same methods as `navigation.*` (e.g. `navgridcreate`, `navagentcreate`, …), `ai.agent(id$)` handle | Delegates to `Nav*` foreigns; `AisysVersion` |
@@ -31,11 +47,10 @@ High-level modules install a global **DotObject** (VM key is lowercase). Dotted 
 | **navigation** | `navigation.*` methods | Navigation foreigns |
 | **indoor** | `indoor.*` methods | Indoor foreigns |
 | **procedural** | `procedural.*` methods | Procedural foreigns |
-| **objects** | `objects.*` including `setmeshshader` | Objects / mesh foreigns |
+| **objects** | `objects.place` / `objects.objectplace`, `drawall`, `setmeshshader`, … | Objects / mesh foreigns |
 | **effect** | `effect.bloom()`, `effect.vignette()`, `effect.dof()` (stub handles) | EffectSysVersion; camera FX via stubs |
-| **camera** | `camera.fx.add(kindOrHandle)`, `camera.fx.clear()` | CameraFXAddStub, CameraFXClearStub |
 | **tween** | `tween.register(target, prop$, from, to, sec)`, `tween.count()` | TweenRegister |
-| **std** | `std.readfile(path)`, `std.getenv(name)`, … (subset) | ReadFile, GetEnv, HELP, … |
+| **std** | `std.readfile`, `std.httpget`, `std.loadjson`, `std.dictionary_get`, `std.len`, `std.sin`, … (expanded modfacade) | ReadFile, HttpGet, LoadJSON, `Dictionary.get`, Len, … |
 | **engine** | `engine.ecs`, `engine.net`, … (property = other module global) | Composition only; no new foreigns |
 
 See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) for registration order and how to add a binding.

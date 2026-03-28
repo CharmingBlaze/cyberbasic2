@@ -80,6 +80,10 @@ var (
 	fpsMoveSpeed float32 = 5.0
 	fpsLookSpeed float32 = 0.002
 	fpsCameraMu  sync.Mutex
+
+	// Seeded RNG for Randomize / RandomMinMax (avoid deprecated global rand.Seed).
+	dbpRandMu sync.Mutex
+	dbpRNG    = rand.New(rand.NewSource(1))
 )
 
 type dbpObject struct {
@@ -300,9 +304,7 @@ func applyObjectPBR(obj *dbpObject) {
 			rl.SetMaterialTexture(mat, rl.MapNormal, tex)
 		}
 	}
-	if obj.emissiveSet {
-		// Emissive color is stored for custom shader pipelines; the default material has no emissive slot.
-	}
+	// When obj.emissiveSet, emissive color is stored for custom shader pipelines (no default material slot).
 }
 
 func withObjectShadowShader(obj *dbpObject, drawModel *rl.Model, fn func()) {
@@ -362,11 +364,8 @@ func DrawScene3D() {
 
 // DrawSky draws the skybox if loaded. Raylib-go may not have DrawSkybox; clear color handles background otherwise.
 func DrawSky() {
-	_, ok := SkyboxTex()
-	if ok {
-		// Skybox loaded: raylib-go DrawSkybox takes Model; dbp stores Texture2D.
-		// For now skip - clear color provides background. Full skybox in future.
-	}
+	// When SkyboxTex() is set, full DrawSkybox is deferred (dbp stores Texture2D; raylib wants Model).
+	_, _ = SkyboxTex()
 }
 
 // DrawAllTerrains draws all visible DBP terrains.
@@ -744,6 +743,28 @@ func RegisterDBP(v *vm.VM) {
 		})
 		return nil, nil
 	})
+	// DrawObjectRange(firstId, lastId): draw every integer object id from first through last (inclusive). Skips missing ids.
+	v.RegisterForeign("DrawObjectRange", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("DrawObjectRange(firstId, lastId) requires 2 arguments")
+		}
+		a, b := toInt(args[0]), toInt(args[1])
+		if a > b {
+			a, b = b, a
+		}
+		for id := a; id <= b; id++ {
+			objectsMu.Lock()
+			_, ok := objects[id]
+			objectsMu.Unlock()
+			if !ok {
+				continue
+			}
+			if _, err := v.CallForeign("DrawObject", []interface{}{id}); err != nil {
+				return nil, err
+			}
+		}
+		return nil, nil
+	})
 	// PointCamera(x, y, z): set camera target - delegates to raylib SetCameraTarget
 	v.RegisterForeign("PointCamera", func(args []interface{}) (interface{}, error) {
 		if len(args) < 3 {
@@ -797,6 +818,28 @@ func RegisterDBP(v *vm.VM) {
 		objectsMu.Unlock()
 		if ok && obj.model.MeshCount > 0 {
 			rl.UnloadModel(obj.model)
+		}
+		return nil, nil
+	})
+	// DeleteObjectRange(firstId, lastId): delete every object id from first through last (inclusive). Skips missing ids.
+	v.RegisterForeign("DeleteObjectRange", func(args []interface{}) (interface{}, error) {
+		if len(args) < 2 {
+			return nil, fmt.Errorf("DeleteObjectRange(firstId, lastId) requires 2 arguments")
+		}
+		a, b := toInt(args[0]), toInt(args[1])
+		if a > b {
+			a, b = b, a
+		}
+		for id := a; id <= b; id++ {
+			objectsMu.Lock()
+			_, ok := objects[id]
+			objectsMu.Unlock()
+			if !ok {
+				continue
+			}
+			if _, err := v.CallForeign("DeleteObject", []interface{}{id}); err != nil {
+				return nil, err
+			}
 		}
 		return nil, nil
 	})
@@ -1585,7 +1628,9 @@ func RegisterDBP(v *vm.VM) {
 				seed = int64(s)
 			}
 		}
-		rand.Seed(seed)
+		dbpRandMu.Lock()
+		dbpRNG = rand.New(rand.NewSource(seed))
+		dbpRandMu.Unlock()
 		return nil, nil
 	})
 	v.RegisterForeign("RandomMinMax", func(args []interface{}) (interface{}, error) {
@@ -1593,7 +1638,10 @@ func RegisterDBP(v *vm.VM) {
 			return nil, fmt.Errorf("RandomMinMax(a, b) requires 2 arguments")
 		}
 		a, b := toFloat32(args[0]), toFloat32(args[1])
-		return float64(a + (b-a)*float32(rand.Float64())), nil
+		dbpRandMu.Lock()
+		v := dbpRNG.Float64()
+		dbpRandMu.Unlock()
+		return float64(a + (b-a)*float32(v)), nil
 	})
 	v.RegisterForeign("Distance", func(args []interface{}) (interface{}, error) {
 		if len(args) < 6 {

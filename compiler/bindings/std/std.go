@@ -16,6 +16,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"cyberbasic/compiler/bindings/modfacade"
@@ -58,7 +59,16 @@ var (
 	locLanguages     = make(map[string]map[string]string)
 	locCurrentCode   string
 	locMu            sync.RWMutex
+
+	httpAsyncMu    sync.Mutex
+	httpAsyncJobs  = make(map[string]chan asyncHTTPResult)
+	httpAsyncSeq   int64
 )
+
+type asyncHTTPResult struct {
+	val interface{}
+	err error
+}
 
 func toFloat64(v interface{}) float64 {
 	if v == nil {
@@ -1055,6 +1065,47 @@ func RegisterStd(v *vm.VM) {
 			return nil, err
 		}
 		return string(body), nil
+	})
+	v.RegisterForeign("HttpGetAsync", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("HttpGetAsync(url) requires 1 argument")
+		}
+		urlStr := toString(args[0])
+		id := fmt.Sprintf("httpjob_%d", atomic.AddInt64(&httpAsyncSeq, 1))
+		ch := make(chan asyncHTTPResult, 1)
+		httpAsyncMu.Lock()
+		httpAsyncJobs[id] = ch
+		httpAsyncMu.Unlock()
+		go func() {
+			resp, err := http.Get(urlStr)
+			if err != nil {
+				ch <- asyncHTTPResult{nil, err}
+				return
+			}
+			defer resp.Body.Close()
+			body, err := io.ReadAll(resp.Body)
+			if err != nil {
+				ch <- asyncHTTPResult{nil, err}
+				return
+			}
+			ch <- asyncHTTPResult{string(body), nil}
+		}()
+		return id, nil
+	})
+	v.RegisterForeign("HttpAwait", func(args []interface{}) (interface{}, error) {
+		if len(args) < 1 {
+			return nil, fmt.Errorf("HttpAwait(jobId$) requires 1 argument")
+		}
+		id := toString(args[0])
+		httpAsyncMu.Lock()
+		ch, ok := httpAsyncJobs[id]
+		delete(httpAsyncJobs, id)
+		httpAsyncMu.Unlock()
+		if !ok {
+			return nil, fmt.Errorf("HttpAwait: unknown job id %q", id)
+		}
+		res := <-ch
+		return res.val, res.err
 	})
 	v.RegisterForeign("HttpPost", func(args []interface{}) (interface{}, error) {
 		if len(args) < 2 {

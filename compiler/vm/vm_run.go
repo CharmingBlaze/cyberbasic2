@@ -101,6 +101,42 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		}
 		vm.stack[varIndex] = value
 
+	case OpLoadParam:
+		if vm.ip >= len(vm.chunk.Code) {
+			return fmt.Errorf("unexpected end of code")
+		}
+		paramIdx := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		if len(vm.userCallFrames) == 0 {
+			return fmt.Errorf("LoadParam outside Sub/Function call")
+		}
+		slot := vm.paramSlot(paramIdx)
+		for slot >= len(vm.stack) {
+			vm.stack = append(vm.stack, nil)
+		}
+		vm.push(vm.stack[slot])
+
+	case OpStoreParam:
+		if vm.ip >= len(vm.chunk.Code) {
+			return fmt.Errorf("unexpected end of code")
+		}
+		paramIdx := int(vm.chunk.Code[vm.ip])
+		vm.ip++
+		if len(vm.userCallFrames) == 0 {
+			return fmt.Errorf("StoreParam outside Sub/Function call")
+		}
+		var value Value
+		if len(vm.stack) > 0 {
+			value = vm.pop()
+		} else {
+			value = nil
+		}
+		slot := vm.paramSlot(paramIdx)
+		for len(vm.stack) <= slot {
+			vm.stack = append(vm.stack, nil)
+		}
+		vm.stack[slot] = value
+
 	case OpLoadGlobal:
 		if vm.ip >= len(vm.chunk.Code) {
 			return fmt.Errorf("unexpected end of code")
@@ -466,18 +502,19 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		if len(vm.stack) < argCount {
 			return fmt.Errorf("stack underflow for user call %s: need %d args, have %d", name, argCount, len(vm.stack))
 		}
-		// Pop args and replace stack with just those args so callee sees stack[0]=first, stack[1]=second, ...
 		args := make([]Value, argCount)
 		for i := argCount - 1; i >= 0; i-- {
 			args[i] = vm.pop()
 		}
+		stackBase := len(vm.stack)
+		vm.userCallFrames = append(vm.userCallFrames, userCallFrame{stackBase: stackBase})
 		vm.callStack = append(vm.callStack, vm.ip)
 		isDraw := (name == "draw")
 		vm.drawFrameStack = append(vm.drawFrameStack, isDraw)
 		if isDraw {
 			vm.insideDraw = true
 		}
-		vm.stack = append(vm.stack[:0], args...)
+		vm.stack = append(vm.stack, args...)
 		vm.ip = targetIP
 
 	case OpGosub:
@@ -531,6 +568,7 @@ func (vm *VM) executeInstruction(instruction byte) error {
 				vm.stack = append(vm.stack[:0], next.stack...)
 				vm.callStack = append(vm.callStack[:0], next.callStack...)
 				vm.drawFrameStack = append(vm.drawFrameStack[:0], next.drawFrameStack...)
+				vm.userCallFrames = append([]userCallFrame(nil), next.userCallFrames...)
 				vm.insideDraw = false
 				for _, b := range vm.drawFrameStack {
 					if b {
@@ -541,6 +579,7 @@ func (vm *VM) executeInstruction(instruction byte) error {
 			} else {
 				vm.running = false
 			}
+			vm.userCallFrames = vm.userCallFrames[:0]
 			return nil
 		}
 		vm.ip = vm.callStack[len(vm.callStack)-1]
@@ -558,6 +597,7 @@ func (vm *VM) executeInstruction(instruction byte) error {
 				}
 			}
 		}
+		vm.shrinkStackAfterUserReturn()
 
 	case OpReturnVal:
 		if len(vm.stack) == 0 {
@@ -576,6 +616,7 @@ func (vm *VM) executeInstruction(instruction byte) error {
 				if len(vm.fiberQueue) == 0 {
 					vm.running = false
 					vm.stack = vm.stack[:0]
+					vm.userCallFrames = vm.userCallFrames[:0]
 					vm.push(val)
 					return nil
 				}
@@ -585,6 +626,7 @@ func (vm *VM) executeInstruction(instruction byte) error {
 				vm.stack = append(vm.stack[:0], next.stack...)
 				vm.callStack = append(vm.callStack[:0], next.callStack...)
 				vm.drawFrameStack = append(vm.drawFrameStack[:0], next.drawFrameStack...)
+				vm.userCallFrames = append([]userCallFrame(nil), next.userCallFrames...)
 				vm.insideDraw = false
 				for _, b := range vm.drawFrameStack {
 					if b {
@@ -596,6 +638,7 @@ func (vm *VM) executeInstruction(instruction byte) error {
 			} else {
 				vm.running = false
 				vm.stack = vm.stack[:0]
+				vm.userCallFrames = vm.userCallFrames[:0]
 				vm.push(val)
 			}
 			return nil
@@ -615,7 +658,7 @@ func (vm *VM) executeInstruction(instruction byte) error {
 				}
 			}
 		}
-		vm.stack = vm.stack[:0]
+		vm.shrinkStackAfterUserReturn()
 		vm.push(val)
 
 	case OpRegisterEvent:
@@ -654,7 +697,7 @@ func (vm *VM) executeInstruction(instruction byte) error {
 			}
 		}
 		fiberIdx := len(vm.fibers)
-		vm.fibers = append(vm.fibers, fiberState{ip: targetIP, stack: []Value{}, callStack: []int{}, drawFrameStack: nil})
+		vm.fibers = append(vm.fibers, fiberState{ip: targetIP, stack: []Value{}, callStack: []int{}, drawFrameStack: nil, userCallFrames: nil})
 		vm.fiberQueue = append(vm.fiberQueue, fiberIdx)
 		if vm.fiberNames == nil {
 			vm.fiberNames = make(map[int]string)
@@ -664,10 +707,11 @@ func (vm *VM) executeInstruction(instruction byte) error {
 	case OpYield:
 		// Save current state, rotate queue, load next fiber
 		vm.fibers[vm.currentFiber] = fiberState{
-			ip:            vm.ip,
-			stack:         append([]Value(nil), vm.stack...),
-			callStack:     append([]int(nil), vm.callStack...),
+			ip:             vm.ip,
+			stack:          append([]Value(nil), vm.stack...),
+			callStack:      append([]int(nil), vm.callStack...),
 			drawFrameStack: append([]bool(nil), vm.drawFrameStack...),
+			userCallFrames: append([]userCallFrame(nil), vm.userCallFrames...),
 		}
 		if len(vm.fiberQueue) < 2 {
 			break
@@ -679,6 +723,7 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		vm.stack = append(vm.stack[:0], next.stack...)
 		vm.callStack = append(vm.callStack[:0], next.callStack...)
 		vm.drawFrameStack = append(vm.drawFrameStack[:0], next.drawFrameStack...)
+		vm.userCallFrames = append([]userCallFrame(nil), next.userCallFrames...)
 		vm.insideDraw = false
 		for _, b := range vm.drawFrameStack {
 			if b {
@@ -706,10 +751,11 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		}
 		// Non-blocking: save fiber state, remove from queue, add to sleeping, switch to next fiber
 		vm.fibers[vm.currentFiber] = fiberState{
-			ip:            vm.ip,
-			stack:         append([]Value(nil), vm.stack...),
-			callStack:     append([]int(nil), vm.callStack...),
+			ip:             vm.ip,
+			stack:          append([]Value(nil), vm.stack...),
+			callStack:      append([]int(nil), vm.callStack...),
 			drawFrameStack: append([]bool(nil), vm.drawFrameStack...),
+			userCallFrames: append([]userCallFrame(nil), vm.userCallFrames...),
 		}
 		resumeAt := time.Now().Add(time.Duration(sec * float64(time.Second)))
 		vm.sleeping = append(vm.sleeping, sleepEntry{fiberIndex: vm.currentFiber, resumeAt: resumeAt, isPaused: false})
@@ -729,6 +775,7 @@ func (vm *VM) executeInstruction(instruction byte) error {
 		vm.stack = append(vm.stack[:0], next.stack...)
 		vm.callStack = append(vm.callStack[:0], next.callStack...)
 		vm.drawFrameStack = append(vm.drawFrameStack[:0], next.drawFrameStack...)
+		vm.userCallFrames = append([]userCallFrame(nil), next.userCallFrames...)
 		vm.insideDraw = false
 		for _, b := range vm.drawFrameStack {
 			if b {

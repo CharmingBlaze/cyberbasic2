@@ -4,7 +4,7 @@ package renderer
 import (
 	"sync"
 
-	"cyberbasic/compiler/bindings/raylib"
+	"cyberbasic/compiler/bindings/effect"
 	"cyberbasic/compiler/vm"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -104,22 +104,11 @@ func (r *Renderer) Frame() {
 	// Shadow pass (when enabled): render from light POV to depth texture
 	RenderShadowPass()
 
-	// 3D pass: scene (sky, terrain, water, clouds, objects) + queued 3D items
-	cam := raylib.GetCamera3D()
-	rl.BeginMode3D(cam)
-	r.draw3D()
-	if v := VM(); v != nil {
-		raylib.DrawQueues3D(v)
+	if effect.HasPostFXQueued() {
+		r.compositePostFXScene()
+	} else {
+		r.drawWorld3DAnd2D()
 	}
-	rl.EndMode3D()
-
-	// Pre-2D: sprite animation tick, etc.
-	if preDraw2DFn != nil {
-		preDraw2DFn()
-	}
-
-	// 2D pass: queued 2D items
-	r.draw2D()
 
 	// GUI pass: queued GUI items
 	r.drawUI()

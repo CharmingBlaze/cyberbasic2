@@ -101,6 +101,24 @@ With no arguments, the CLI starts the **REPL**. High-level bindings include `Phy
 
 For more control (manual loop, custom update/draw), see [Rendering and the game loop](docs/RENDERING_AND_GAME_LOOP.md).
 
+### Verify locally (same checks as CI)
+
+From the repo root (Unix shell or Git Bash; on Windows use Git Bash for the `for` loop, or run the PowerShell equivalent from [`.github/workflows/ci.yml`](.github/workflows/ci.yml)):
+
+```bash
+go test ./...
+go build -o cyberbasic .
+go run ./internal/tools/foreignaudit -root . \
+  -out-json docs/generated/foreign_commands.json \
+  -out-md docs/generated/FOREIGN_COMMANDS_INDEX.md \
+  -parity-json docs/generated/raylib_parity.json
+git diff --exit-code docs/generated/
+set -e
+for f in examples/*.bas; do echo "==> $f"; ./cyberbasic --lint "$f"; done
+```
+
+**Lint Go code:** install [golangci-lint](https://golangci-lint.run/) v1.64.5 (or run `go run github.com/golangci/golangci-lint/cmd/golangci-lint@v1.64.5 run ./...`). **Stub vs production APIs:** see [docs/COMMAND_COVERAGE.md](docs/COMMAND_COVERAGE.md). **Deferred / backlog items:** [docs/STUB_BACKLOG.md](docs/STUB_BACKLOG.md).
+
 ### Examples
 
 | Example | Description | Command |

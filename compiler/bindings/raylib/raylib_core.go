@@ -6,6 +6,7 @@ import (
 	"cyberbasic/compiler/vm"
 	"fmt"
 	"os"
+	"strings"
 	"sync/atomic"
 
 	rl "github.com/gen2brain/raylib-go/raylib"
@@ -830,5 +831,19 @@ func registerCore(v *vm.VM) {
 		}
 		_, err := os.Stat(toString(args[0]))
 		return err == nil, nil
+	})
+	v.RegisterForeign("IsFileDropped", func(args []interface{}) (interface{}, error) {
+		return rl.IsFileDropped(), nil
+	})
+	// GetDroppedFilePaths returns paths separated by newline (empty if none this frame).
+	v.RegisterForeign("GetDroppedFilePaths", func(args []interface{}) (interface{}, error) {
+		if !rl.IsFileDropped() {
+			return "", nil
+		}
+		paths := rl.LoadDroppedFiles()
+		if len(paths) == 0 {
+			return "", nil
+		}
+		return strings.Join(paths, "\n"), nil
 	})
 }

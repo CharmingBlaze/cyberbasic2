@@ -87,6 +87,10 @@ Some subsystems expose a **namespace object** in globals (stored under a **lower
 - **Composition:** global **`engine`** exposes subsystems by name (`engine.net`, `engine.ecs`, …) as aliases of the same lowercase globals — optional sugar, not a second API surface.
 - **Tier 0 escape hatches** stay special-cased in codegen: `rl.*`, flat `box2d`/`bullet` rewrites, and `game.*` helpers.
 
+**Dot namespaces (additive):** High-traffic raylib and std paths also have globals such as **`draw`** (e.g. `draw.begin`, `draw.clear`, `draw.text`), **`texture`** (`texture.load` → handle with `draw`, `unload`), **`sprite`**, **`file`**, **`http`** (`http.get` only; synchronous), **`object`** (DBP-style `LoadObject` ids + handle methods), and extended **`camera`** / **`window`** / **`input`** / **`physics`** methods. They call the same `RegisterForeign` names as flat commands; flat names are not removed.
+
+**Deferred language features (not required for dot calls today):** Spec-style **keyword arguments**, **`AWAIT` / async HTTP**, rich **`INPUT.MAP({ ... })`** with inline action tables, and aggregate builtins like **`VEC3(...)`** / **`COLOR(...)`** for property assignment are **not** in the grammar yet. Use **positional** dot methods and scalar properties until a separate language RFC lands.
+
 Full mapping table: [API_REFERENCE.md](API_REFERENCE.md#module-api-v2-style-vs-legacy-flat-names). **Pillar coverage** (2D/3D games and apps, smoke examples, stubs): [docs/COMMAND_COVERAGE.md](docs/COMMAND_COVERAGE.md). Architecture: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ### 1.2 Control flow
